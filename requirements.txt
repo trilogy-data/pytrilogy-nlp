@@ -1,3 +1,4 @@
 pypreql
 promptimize
 pandas
+openai

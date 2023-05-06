@@ -196,11 +196,11 @@ def parse_order(input: List[Concept], ordering: List[str] | None) -> OrderBy:
     return OrderBy(items=final)
 
 
-def build_query(
+def parse_query(
     input_text: str,
     input_environment: Environment,
     debug: bool = False,
-) -> ProcessedQuery:
+):
     results = discover_inputs(input_text, input_environment, debug=debug)
     concepts = [input_environment.concepts[x] for x in results.select]
     order = parse_order(concepts, results.order)
@@ -209,5 +209,13 @@ def build_query(
         for c in concepts:
             print(c.address)
     query = Select(selection=concepts, limit=safe_limit(results.limit), order_by=order)
+    return query
 
+
+def build_query(
+    input_text: str,
+    input_environment: Environment,
+    debug: bool = False,
+) -> ProcessedQuery:
+    query = parse_query(input_text, input_environment, debug=debug)
     return process_query_v2(statement=query, environment=input_environment)

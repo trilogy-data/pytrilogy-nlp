@@ -2,6 +2,9 @@ from .monkeypatch import patch_promptimize
 
 patch_promptimize()
 
-from .main import build_query
+from .main import build_query  # noqa: E402
 
-__all__ = ['build_query']
+
+__version__ = "0.0.1"
+
+__all__ = ["build_query"]

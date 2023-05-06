@@ -171,7 +171,10 @@ def safe_limit(input: int | None) -> int:
 
 
 def build_query(
-    input_text: str, input_environment: Environment, debug: bool = False, result_limit:int | None =None
+    input_text: str,
+    input_environment: Environment,
+    debug: bool = False,
+    result_limit: int | None = None,
 ) -> ProcessedQuery:
     results = discover_inputs(input_text, input_environment, debug=debug)
     concepts = [input_environment.concepts[x] for x in results.select]

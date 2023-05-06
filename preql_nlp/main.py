@@ -1,7 +1,8 @@
 from preql.core.models import Select, ProcessedQuery
 from preql.core.query_processor import process_query_v2
 from preql.core.enums import Purpose
-from typing import Tuple, Iterable, List
+from typing import Iterable, List
+from collections import defaultdict
 
 from preql.core.models import Environment
 from preql_nlp.prompts import (
@@ -37,9 +38,6 @@ def build_token_list_by_purpose(concepts, purposes: Iterable[Purpose]):
         for x in split_to_tokens(concept):
             final.add(x)
     return ", ".join(list(final))
-
-
-from collections import defaultdict
 
 
 def tokens_to_concept(
@@ -173,7 +171,7 @@ def safe_limit(input: int | None) -> int:
 
 
 def build_query(
-    input_text: str, input_environment: Environment, debug: bool = False
+    input_text: str, input_environment: Environment, debug: bool = False, result_limit:int | None =None
 ) -> ProcessedQuery:
     results = discover_inputs(input_text, input_environment, debug=debug)
     concepts = [input_environment.concepts[x] for x in results.select]
@@ -183,7 +181,7 @@ def build_query(
             print(c.address)
     query = Select(
         selection=concepts,
-        limit=safe_limit(results.limit),
+        limit=result_limit or safe_limit(results.limit),
     )
 
     return process_query_v2(statement=query, environment=input_environment)

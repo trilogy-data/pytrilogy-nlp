@@ -13,10 +13,9 @@ Requires setting the following environment variables
 
 Recommended to use "gpt-3.5-turbo" or higher as the model.
 
-
-
-
 ## Examples
+
+### Basic BQ example
 
 
 ```python
@@ -24,22 +23,24 @@ from trilogy_public_models import models
 from preql import Executor, default_engine, Dialect
 from preql_nlp import build_query
 
-## set up standard preql configuration
-engine = default_engine(Dialect.BIGQUERY)
-# grab the model we want to parse
+# define the model we want to parse
 environment = models["bigquery.stack_overflow"]
 
+# set up preql executor
+# default bigquery executor requires local default credentials configured
+executor = Dialect.BIGQUERY.default_executor(environment= environment)
+
+# build a query off text and the selected model
 processed_query = build_query(
     "How many questions are asked per year?",
-    models["bigquery.stack_overflow"],
+    environment,
 )
 
-executor = Executor(
-    engine=engine,
-    dialect=Dialects.BIGQUERY,
-    environment=environment,
-)
+# make sure we got reasonable outputs
+for concept in processed_query.output_columns:
+    print(concept.name)
 
+# and run that to get our answer
 results = executor.execute_query(processed_query)
 for row in results:
     print(row)

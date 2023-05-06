@@ -1,2 +1,3 @@
 pypreql
 promptimize
+pandas

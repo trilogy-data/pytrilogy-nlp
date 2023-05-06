@@ -17,15 +17,28 @@ with open("requirements.txt", "r") as f:
     install_requires = [line.strip().replace("==", ">=") for line in f.readlines()]
 
 setuptools.setup(
-    name="pypreql",
+    name="pypreql-nlp",
     version=version,
     url="",
     author="",
-    author_email="preql-community@gmail.com",
-    description="Declarative, typed query language that compiles to SQL.",
+    author_email="pypreql-community@gmail.com",
+    description="NLP interface for pypreql.",
     long_description=open("README.md").read(),
-    long_description_content_type='text/markdown',
-    packages=setuptools.find_packages(exclude=["dist", "build", "*.tests", "*.tests.*", "tests.*", "tests", "docs", ".github", "", "examples"]),
+    long_description_content_type="text/markdown",
+    packages=setuptools.find_packages(
+        exclude=[
+            "dist",
+            "build",
+            "*.tests",
+            "*.tests.*",
+            "tests.*",
+            "tests",
+            "docs",
+            ".github",
+            "",
+            "examples",
+        ]
+    ),
     package_data={
         "": ["*.tf", "*.jinja", "py.typed"],
     },
@@ -35,5 +48,6 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
     ],
 )

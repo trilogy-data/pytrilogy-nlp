@@ -1,9 +1,11 @@
-
-def process_concept(concept:str):
+def process_concept(concept: str):
     return concept
 
-def gen_selection_v1(concepts:list[str], question:str): 
-    concept_string = ', '.join([f'"{process_concept(concept)}"' for concept in concepts])
+
+def gen_selection_v1(concepts: list[str], question: str):
+    concept_string = ", ".join(
+        [f'"{process_concept(concept)}"' for concept in concepts]
+    )
     return f"""
 System: You are a helpful AI that selects the most relevant matching concepts to answer a question from a provided list.
 

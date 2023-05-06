@@ -1,4 +1,3 @@
-
 from promptimize.prompt_cases import PromptCase
 from promptimize import evals
 from promptimize.suite import Suite
@@ -7,9 +6,16 @@ from preql_nlp.prompts.query_semantic_extraction import gen_extraction_prompt_v1
 
 
 def test_extraction_prompt():
-    prompt =  gen_extraction_prompt_v1(input =  'How many questions are asked per year?')
+    prompt = gen_extraction_prompt_v1(input="How many questions are asked per year?")
 
-    case = PromptCase(user_input = prompt, evaluators=[lambda x: evals.all_words(x, ['questions', 'asked', 'per', 'year', 'How', 'many', 'are', '?'])])
+    case = PromptCase(
+        user_input=prompt,
+        evaluators=[
+            lambda x: evals.all_words(
+                x, ["questions", "asked", "per", "year", "How", "many", "are", "?"]
+            )
+        ],
+    )
 
     suite = Suite([case])
     output = suite.execute(

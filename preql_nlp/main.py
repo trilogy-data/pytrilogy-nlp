@@ -19,7 +19,7 @@ import re
 
 
 def split_to_tokens(input_text: str) -> list[str]:
-    return re.split("\.|\_", input_text)
+    return list(set(re.split("\.|\_", input_text)))
 
 
 def build_token_list_by_purpose(concepts, purposes: Iterable[Purpose]):
@@ -40,10 +40,16 @@ def build_token_list_by_purpose(concepts, purposes: Iterable[Purpose]):
 
 
 from collections import defaultdict
+
+
 def tokens_to_concept(
-    tokens: str, concepts: List[str], limits: int = 5, universe: list[str] | None = None
+    tokens: list[str],
+    concepts: List[str],
+    limits: int = 5,
+    universe: list[str] | None = None,
 ):
-    universe_list = universe or []
+    tokens = list(set(tokens))
+    universe_list = list(set(universe or []))
     mappings = {x: split_to_tokens(x) for x in concepts}
     candidates = [x for x in concepts if all(token in mappings[x] for token in tokens)]
     pickings = defaultdict(list)
@@ -53,14 +59,13 @@ def tokens_to_concept(
     tiers = set()
     for candidate in candidates:
         tier = sum(
-                [1 if token in mappings[candidate] else 0 for token in universe_list]
-            )
+            [1 if token in mappings[candidate] else 0 for token in universe_list]
+        )
         pickings[tier].append(candidate)
         tiers.add(tier)
     tier_list = sorted(list(tiers), key=lambda x: -x)
 
-    found:List[str] = [
-    ]
+    found: List[str] = []
     while len(found) < limits and tier_list:
         stier = tier_list.pop(0)
         candidates = sorted(pickings[stier], key=lambda x: len(x))

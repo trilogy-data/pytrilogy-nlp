@@ -1,5 +1,4 @@
-
-def gen_extraction_prompt_v1(input:str): 
+def gen_extraction_prompt_v1(input: str):
     return f"""
 System: You are a helpful AI that translates ambiguous business questions into structured outputs.
 For a provided question, you will determine if there are metrics or aggregates or dimensions,

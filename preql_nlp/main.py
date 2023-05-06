@@ -1,4 +1,11 @@
-from preql.core.models import Select, ProcessedQuery
+from preql.core.models import (
+    Select,
+    ProcessedQuery,
+    Concept,
+    OrderItem,
+    OrderBy,
+    Ordering,
+)
 from preql.core.query_processor import process_query_v2
 from preql.core.enums import Purpose
 from typing import Iterable, List
@@ -76,7 +83,7 @@ def tokens_to_concept(
 class IntermediateParseResults:
     select: List[str]
     limit: int
-    order: Any
+    order: List[str]
     # filter: List[FilterItem]
 
 
@@ -157,6 +164,7 @@ def discover_inputs(
         run_prompt(gen_selection_v1(concepts=output, question=input_text), debug=debug)
     )[0]
     final = list(set(selections.get("matches", [])))
+
     return IntermediateParseResults(
         select=final, limit=parsed.get("limit", 20), order=order
     )
@@ -170,21 +178,36 @@ def safe_limit(input: int | None) -> int:
     return input
 
 
+def parse_order(input: List[Concept], ordering: List[str] | None) -> OrderBy:
+    default_order = [
+        OrderItem(expr=c, order=Ordering.DESCENDING)
+        for c in input
+        if c.purpose == Purpose.METRIC
+    ]
+    if not ordering:
+        return OrderBy(default_order)
+    final = []
+    for order in ordering:
+        concept, direction = order.split(" ", 1)
+        matched = [c for c in input if concept in c.address]
+        if not matched:
+            continue
+        final.append(OrderItem(expr=matched[0], order=Ordering(direction)))
+    return OrderBy(items=final)
+
+
 def build_query(
     input_text: str,
     input_environment: Environment,
     debug: bool = False,
-    result_limit: int | None = None,
 ) -> ProcessedQuery:
     results = discover_inputs(input_text, input_environment, debug=debug)
     concepts = [input_environment.concepts[x] for x in results.select]
+    order = parse_order(concepts, results.order)
     if debug:
         print("Concepts found")
         for c in concepts:
             print(c.address)
-    query = Select(
-        selection=concepts,
-        limit=result_limit or safe_limit(results.limit),
-    )
+    query = Select(selection=concepts, limit=safe_limit(results.limit), order_by=order)
 
     return process_query_v2(statement=query, environment=input_environment)

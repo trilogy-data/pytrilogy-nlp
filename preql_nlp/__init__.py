@@ -5,6 +5,6 @@ patch_promptimize()
 from .main import build_query  # noqa: E402
 
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 __all__ = ["build_query"]

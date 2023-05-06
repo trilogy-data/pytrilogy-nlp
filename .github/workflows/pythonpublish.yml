@@ -11,6 +11,7 @@ jobs:
   deploy:
 
     runs-on: ubuntu-latest
+    environment: release
     environment:
       name: pypi
       url: https://pypi.org/p/preql-nlp

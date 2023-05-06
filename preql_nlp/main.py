@@ -178,21 +178,33 @@ def safe_limit(input: int | None) -> int:
     return input
 
 
-def parse_order(input: List[Concept], ordering: List[str] | None) -> OrderBy:
+def safe_parse_order_item(
+    input: str, input_concepts: List[Concept]
+) -> OrderItem | None:
+    concept, direction = input.split(" ", 1)
+    matched = [c for c in input_concepts if concept in c.address]
+    if not matched:
+        return None
+    try:
+        order = Ordering(direction)
+    except Exception:
+        return None
+    return OrderItem(expr=matched[0], order=order)
+
+
+def parse_order(input_concepts: List[Concept], ordering: List[str] | None) -> OrderBy:
     default_order = [
         OrderItem(expr=c, order=Ordering.DESCENDING)
-        for c in input
+        for c in input_concepts
         if c.purpose == Purpose.METRIC
     ]
     if not ordering:
         return OrderBy(default_order)
     final = []
     for order in ordering:
-        concept, direction = order.split(" ", 1)
-        matched = [c for c in input if concept in c.address]
-        if not matched:
-            continue
-        final.append(OrderItem(expr=matched[0], order=Ordering(direction)))
+        parsed = safe_parse_order_item(order, input_concepts)
+        if parsed:
+            final.append(parsed)
     return OrderBy(items=final)
 
 

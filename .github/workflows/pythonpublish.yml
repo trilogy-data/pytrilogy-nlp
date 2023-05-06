@@ -11,9 +11,8 @@ jobs:
   deploy:
 
     runs-on: ubuntu-latest
-    environment: release
     environment:
-      name: pypi
+      name: release
       url: https://pypi.org/p/preql-nlp
     permissions:
       id-token: write

@@ -1,4 +1,4 @@
-pypreql>=pypreql-0.0.1rc31
+pypreql
 promptimize
 pandas
 openai

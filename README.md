@@ -20,7 +20,7 @@ Recommended to use "gpt-3.5-turbo" or higher as the model.
 
 ```python
 from trilogy_public_models import models
-from preql import Executor, default_engine, Dialect
+from preql import Executor, Dialects
 from preql_nlp import build_query
 
 # define the model we want to parse
@@ -28,7 +28,7 @@ environment = models["bigquery.stack_overflow"]
 
 # set up preql executor
 # default bigquery executor requires local default credentials configured
-executor = Dialect.BIGQUERY.default_executor(environment= environment)
+executor = Dialects.BIGQUERY.default_executor(environment= environment)
 
 # build a query off text and the selected model
 processed_query = build_query(

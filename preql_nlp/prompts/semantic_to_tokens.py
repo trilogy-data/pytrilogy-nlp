@@ -1,4 +1,3 @@
-from typing import List
 
 STRUCTURED_PROMPT_V1 = """\
 System: you are an AI that helps a user map phrases to tokens by associating a phrase with tokens related to the words

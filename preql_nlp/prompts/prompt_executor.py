@@ -19,6 +19,7 @@ class BasePreqlPromptCase(TemplatedPromptCase):
     
     def __init__(self, category: str, evaluators: Optional[Union[Callable, List[Callable]]] = None):
         super().__init__(category=category, evaluators=evaluators)
+        self.execution.score = None
         self._prompt_hash = str(uuid.uuid4())
 
     def get_extra_template_context(self):

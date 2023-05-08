@@ -2,7 +2,6 @@ from promptimize.prompt_cases import PromptCase
 from promptimize import evals
 from promptimize.suite import Suite
 from promptimize.reports import Report
-from preql_nlp.prompts.final_selection import gen_selection_v1
 from preql_nlp.prompts.prompt_executor import SelectionPromptCase
 
 

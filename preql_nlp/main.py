@@ -218,7 +218,7 @@ def parse_query(
     debug: bool = False,
     log_info: bool=True
 ):
-    results = discover_inputs(input_text, input_environment, debug=debug, log_info=True)
+    results = discover_inputs(input_text, input_environment, debug=debug, log_info=log_info)
     concepts = [input_environment.concepts[x] for x in results.select]
     order = parse_order(concepts, results.order)
     if debug:

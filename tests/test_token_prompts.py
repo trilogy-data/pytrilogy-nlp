@@ -1,4 +1,3 @@
-from promptimize.prompt_cases import PromptCase
 from promptimize import evals
 from promptimize.suite import Suite
 from promptimize.reports import Report

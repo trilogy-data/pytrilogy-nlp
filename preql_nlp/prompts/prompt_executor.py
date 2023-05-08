@@ -115,7 +115,7 @@ def run_prompt(
     prompt: TemplatedPromptCase,
     debug: bool = False,
     log_info=True,
-    session_uuid: uuid.UUID = None,
+    session_uuid: uuid.UUID | None = None,
 ) -> list[dict | list]:
     if not session_uuid:
         session_uuid = uuid.uuid4()

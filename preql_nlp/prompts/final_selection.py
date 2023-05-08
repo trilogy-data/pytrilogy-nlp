@@ -1,12 +1,4 @@
-def process_concept(concept: str):
-    return concept
-
-
-def gen_selection_v1(concepts: list[str], question: str):
-    concept_string = ", ".join(
-        [f'"{process_concept(concept)}"' for concept in concepts]
-    )
-    return f"""
+SELECTION_TEMPLATE_V1 = """
 System: You are a helpful AI that selects the most relevant matching concepts to answer a question from a provided list.
 
 Guidelines:
@@ -21,17 +13,17 @@ The output should be a VALID JSON blob with the following keys and values:
 * reasoning: a string explaining your step by step reasoning for the matches
 User: concepts: ["product.color", "order.state", "order.year", "order.revenue.sum", "order.revenue.avg", "product.name", "order.month", "order.day", "product.manufacturer"] question: "what product colors had the most revenue in 2024?"]
 System:
-{{"matches": ["product.color", "order.revenue.sum", "order.year" ],
-"reasoning": "product.color matches the user request for product colors, and order revenue sum would enable aggregating revenue to the color. Order year is required to filter to 2024." }}
+{% raw %}{"matches": ["product.color", "order.revenue.sum", "order.year" ],
+"reasoning": "product.color matches the user request for product colors, and order revenue sum would enable aggregating revenue to the color. Order year is required to filter to 2024." }
 User: concepts: ["product.color", "order.state", "order.year", "order.revenue.sum", "order.revenue.avg", "product.name", "order.month", "order.day", "product.manufacturer"] question: "What are the sales by state?"
 System:
-{{"matches": ["order.state", "order.revenue.sum"],
-"reasoning": "order.state is the best match for state when looking at revenue, and order.revenue.sum would enable aggregating revenue." }}
+{"matches": ["order.state", "order.revenue.sum"],
+"reasoning": "order.state is the best match for state when looking at revenue, and order.revenue.sum would enable aggregating revenue." }
 User: concepts: ["product.color", "order.state", "order.year", "order.revenue.sum", "order.revenue.avg", "product.name", "order.month", "order.day", "product.manufacturer"]  question: "What are the average sales by state?"
 System:
-{{"matches": ["order.state", "order.revenue.avg"],
-"reasoning": "order.state is the best match for state, and order.revenue.avg would capture average revenue." }}
-User: concepts:"[{concept_string}]" question: "{question}"
+{"matches": ["order.state", "order.revenue.avg"],
+"reasoning": "order.state is the best match for state, and order.revenue.avg would capture average revenue." }{% endraw %}
+User: concepts:"[{{ concept_string }}]" question: "{{ question }}"
 System:
 
 """

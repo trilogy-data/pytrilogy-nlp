@@ -3,6 +3,7 @@ from promptimize import evals
 from promptimize.suite import Suite
 from promptimize.reports import Report
 from preql_nlp.prompts.final_selection import gen_selection_v1
+from preql_nlp.prompts.prompt_executor import SelectionPromptCase
 
 
 def test_selection_prompt(test_logger):
@@ -12,12 +13,8 @@ def test_selection_prompt(test_logger):
         "question.id.count",
         "question.author",
     ]
-    prompt = gen_selection_v1(
-        concepts=concepts, question="How many questions are asked per year?"
-    )
-
-    case = PromptCase(
-        user_input=prompt,
+    prompt = SelectionPromptCase(
+        concepts=concepts, question="How many questions are asked per year?",
         evaluators=[
             lambda x: evals.all_words(
                 x, ["question.creation_date.year", "question.id.count"]
@@ -25,7 +22,7 @@ def test_selection_prompt(test_logger):
         ],
     )
 
-    suite = Suite([case])
+    suite = Suite([prompt])
     output = suite.execute(
         verbose=True  # verbose,
         # style=style,

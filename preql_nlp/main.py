@@ -14,9 +14,9 @@ from collections import defaultdict
 from preql.core.models import Environment
 from preql_nlp.prompts import (
     run_prompt,
-    gen_extraction_prompt_v1,
-    gen_structured_prompt_v1,
-    gen_selection_v1,
+    SemanticToTokensPromptCase,
+    SelectionPromptCase,
+    SemanticExtractionPromptCase,
 )
 from preql_nlp.constants import logger, DEFAULT_LIMIT
 
@@ -108,7 +108,7 @@ def coerce_list_str(input: Any) -> List[str]:
 def discover_inputs(
     input_text: str, input_environment: Environment, debug: bool = False
 ) -> IntermediateParseResults:
-    # we work around promopt size issues and hallucination by doing a two phase discovery
+    # we work around prompt size issues and hallucination by doing a two phase discovery
     # first we parse the question into metrics/dimensions
     # then for each one, we match those to a token list
     # and then we deterministically map the tokens back to the most relevant concept
@@ -122,7 +122,7 @@ def discover_inputs(
     )
 
     parsed = coerce_list_dict(
-        run_prompt(gen_extraction_prompt_v1(input_text), debug=debug)
+        run_prompt(SemanticExtractionPromptCase(input_text), debug=debug)
     )[0]
     order = parsed.get("order", [])
     token_inputs = {"metrics": metrics, "dimensions": dimensions}
@@ -135,7 +135,7 @@ def discover_inputs(
         local_phrases = [x for x in parsed[field]]
         phrase_tokens = coerce_list_dict(
             run_prompt(
-                gen_structured_prompt_v1(
+                SemanticToTokensPromptCase(
                     phrases=local_phrases, tokens=token_inputs[field]
                 ),
                 debug=True,
@@ -161,7 +161,7 @@ def discover_inputs(
                         f"Could not find concept for input {k} with tokens {v}"
                     )
     selections = coerce_list_dict(
-        run_prompt(gen_selection_v1(concepts=output, question=input_text), debug=debug)
+        run_prompt(SelectionPromptCase(concepts=output, question=input_text), debug=debug)
     )[0]
     final = list(set(selections.get("matches", [])))
 

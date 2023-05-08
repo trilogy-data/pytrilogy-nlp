@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import re
-
+import uuid
 
 def split_to_tokens(input_text: str) -> list[str]:
     return list(set(re.split("\.|\_", input_text)))
@@ -106,7 +106,7 @@ def coerce_list_str(input: Any) -> List[str]:
 
 
 def discover_inputs(
-    input_text: str, input_environment: Environment, debug: bool = False
+    input_text: str, input_environment: Environment, debug: bool = False, log_info: bool = True
 ) -> IntermediateParseResults:
     # we work around prompt size issues and hallucination by doing a two phase discovery
     # first we parse the question into metrics/dimensions
@@ -121,8 +121,10 @@ def discover_inputs(
         concepts, (Purpose.KEY, Purpose.PROPERTY, Purpose.CONSTANT)
     )
 
+    session_uuid = uuid.uuid4()
+
     parsed = coerce_list_dict(
-        run_prompt(SemanticExtractionPromptCase(input_text), debug=debug)
+        run_prompt(SemanticExtractionPromptCase(input_text), debug=debug, log_info=log_info, session_uuid=session_uuid)
     )[0]
     order = parsed.get("order", [])
     token_inputs = {"metrics": metrics, "dimensions": dimensions}
@@ -139,6 +141,8 @@ def discover_inputs(
                     phrases=local_phrases, tokens=token_inputs[field]
                 ),
                 debug=True,
+                session_uuid=session_uuid,
+                log_info=log_info
             )
         )
         token_universe = []
@@ -161,7 +165,7 @@ def discover_inputs(
                         f"Could not find concept for input {k} with tokens {v}"
                     )
     selections = coerce_list_dict(
-        run_prompt(SelectionPromptCase(concepts=output, question=input_text), debug=debug)
+        run_prompt(SelectionPromptCase(concepts=output, question=input_text), debug=debug, session_uuid=session_uuid, log_info=log_info)
     )[0]
     final = list(set(selections.get("matches", [])))
 
@@ -212,8 +216,9 @@ def parse_query(
     input_text: str,
     input_environment: Environment,
     debug: bool = False,
+    log_info: bool=True
 ):
-    results = discover_inputs(input_text, input_environment, debug=debug)
+    results = discover_inputs(input_text, input_environment, debug=debug, log_info=True)
     concepts = [input_environment.concepts[x] for x in results.select]
     order = parse_order(concepts, results.order)
     if debug:
@@ -224,10 +229,12 @@ def parse_query(
     return query
 
 
+
 def build_query(
     input_text: str,
     input_environment: Environment,
     debug: bool = False,
+    log_info: bool = True
 ) -> ProcessedQuery:
-    query = parse_query(input_text, input_environment, debug=debug)
+    query = parse_query(input_text, input_environment, debug=debug, log_info=log_info)
     return process_query_v2(statement=query, environment=input_environment)

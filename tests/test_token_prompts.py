@@ -8,7 +8,20 @@ from preql_nlp.prompts import SemanticToTokensPromptCase
 def test_structured_input():
     phrases = ["questions per year"]
     tokens = ["question", "year", "count"]
-    prompt = SemanticToTokensPromptCase(phrases=phrases, tokens=tokens)
+    prompt = SemanticToTokensPromptCase(
+        phrases=phrases,
+        tokens=tokens,
+        evaluators=[
+            lambda x: evals.all_words(
+                x,
+                [
+                    '"questions per year"',
+                    '"question"',
+                    '"year"',
+                ],
+            )
+        ],
+        )
 
 
     suite = Suite([prompt])

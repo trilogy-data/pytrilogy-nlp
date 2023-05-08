@@ -2,16 +2,15 @@ from promptimize.prompt_cases import PromptCase
 from promptimize import evals
 from promptimize.suite import Suite
 from promptimize.reports import Report
-from preql_nlp.prompts.semantic_to_tokens import gen_structured_prompt_v1
+from preql_nlp.prompts import SemanticToTokensPromptCase
 
 
 def test_structured_input():
     phrases = ["questions per year"]
     tokens = ["question", "year", "count"]
-    prompt = gen_structured_prompt_v1(phrases=phrases, tokens=tokens)
-
-    case = PromptCase(
-        user_input=prompt,
+    prompt = SemanticToTokensPromptCase(
+        phrases=phrases,
+        tokens=tokens,
         evaluators=[
             lambda x: evals.all_words(
                 x,
@@ -22,9 +21,10 @@ def test_structured_input():
                 ],
             )
         ],
-    )
+        )
 
-    suite = Suite([case])
+
+    suite = Suite([prompt])
     output = suite.execute(
         # verbose=verbose,
         # style=style,

@@ -1,9 +1,6 @@
-
 from preql_nlp.constants import logger
 from pytest import fixture
-from logging import StreamHandler, DEBUG, basicConfig
-
-basicConfig()
+from logging import StreamHandler, DEBUG
 
 
 @fixture

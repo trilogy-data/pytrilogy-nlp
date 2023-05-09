@@ -20,8 +20,8 @@ Recommended to use "gpt-3.5-turbo" or higher as the model.
 
 ```python
 from trilogy_public_models import models
-from preql import Executor, Dialects
-from preql_nlp import build_query
+from preql import Dialects
+from preql_nlp import build_query, NlpPreqlModelClient
 
 # define the model we want to parse
 environment = models["bigquery.stack_overflow"]
@@ -30,20 +30,17 @@ environment = models["bigquery.stack_overflow"]
 # default bigquery executor requires local default credentials configured
 executor = Dialects.BIGQUERY.default_executor(environment= environment)
 
-# build a query off text and the selected model
-processed_query = build_query(
-    "How many questions are asked per year?",
-    environment,
-)
+# build an NLP client for the preql model
+client = NlpPreqlModelClient(openai_model="gpt-3.5-turbo", preql_model=environment, preql_executor=executor)
 
-# make sure we got reasonable outputs
-for concept in processed_query.output_columns:
-    print(concept.name)
+# ask a data question  about the model in natural language.
+question = "How many questions are asked per year?"
+results = client.answer(question)
 
-# and run that to get our answer
-results = executor.execute_query(processed_query)
-for row in results:
-    print(row)
+# print the results
+for r in results:
+    print(r)
+
 ```
 
 

@@ -1,5 +1,3 @@
-
-
 EXTRACTION_PROMPT_V1 = """
 System: You are a helpful AI that translates ambiguous business questions into structured outputs.
 For a provided question, you will determine if there are metrics or aggregates or dimensions,

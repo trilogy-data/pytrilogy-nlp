@@ -9,6 +9,8 @@ from preql_nlp.constants import logger
 from preql_nlp.prompts.query_semantic_extraction import EXTRACTION_PROMPT_V1
 from preql_nlp.prompts.semantic_to_tokens import STRUCTURED_PROMPT_V1
 from preql_nlp.prompts.final_selection import SELECTION_TEMPLATE_V1
+from preql_nlp.prompts.check_answer import CHECK_ANSWER_PROMPT_V1
+from langchain.llms import OpenAI
 
 from typing import List, Optional, Callable, Union
 import uuid
@@ -21,12 +23,20 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         self,
         category: str,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
+        model: Optional[str] = None
     ):
+        self.model = model or "gpt-3.5-turbo"
         super().__init__(category=category, evaluators=evaluators)
         self._prompt_hash = str(uuid.uuid4())
 
     def get_extra_template_context(self):
         raise NotImplementedError("This class can't be used directly.")
+    
+    def get_prompt_executor(self):
+        model_name = self.model
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        self.prompt_executor_kwargs = {"model_name": model_name}
+        return OpenAI(model_name=model_name, openai_api_key=openai_api_key)
 
 
 class SemanticExtractionPromptCase(BasePreqlPromptCase):
@@ -36,9 +46,10 @@ class SemanticExtractionPromptCase(BasePreqlPromptCase):
         self,
         question: str,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
+        model: Optional[str] = None
     ):
         self.question = question
-        super().__init__(category="semantic_extraction", evaluators=evaluators)
+        super().__init__(category="semantic_extraction", evaluators=evaluators, model=model)
 
     def get_extra_template_context(self):
         return {"question": self.question}
@@ -52,10 +63,11 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
         tokens: List[str],
         phrases: List[str],
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
+        model: Optional[str] = None
     ):
         self.tokens = tokens
         self.phrases = phrases
-        super().__init__(category="semantic_to_tokens", evaluators=evaluators)
+        super().__init__(category="semantic_to_tokens", evaluators=evaluators, model=model)
 
     def get_extra_template_context(self):
         return {"tokens": self.tokens, "phrase_str": ",".join(self.phrases)}
@@ -69,15 +81,30 @@ class SelectionPromptCase(BasePreqlPromptCase):
         question: str,
         concepts: List[str],
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
+        model: Optional[str] = None
     ):
         self.question = question
         self.concepts = concepts
-        super().__init__(evaluators=evaluators, category="selection")
-        self.execution.score = None
+        super().__init__(evaluators=evaluators, category="selection", model=model)
 
     def get_extra_template_context(self):
         return {"concept_string": ", ".join(self.concepts), "question": self.question}
 
+
+class CheckAnswerPromptCase(BasePreqlPromptCase):
+    template = CHECK_ANSWER_PROMPT_V1
+
+    def __init__(self, question: str, columns: List[str], answer: List[tuple], evaluators: Optional[Union[Callable, List[Callable]]] = None,
+        model: Optional[str] = None):
+        self.question = question
+        self.columns = columns
+        self.answer = answer
+        super().__init__(evaluators=evaluators, category="check", model=model)
+
+    def get_extra_template_context(self):
+        return {"results": self.answer, "columns": self.columns, "question": self.question}
+        
+    
 
 DATA_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "log_data"
@@ -86,7 +113,7 @@ if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
 
 
-def log_prompt_info(prompt: TemplatedPromptCase, session_uuid: uuid.UUID):
+def log_prompt_info(prompt: BasePreqlPromptCase, session_uuid: uuid.UUID):
     prompt_hash = prompt.prompt_hash
     prompt_context = prompt.jinja_context
     template = prompt.template
@@ -99,20 +126,16 @@ def log_prompt_info(prompt: TemplatedPromptCase, session_uuid: uuid.UUID):
         "category": category,
         "session_uuid": str(session_uuid),
         "response": prompt.response,
+        "model": prompt.model
     }
     with open(
         os.path.join(DATA_DIR, str(session_uuid), prompt_hash + ".json"), "w"
     ) as f:
-        print(
-            "printing to...{}".format(
-                os.path.join(DATA_DIR, str(session_uuid), prompt_hash + ".json")
-            )
-        )
         json.dump(data, f)
 
 
 def run_prompt(
-    prompt: TemplatedPromptCase,
+    prompt: BasePreqlPromptCase,
     debug: bool = False,
     log_info=True,
     session_uuid: uuid.UUID | None = None,

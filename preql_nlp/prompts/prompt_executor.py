@@ -9,28 +9,42 @@ from preql_nlp.constants import logger
 from preql_nlp.prompts.query_semantic_extraction import EXTRACTION_PROMPT_V1
 from preql_nlp.prompts.semantic_to_tokens import STRUCTURED_PROMPT_V1
 from preql_nlp.prompts.final_selection import SELECTION_TEMPLATE_V1
-
-from typing import List, Optional, Callable, Union
+from preql_nlp.models import InitialParseResult, TokenInputs
+from pydantic import BaseModel
+from typing import List, Optional, Callable, Union, Type
 import uuid
 import json
 import os
 
 
 class BasePreqlPromptCase(TemplatedPromptCase):
+    parse_model:Type[BaseModel]
+
     def __init__(
         self,
         category: str,
+        fail_on_parse_error:bool = True,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
+
     ):
         super().__init__(category=category, evaluators=evaluators)
         self._prompt_hash = str(uuid.uuid4())
+        self.parsed = None
+        self.fail_on_parse_error = fail_on_parse_error
 
     def get_extra_template_context(self):
         raise NotImplementedError("This class can't be used directly.")
 
-
+    def post_run(self):
+        try:
+            self.parsed = self.parse_model.parse_obj(extract_json_objects(self.response)[0])
+        except Exception as e:
+            if self.fail_on_parse_error:
+                raise e
+            
 class SemanticExtractionPromptCase(BasePreqlPromptCase):
     template = EXTRACTION_PROMPT_V1
+    parse_model = InitialParseResult
 
     def __init__(
         self,

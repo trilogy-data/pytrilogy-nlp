@@ -19,12 +19,13 @@ from preql_nlp.prompts import (
     SemanticExtractionPromptCase,
 )
 from preql_nlp.constants import logger, DEFAULT_LIMIT
-
+from preql_nlp.models import InitialParseResult, TokenInputs
 from dataclasses import dataclass
 from typing import Any
 
 import re
 import uuid
+
 
 def split_to_tokens(input_text: str) -> list[str]:
     return list(set(re.split("\.|\_", input_text)))
@@ -105,8 +106,15 @@ def coerce_list_str(input: Any) -> List[str]:
     return input
 
 
+def coerce_initial_result(input) -> InitialParseResult:
+    return InitialParseResult.parse_obj(input)
+
+
 def discover_inputs(
-    input_text: str, input_environment: Environment, debug: bool = False, log_info: bool = True
+    input_text: str,
+    input_environment: Environment,
+    debug: bool = False,
+    log_info: bool = True,
 ) -> IntermediateParseResults:
     # we work around prompt size issues and hallucination by doing a two phase discovery
     # first we parse the question into metrics/dimensions
@@ -123,11 +131,16 @@ def discover_inputs(
 
     session_uuid = uuid.uuid4()
 
-    parsed = coerce_list_dict(
-        run_prompt(SemanticExtractionPromptCase(input_text), debug=debug, log_info=log_info, session_uuid=session_uuid)
-    )[0]
-    order = parsed.get("order", [])
-    token_inputs = {"metrics": metrics, "dimensions": dimensions}
+    parsed = coerce_initial_result(
+        run_prompt(
+            SemanticExtractionPromptCase(input_text),
+            debug=debug,
+            log_info=log_info,
+            session_uuid=session_uuid,
+        )[0]
+    )
+    order = parsed.order
+    token_inputs = TokenInputs(metrics=metrics, dimensions=dimensions)
 
     output: List[str] = []
     for field in [
@@ -142,7 +155,7 @@ def discover_inputs(
                 ),
                 debug=True,
                 session_uuid=session_uuid,
-                log_info=log_info
+                log_info=log_info,
             )
         )
         token_universe = []
@@ -165,7 +178,12 @@ def discover_inputs(
                         f"Could not find concept for input {k} with tokens {v}"
                     )
     selections = coerce_list_dict(
-        run_prompt(SelectionPromptCase(concepts=output, question=input_text), debug=debug, session_uuid=session_uuid, log_info=log_info)
+        run_prompt(
+            SelectionPromptCase(concepts=output, question=input_text),
+            debug=debug,
+            session_uuid=session_uuid,
+            log_info=log_info,
+        )
     )[0]
     final = list(set(selections.get("matches", [])))
 
@@ -216,9 +234,11 @@ def parse_query(
     input_text: str,
     input_environment: Environment,
     debug: bool = False,
-    log_info: bool=True
+    log_info: bool = True,
 ):
-    results = discover_inputs(input_text, input_environment, debug=debug, log_info=log_info)
+    results = discover_inputs(
+        input_text, input_environment, debug=debug, log_info=log_info
+    )
     concepts = [input_environment.concepts[x] for x in results.select]
     order = parse_order(concepts, results.order)
     if debug:
@@ -229,12 +249,11 @@ def parse_query(
     return query
 
 
-
 def build_query(
     input_text: str,
     input_environment: Environment,
     debug: bool = False,
-    log_info: bool = True
+    log_info: bool = True,
 ) -> ProcessedQuery:
     query = parse_query(input_text, input_environment, debug=debug, log_info=log_info)
     return process_query_v2(statement=query, environment=input_environment)

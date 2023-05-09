@@ -1,7 +1,6 @@
 from preql import Environment, Executor
 from preql_nlp.main import build_query, answer_is_reasonable
 from dataclasses import dataclass
-from sqlalchemy.engine import CursorResult
 
 from time import sleep
 from typing import List

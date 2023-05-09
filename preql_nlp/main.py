@@ -218,7 +218,7 @@ def parse_query(
     input_environment: Environment,
     debug: bool = False,
     log_info: bool=True,
-    model: bool="gpt-3.5-turbo"
+    model: str="gpt-3.5-turbo"
 ):
     results = discover_inputs(input_text, input_environment, debug=debug, log_info=log_info, model=model)
     concepts = [input_environment.concepts[x] for x in results.select]

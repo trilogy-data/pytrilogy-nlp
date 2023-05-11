@@ -19,54 +19,80 @@ import sqlite3
 
 SQLITE_ADDRESS = "local_prompt_cache.db"
 
-def get_result_if_cached(prompt_hash:str)->str | None:
-    print('checking for cache with prompt hash ', prompt_hash)
-    con = sqlite3.connect(SQLITE_ADDRESS)
-    cur= con.cursor()
-    cur.execute('create table if not exists prompt_cache (cache_id string, prompt_type string, response string)')
-    res = cur.execute('select response, prompt_type from prompt_cache where cache_id = ?', (prompt_hash,))
-    current = res.fetchone()
-    if current:
-        print('got cached response of type ', current[1])
-        return current[0]
-    return None
-    
 
-def stash_result(prompt_hash:str, category:str, result:str):
+def gen_hash(obj, keys: set[str]) -> str:
+    """Generate a deterministic hash for an object across multiple runs"""
+    import hashlib
+
+    m = hashlib.sha256(usedforsecurity=False)
+
+    # we need to hash things in a deterministic order
+    key_list = sorted(list(keys), key=lambda x: x)
+    for key in key_list:
+        s = str(getattr(obj, key))
+
+        m.update(s.encode("utf-8"))
+
+    return m.digest().hex()
+
+
+def get_result_if_cached(prompt_hash: str) -> str | None:
+    print("checking for cache with prompt hash ", prompt_hash)
     con = sqlite3.connect(SQLITE_ADDRESS)
     cur = con.cursor()
-    cur.execute('create table if not exists prompt_cache (cache_id string, prompt_type string, response string)')
-    cur.execute('insert into prompt_cache select ?, ?,  ?', (prompt_hash, category, result))
+    cur.execute(
+        "create table if not exists prompt_cache (cache_id string, prompt_type string, response string)"
+    )
+    res = cur.execute(
+        "select response, prompt_type from prompt_cache where cache_id = ?",
+        (prompt_hash,),
+    )
+    current = res.fetchone()
+    if current:
+        print("got cached response of type ", current[1])
+        return current[0]
+    return None
+
+
+def stash_result(prompt_hash: str, category: str, result: str):
+    con = sqlite3.connect(SQLITE_ADDRESS)
+    cur = con.cursor()
+    cur.execute(
+        "create table if not exists prompt_cache (cache_id string, prompt_type string, response string)"
+    )
+    cur.execute(
+        "insert into prompt_cache select ?, ?,  ?", (prompt_hash, category, result)
+    )
     con.commit()
 
+
 class BasePreqlPromptCase(TemplatedPromptCase):
-    parse_model:Type[BaseModel]
+    parse_model: Type[BaseModel]
 
     def __init__(
         self,
         category: str,
-        fail_on_parse_error:bool = True,
+        fail_on_parse_error: bool = True,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
-
     ):
         super().__init__(category=category, evaluators=evaluators)
         self._prompt_hash = str(uuid.uuid4())
         self.parsed = None
         self.fail_on_parse_error = fail_on_parse_error
 
-
     def execute_prompt(self, prompt_str):
         # if we already have a local result
         # skip hitting remote
-        resp = get_result_if_cached(hash(self))
+        # TODO: make the cache provider pluggable and injected
+        hash_val = gen_hash(self, self.attributes_used_for_hash)
+        resp = get_result_if_cached(hash_val)
         if resp:
-            print('GOT CACHED RESPONSE \o/')
+            print("GOT CACHED RESPONSE \o/")
             self.response = resp
             return self.response
         self.response = self.prompt_executor(prompt_str)
-        stash_result(hash(self), self.category, self.response)
+        stash_result(hash_val, self.category, self.response)
         return self.response
-    
 
     def get_extra_template_context(self):
         raise NotImplementedError("This class can't be used directly.")
@@ -75,19 +101,21 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         try:
             self.parsed = self.parse_model.parse_raw(self.response)
         except ValidationError as e:
-            print('was unable to parse response using ', str(self.parse_model))
+            print("was unable to parse response using ", str(self.parse_model))
             print(self.response)
             if self.fail_on_parse_error:
                 raise e
-            
+
+
 class SemanticExtractionPromptCase(BasePreqlPromptCase):
     template = EXTRACTION_PROMPT_V1
     parse_model = InitialParseResult
 
-    attributes_used_for_hash = BasePreqlPromptCase.attributes_used_for_hash | {
+    attributes_used_for_hash = {
         "category",
         "question",
     }
+
     def __init__(
         self,
         question: str,
@@ -103,12 +131,9 @@ class SemanticExtractionPromptCase(BasePreqlPromptCase):
 class SemanticToTokensPromptCase(BasePreqlPromptCase):
     template = STRUCTURED_PROMPT_V1
     parse_model = SemanticTokenResponse
-    
-    attributes_used_for_hash = {
-        "tokens",
-        "phrases",
-        "category"
-    }
+
+    attributes_used_for_hash = {"tokens", "phrases", "category"}
+
     def __init__(
         self,
         tokens: List[str],
@@ -119,7 +144,6 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
         self.phrases = phrases
         super().__init__(category="semantic_to_tokens", evaluators=evaluators)
 
-        
     def get_extra_template_context(self):
         return {"tokens": self.tokens, "phrase_str": ",".join(self.phrases)}
 
@@ -128,11 +152,7 @@ class SelectionPromptCase(BasePreqlPromptCase):
     template = SELECTION_TEMPLATE_V1
     parse_model = ConceptSelection
 
-    attributes_used_for_hash = BasePreqlPromptCase.attributes_used_for_hash | {
-        "question",
-        "concepts",
-        "category"
-    }
+    attributes_used_for_hash = {"question", "concepts", "category"}
 
     def __init__(
         self,

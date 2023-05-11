@@ -9,13 +9,35 @@ from preql_nlp.constants import logger
 from preql_nlp.prompts.query_semantic_extraction import EXTRACTION_PROMPT_V1
 from preql_nlp.prompts.semantic_to_tokens import STRUCTURED_PROMPT_V1
 from preql_nlp.prompts.final_selection import SELECTION_TEMPLATE_V1
-from preql_nlp.models import InitialParseResult, TokenInputs
-from pydantic import BaseModel
+from preql_nlp.models import InitialParseResult, ConceptSelection, SemanticTokenResponse
+from pydantic import BaseModel, ValidationError
 from typing import List, Optional, Callable, Union, Type
 import uuid
 import json
 import os
+import sqlite3
 
+SQLITE_ADDRESS = "local_prompt_cache.db"
+
+def get_result_if_cached(prompt_hash:str)->str | None:
+    print('checking for cache with prompt hash ', prompt_hash)
+    con = sqlite3.connect(SQLITE_ADDRESS)
+    cur= con.cursor()
+    cur.execute('create table if not exists prompt_cache (cache_id string, prompt_type string, response string)')
+    res = cur.execute('select response, prompt_type from prompt_cache where cache_id = ?', (prompt_hash,))
+    current = res.fetchone()
+    if current:
+        print('got cached response of type ', current[1])
+        return current[0]
+    return None
+    
+
+def stash_result(prompt_hash:str, category:str, result:str):
+    con = sqlite3.connect(SQLITE_ADDRESS)
+    cur = con.cursor()
+    cur.execute('create table if not exists prompt_cache (cache_id string, prompt_type string, response string)')
+    cur.execute('insert into prompt_cache select ?, ?,  ?', (prompt_hash, category, result))
+    con.commit()
 
 class BasePreqlPromptCase(TemplatedPromptCase):
     parse_model:Type[BaseModel]
@@ -32,13 +54,29 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         self.parsed = None
         self.fail_on_parse_error = fail_on_parse_error
 
+
+    def execute_prompt(self, prompt_str):
+        # if we already have a local result
+        # skip hitting remote
+        resp = get_result_if_cached(hash(self))
+        if resp:
+            print('GOT CACHED RESPONSE \o/')
+            self.response = resp
+            return self.response
+        self.response = self.prompt_executor(prompt_str)
+        stash_result(hash(self), self.category, self.response)
+        return self.response
+    
+
     def get_extra_template_context(self):
         raise NotImplementedError("This class can't be used directly.")
 
     def post_run(self):
         try:
-            self.parsed = self.parse_model.parse_obj(extract_json_objects(self.response)[0])
-        except Exception as e:
+            self.parsed = self.parse_model.parse_raw(self.response)
+        except ValidationError as e:
+            print('was unable to parse response using ', str(self.parse_model))
+            print(self.response)
             if self.fail_on_parse_error:
                 raise e
             
@@ -46,6 +84,10 @@ class SemanticExtractionPromptCase(BasePreqlPromptCase):
     template = EXTRACTION_PROMPT_V1
     parse_model = InitialParseResult
 
+    attributes_used_for_hash = BasePreqlPromptCase.attributes_used_for_hash | {
+        "category",
+        "question",
+    }
     def __init__(
         self,
         question: str,
@@ -60,7 +102,13 @@ class SemanticExtractionPromptCase(BasePreqlPromptCase):
 
 class SemanticToTokensPromptCase(BasePreqlPromptCase):
     template = STRUCTURED_PROMPT_V1
-
+    parse_model = SemanticTokenResponse
+    
+    attributes_used_for_hash = {
+        "tokens",
+        "phrases",
+        "category"
+    }
     def __init__(
         self,
         tokens: List[str],
@@ -71,12 +119,20 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
         self.phrases = phrases
         super().__init__(category="semantic_to_tokens", evaluators=evaluators)
 
+        
     def get_extra_template_context(self):
         return {"tokens": self.tokens, "phrase_str": ",".join(self.phrases)}
 
 
 class SelectionPromptCase(BasePreqlPromptCase):
     template = SELECTION_TEMPLATE_V1
+    parse_model = ConceptSelection
+
+    attributes_used_for_hash = BasePreqlPromptCase.attributes_used_for_hash | {
+        "question",
+        "concepts",
+        "category"
+    }
 
     def __init__(
         self,

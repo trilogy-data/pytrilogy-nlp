@@ -19,8 +19,8 @@ from preql_nlp.prompts import (
     SemanticExtractionPromptCase,
 )
 from preql_nlp.constants import logger, DEFAULT_LIMIT
-from preql_nlp.models import InitialParseResponse, TokenInputs, SemanticTokenResponse, ConceptSelectionResponse
-from dataclasses import dataclass
+from preql_nlp.models import InitialParseResponse, OrderResult, FilterResult, TokenInputs, SemanticTokenResponse, ConceptSelectionResponse, IntermediateParseResults
+
 from typing import Any
 
 import re
@@ -80,12 +80,6 @@ def tokens_to_concept(
     return found
 
 
-@dataclass
-class IntermediateParseResults:
-    select: List[str]
-    limit: int
-    order: List[str]
-    # filter: List[FilterItem]
 
 
 def coerce_list_dict(input: Any) -> List[dict]:
@@ -109,6 +103,15 @@ def coerce_list_str(input: Any) -> List[str]:
 def coerce_initial_result(input) -> InitialParseResponse:
     return InitialParseResponse.parse_obj(input)
 
+
+def get_phrase_from_x(x):
+    if isinstance(x, str):
+        return x
+    elif isinstance(x, FilterResult):
+        return x.concept
+    elif isinstance(x, OrderResult):
+        return x.concept
+    raise ValueError
 
 def discover_inputs(
     input_text: str,
@@ -137,15 +140,20 @@ def discover_inputs(
             log_info=log_info,
             session_uuid=session_uuid,
         )
-    order = parsed.order
-    token_inputs = TokenInputs(metrics=metrics, dimensions=dimensions)
+    order = [x.concept for x in parsed.order]
+    filtering = [f.concept for f in parsed.filtering]
+    token_inputs = TokenInputs(metrics=metrics, dimensions=dimensions,
+                               order=order,
+                               filtering=filtering)
 
     output: List[str] = []
     for field in [
         "metrics",
         "dimensions",
+        "filtering",
+        "order"
     ]:
-        local_phrases = [x for x in getattr(parsed, field)]
+        local_phrases = [get_phrase_from_x(x) for x in getattr(parsed, field)]
         phrase_tokens:SemanticTokenResponse =       run_prompt(
                 SemanticToTokensPromptCase(
                     phrases=local_phrases, tokens=getattr(token_inputs, field)
@@ -180,7 +188,8 @@ def discover_inputs(
     final = list(set(selections.matches))
 
     return IntermediateParseResults(
-        select=final, limit=parsed.limit or 20, order=[]
+        select=final, limit=parsed.limit or 20, order=parsed.order,
+        filtering = parsed.filtering
     )
 
 
@@ -193,20 +202,19 @@ def safe_limit(input: int | None) -> int:
 
 
 def safe_parse_order_item(
-    input: str, input_concepts: List[Concept]
+    input: OrderResult, input_concepts: List[Concept]
 ) -> OrderItem | None:
-    concept, direction = input.split(" ", 1)
-    matched = [c for c in input_concepts if concept in c.address]
+    matched = [c for c in input_concepts if input.concept in c.address]
     if not matched:
         return None
     try:
-        order = Ordering(direction)
+        order = input.order
     except Exception:
         return None
     return OrderItem(expr=matched[0], order=order)
 
 
-def parse_order(input_concepts: List[Concept], ordering: List[str] | None) -> OrderBy:
+def parse_order(input_concepts: List[Concept], ordering: List[OrderResult] | None) -> OrderBy:
     default_order = [
         OrderItem(expr=c, order=Ordering.DESCENDING)
         for c in input_concepts
@@ -221,6 +229,37 @@ def parse_order(input_concepts: List[Concept], ordering: List[str] | None) -> Or
             final.append(parsed)
     return OrderBy(items=final)
 
+from preql.core.models import WhereClause, FilterItem, Conditional, Comparison
+from preql.core.enums import BooleanOperator
+
+def parse_filter(input:FilterResult, input_concepts:List[Concept])->Comparison | None:
+
+    matched = [c for c in input_concepts if input.concept in c.address]
+    if not matched:
+        return None
+    return Comparison(left=matched[0], right=input.values[0] if len(input.values) == 1 else input.values,
+                      operator=input.operator)
+
+
+def parse_filtering(input_concepts:List[Concept],
+                filtering: List[FilterResult])->WhereClause | None:
+
+    base = []
+    for item in filtering:
+        parsed = parse_filter(item, input_concepts)
+        if parsed:
+            base.append(parsed)
+    if not base:
+        return None
+    if len(base) == 1:
+        return WhereClause(conditional=base[0])
+    left:Conditional | Comparison = base.pop()
+    while base:
+        right = base.pop()
+        new = Conditional(left = left, right=right, operator=BooleanOperator.AND)
+        left = new
+    return WhereClause(conditional=left)
+    
 
 def parse_query(
     input_text: str,
@@ -233,11 +272,13 @@ def parse_query(
     )
     concepts = [input_environment.concepts[x] for x in results.select]
     order = parse_order(concepts, results.order)
+    filtering = parse_filtering(concepts, results.filtering)
     if debug:
         print("Concepts found")
         for c in concepts:
             print(c.address)
-    query = Select(selection=concepts, limit=safe_limit(results.limit), order_by=order)
+    query = Select(selection=concepts, limit=safe_limit(results.limit), order_by=order,
+                   where_clause=filtering)
     return query
 
 

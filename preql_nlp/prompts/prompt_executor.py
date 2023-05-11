@@ -4,7 +4,6 @@ from promptimize.prompt_cases import TemplatedPromptCase
 # Bringing some useful eval function that help evaluating and scoring responses
 # eval functions have a handle on the prompt object and are expected
 # to return a score between 0 and 1
-from promptimize.utils import extract_json_objects
 from preql_nlp.constants import logger
 from preql_nlp.prompts.query_semantic_extraction import EXTRACTION_PROMPT_V1
 from preql_nlp.prompts.semantic_to_tokens import STRUCTURED_PROMPT_V1
@@ -114,6 +113,7 @@ class SemanticExtractionPromptCase(BasePreqlPromptCase):
     attributes_used_for_hash = {
         "category",
         "question",
+        "template"
     }
 
     def __init__(
@@ -132,7 +132,7 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
     template = STRUCTURED_PROMPT_V1
     parse_model = SemanticTokenResponse
 
-    attributes_used_for_hash = {"tokens", "phrases", "category"}
+    attributes_used_for_hash = {"tokens", "phrases", "category", "template"}
 
     def __init__(
         self,
@@ -152,7 +152,7 @@ class SelectionPromptCase(BasePreqlPromptCase):
     template = SELECTION_TEMPLATE_V1
     parse_model = ConceptSelectionResponse
 
-    attributes_used_for_hash = {"question", "concepts", "category"}
+    attributes_used_for_hash = {"question", "concepts", "category", "template"}
 
     def __init__(
         self,
@@ -161,7 +161,7 @@ class SelectionPromptCase(BasePreqlPromptCase):
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         self.question = question
-        self.concepts = concepts
+        self.concepts = sorted(list(set(concepts)), key=lambda x: x)
         super().__init__(evaluators=evaluators, category="selection")
         self.execution.score = None
 

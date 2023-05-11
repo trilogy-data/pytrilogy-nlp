@@ -1,4 +1,6 @@
 from pydantic import BaseModel
+from preql.core.enums import ComparisonOperator
+from preql.core.enums import Ordering
 
 ''''- metrics: a list of concepts from the question that should be aggregated
 - dimensions: a list of concepts from the question which are not metrics
@@ -10,16 +12,19 @@ class TokenInputs(BaseModel):
     """The inputs to the tokenization prompt"""
     metrics:list[str]
     dimensions:list[str]
+    order:list[str]
+    filtering:list[str]
 
 class FilterResult(BaseModel):
     """The result of the filter prompt"""
     concept:str
     values:list[str]
+    operator:ComparisonOperator
 
 class OrderResult(BaseModel):
     """The result of the order prompt"""
     concept:str
-    order:str
+    order: Ordering
 
 class InitialParseResponse(BaseModel):
     """The result of the initial parse"""
@@ -50,3 +55,11 @@ class SemanticTokenResponse(BaseModel):
 class ConceptSelectionResponse(BaseModel):
     matches:list[str]
     reasoning:str
+
+
+
+class IntermediateParseResults(BaseModel):
+    select: list[str]
+    limit: int
+    order: list[OrderResult]
+    filtering:list[FilterResult]

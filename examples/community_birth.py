@@ -14,7 +14,7 @@ environment = models["bigquery.usa_names"]
 
 
 processed_query = build_query(
-    "Most popular names in the state of vermont in 1990?",
+    "Most common names in the state of VT in 1990?",
     environment,
     debug=True,
 )

@@ -64,7 +64,7 @@ System:
       ]
    }
 ]{% endraw %}
-User: Given the tokens {{ tokens }}, match tokens to the phrases {{ phrase_str }}
+User: Given the tokens {{ tokens }}, match tokens to the phrases [{{ phrase_str }}]
 System:
 """
 

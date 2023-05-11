@@ -1,10 +1,10 @@
 from preql_nlp.prompts.prompt_executor import SelectionPromptCase
-from preql_nlp.models import ConceptSelection
+from preql_nlp.models import ConceptSelectionResponse
 from tests.utility import generate_test_case, evaluate_cases
 
 
 def gen_select_test(words):
-    def select_test(x: ConceptSelection):
+    def select_test(x: ConceptSelectionResponse):
         return set(x.matches) == set(words)
 
     return [select_test]

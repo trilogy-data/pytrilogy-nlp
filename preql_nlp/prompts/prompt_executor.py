@@ -9,7 +9,7 @@ from preql_nlp.constants import logger
 from preql_nlp.prompts.query_semantic_extraction import EXTRACTION_PROMPT_V1
 from preql_nlp.prompts.semantic_to_tokens import STRUCTURED_PROMPT_V1
 from preql_nlp.prompts.final_selection import SELECTION_TEMPLATE_V1
-from preql_nlp.models import InitialParseResult, ConceptSelection, SemanticTokenResponse
+from preql_nlp.models import InitialParseResponse, ConceptSelectionResponse, SemanticTokenResponse
 from pydantic import BaseModel, ValidationError
 from typing import List, Optional, Callable, Union, Type
 import uuid
@@ -109,7 +109,7 @@ class BasePreqlPromptCase(TemplatedPromptCase):
 
 class SemanticExtractionPromptCase(BasePreqlPromptCase):
     template = EXTRACTION_PROMPT_V1
-    parse_model = InitialParseResult
+    parse_model = InitialParseResponse
 
     attributes_used_for_hash = {
         "category",
@@ -145,12 +145,12 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
         super().__init__(category="semantic_to_tokens", evaluators=evaluators)
 
     def get_extra_template_context(self):
-        return {"tokens": self.tokens, "phrase_str": ",".join(self.phrases)}
+        return {"tokens": self.tokens, "phrase_str": ", ".join([f'"{c}"' for c in self.phrases])}
 
 
 class SelectionPromptCase(BasePreqlPromptCase):
     template = SELECTION_TEMPLATE_V1
-    parse_model = ConceptSelection
+    parse_model = ConceptSelectionResponse
 
     attributes_used_for_hash = {"question", "concepts", "category"}
 
@@ -166,7 +166,7 @@ class SelectionPromptCase(BasePreqlPromptCase):
         self.execution.score = None
 
     def get_extra_template_context(self):
-        return {"concept_string": ", ".join(self.concepts), "question": self.question}
+        return {"concept_string": ", ".join([f'"{c}"' for c in self.concepts]), "question": self.question}
 
 
 DATA_DIR = os.path.join(
@@ -202,11 +202,11 @@ def log_prompt_info(prompt: TemplatedPromptCase, session_uuid: uuid.UUID):
 
 
 def run_prompt(
-    prompt: TemplatedPromptCase,
+    prompt: BasePreqlPromptCase,
     debug: bool = False,
     log_info=True,
     session_uuid: uuid.UUID | None = None,
-) -> list[dict | list]:
+) -> BaseModel:
     if not session_uuid:
         session_uuid = uuid.uuid4()
 
@@ -225,7 +225,4 @@ def run_prompt(
     if log_info:
         log_prompt_info(prompt, session_uuid)
 
-    base = extract_json_objects(raw_output)
-    if debug:
-        logger.debug(base)
-    return base
+    return prompt.parsed 

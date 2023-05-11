@@ -19,7 +19,7 @@ from preql_nlp.prompts import (
     SemanticExtractionPromptCase,
 )
 from preql_nlp.constants import logger, DEFAULT_LIMIT
-from preql_nlp.models import InitialParseResult, TokenInputs
+from preql_nlp.models import InitialParseResponse, TokenInputs, SemanticTokenResponse, ConceptSelectionResponse
 from dataclasses import dataclass
 from typing import Any
 
@@ -45,7 +45,7 @@ def build_token_list_by_purpose(concepts, purposes: Iterable[Purpose]):
         #     final.append(concept)
         for x in split_to_tokens(concept):
             final.add(x)
-    return ", ".join(list(final))
+    return list(final)
 
 
 def tokens_to_concept(
@@ -106,8 +106,8 @@ def coerce_list_str(input: Any) -> List[str]:
     return input
 
 
-def coerce_initial_result(input) -> InitialParseResult:
-    return InitialParseResult.parse_obj(input)
+def coerce_initial_result(input) -> InitialParseResponse:
+    return InitialParseResponse.parse_obj(input)
 
 
 def discover_inputs(
@@ -131,14 +131,12 @@ def discover_inputs(
 
     session_uuid = uuid.uuid4()
 
-    parsed = coerce_initial_result(
-        run_prompt(
+    parsed:InitialParseResponse =run_prompt(
             SemanticExtractionPromptCase(input_text),
             debug=debug,
             log_info=log_info,
             session_uuid=session_uuid,
-        )[0]
-    )
+        )
     order = parsed.order
     token_inputs = TokenInputs(metrics=metrics, dimensions=dimensions)
 
@@ -147,48 +145,42 @@ def discover_inputs(
         "metrics",
         "dimensions",
     ]:
-        local_phrases = [x for x in parsed[field]]
-        phrase_tokens = coerce_list_dict(
-            run_prompt(
+        local_phrases = [x for x in getattr(parsed, field)]
+        phrase_tokens:SemanticTokenResponse =       run_prompt(
                 SemanticToTokensPromptCase(
-                    phrases=local_phrases, tokens=token_inputs[field]
+                    phrases=local_phrases, tokens=getattr(token_inputs, field)
                 ),
                 debug=True,
                 session_uuid=session_uuid,
                 log_info=log_info,
             )
-        )
         token_universe = []
         for mapping in phrase_tokens:
-            for k, v in mapping.items():
-                token_universe += v
+            token_universe += mapping.tokens
         for mapping in phrase_tokens:
-            for k, v in mapping.items():
-                concepts = tokens_to_concept(
-                    v,
-                    [c for c in final_concept_list],
-                    limits=5,
-                    universe=token_universe,
+            concepts = tokens_to_concept(
+                mapping.tokens,
+                [c for c in final_concept_list],
+                limits=5,
+                universe=token_universe,
+            )
+            logger.info(f"For phrase {mapping.phrase} got {concepts}")
+            if concepts:
+                output += concepts
+            else:
+                raise ValueError(
+                    f"Could not find concept for input {mapping.phrase} with tokens {mapping.tokens}"
                 )
-                logger.info(f"For phrase {k} got {concepts}")
-                if concepts:
-                    output += concepts
-                else:
-                    raise ValueError(
-                        f"Could not find concept for input {k} with tokens {v}"
-                    )
-    selections = coerce_list_dict(
-        run_prompt(
+    selections:ConceptSelectionResponse = run_prompt(
             SelectionPromptCase(concepts=output, question=input_text),
             debug=debug,
             session_uuid=session_uuid,
             log_info=log_info,
         )
-    )[0]
-    final = list(set(selections.get("matches", [])))
+    final = list(set(selections.matches))
 
     return IntermediateParseResults(
-        select=final, limit=parsed.limit or 20, order=order
+        select=final, limit=parsed.limit or 20, order=[]
     )
 
 

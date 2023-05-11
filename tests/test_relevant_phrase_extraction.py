@@ -1,5 +1,5 @@
 from preql_nlp.prompts.prompt_executor import SemanticExtractionPromptCase
-from preql_nlp.models import InitialParseResult, FilterResult, OrderResult
+from preql_nlp.models import InitialParseResponse, FilterResult, OrderResult
 from tests.utility import generate_test_case, evaluate_cases
 
 
@@ -14,7 +14,7 @@ def gen_validate_initial_parse_result(**kwargs):
     outputs = []
     for key, test_values in kwargs.items():
 
-        def validator(input: InitialParseResult):
+        def validator(input: InitialParseResponse):
             # coerce any of the object results
             # like filtering
             # to a string for simplicity

@@ -1,4 +1,4 @@
-from preql_nlp.models import  SemanticTokenResponse, InitialParseResult
+from preql_nlp.models import  SemanticTokenResponse, InitialParseResponse
 
 
 def test_phrase_token():
@@ -25,5 +25,5 @@ def test_initial_parse_result():
 "filtering": [{"concept":"year", "values":["2020"]}]
 }'''
 
-    x = InitialParseResult.parse_raw(response)
+    x = InitialParseResponse.parse_raw(response)
     assert x.limit == -1

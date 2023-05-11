@@ -21,7 +21,7 @@ class OrderResult(BaseModel):
     concept:str
     order:str
 
-class InitialParseResult(BaseModel):
+class InitialParseResponse(BaseModel):
     """The result of the initial parse"""
     metrics:list[str]
     dimensions:list[str]
@@ -47,6 +47,6 @@ class SemanticTokenResponse(BaseModel):
     def __getitem__(self, idx):
         return self.__root__.__getitem__(idx)
 
-class ConceptSelection(BaseModel):
+class ConceptSelectionResponse(BaseModel):
     matches:list[str]
     reasoning:str

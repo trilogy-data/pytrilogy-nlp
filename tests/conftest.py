@@ -3,7 +3,7 @@ from pytest import fixture
 from logging import StreamHandler, DEBUG
 
 
-@fixture
+@fixture(scope='session', autouse=True)
 def test_logger():
     logger.addHandler(StreamHandler())
     logger.setLevel(DEBUG)

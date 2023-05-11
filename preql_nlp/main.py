@@ -188,7 +188,7 @@ def discover_inputs(
     final = list(set(selections.get("matches", [])))
 
     return IntermediateParseResults(
-        select=final, limit=parsed.get("limit", 20), order=order
+        select=final, limit=parsed.limit or 20, order=order
     )
 
 

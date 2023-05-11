@@ -11,10 +11,42 @@ class TokenInputs(BaseModel):
     metrics:list[str]
     dimensions:list[str]
 
+class FilterResult(BaseModel):
+    """The result of the filter prompt"""
+    concept:str
+    values:list[str]
+
+class OrderResult(BaseModel):
+    """The result of the order prompt"""
+    concept:str
+    order:str
+
 class InitialParseResult(BaseModel):
     """The result of the initial parse"""
     metrics:list[str]
     dimensions:list[str]
     limit:int
-    order:list[str]
-    filtering:list[str]
+    order:list[OrderResult]
+    filtering:list[FilterResult]
+
+    @property
+    def selection(self)->list[str]:
+        return self.metrics + self.dimensions
+
+
+class SemanticTokenMatch(BaseModel):
+    phrase: str
+    tokens: list[str]
+
+class SemanticTokenResponse(BaseModel):
+    __root__:list[SemanticTokenMatch]
+
+    def __iter__(self):
+        return iter(self.__root__)
+
+    def __getitem__(self, idx):
+        return self.__root__.__getitem__(idx)
+
+class ConceptSelection(BaseModel):
+    matches:list[str]
+    reasoning:str

@@ -1,62 +1,52 @@
 from promptimize.suite import Suite
 from promptimize.reports import Report
-from promptimize.utils import extract_json_objects
+from preql_nlp.prompts.prompt_executor import BasePreqlPromptCase
 from promptimize.utils import serialize_object
-from typing import List
+from typing import List, Callable, Type
+from pydantic import BaseModel
 
 
-def validate_object(input: str, fields: str | list[str], matches: List[str]) -> bool:
-    if isinstance(fields, str):
-        fields = [fields]
-    field_vals: list[str] = []
-    jobject = extract_json_objects(input)[0]
-    print(jobject)
-    for field in fields:
-        print('getting')
-        print(field)
-        field_vals+=jobject.get(field, [])
-    print('for matches', matches)
-    print(field_vals)
-    output = all([any(x in field for field in field_vals) for x in matches])
-    print('BOOLEAN')
-    print(output)
-    return output
+# def validate_object(input: str, fields: str | list[str], matches: List[str]) -> bool:
+#     if isinstance(fields, str):
+#         fields = [fields]
+#     field_vals: list[str] = []
+#     jobject = extract_json_objects(input)[0]
+#     print(jobject)
+#     for field in fields:
+#         print('getting')
+#         print(field)
+#         field_vals+=jobject.get(field, [])
+#     print('for matches', matches)
+#     print(field_vals)
+#     output = all([any(x in field for field in field_vals) for x in matches])
+#     print('BOOLEAN')
+#     print(output)
+#     return output
 
+def validate_model(input:BaseModel, accessor:Callable[[BaseModel], List[str]], matches: List[str])->bool:
+    field_vals = accessor(input)
+    success = all([any(x in field for field in field_vals) for x in matches])
+    return success
 
 def generate_test_case(
-    question: str,
-    prompt,
-    test_logger,
-    select: list[str] | None = None,
-    where: list[str] | None = None,
-    order: list[str] | None = None,
+    prompt: BasePreqlPromptCase,
+    tests:List[Callable[[BaseModel], bool]],
     **kwargs,
 ):
     evaluators = []
-    if select:
-        select_check = select or []
-        evaluators.append(
-            lambda x: validate_object(x, ["dimensions", "metrics"], select_check),
-        )
-
-    if order:
-        order_check = order or []
-        evaluators.append(lambda x: validate_object(x, "order", order_check))
-    if where:
-        where_check = where or []
-        evaluators.append(
-            lambda x: validate_object(x, "filtering", where_check),
-        )
+    evaluators.append(lambda x: prompt.parse_model.parse_raw(x) is not None)
+    for test in tests:
+        evaluators.append(lambda x: test(prompt.parse_model.parse_raw(x)) )
     case = prompt(
-        question=question,
-        evaluators=evaluators,
         **kwargs,
+        evaluators=evaluators,
     )
     return case
 
-def evaluate_cases(cases):
+def evaluate_cases(cases:List[BasePreqlPromptCase]):
     suite = Suite(cases)
-    output = suite.execute(
+    suite.execute(
+        silent=True
         # verbose=verbose,
         # style=style,
         # silent=silent,
@@ -69,9 +59,8 @@ def evaluate_cases(cases):
         # shuffle=shuffle,
         # limit=limit,
     )
-
-
     output_report = Report.from_suite(suite)
+
     # print results to log
     print(serialize_object(output_report.data.to_dict(), highlighted=False, style="yaml"))
     # print(output_report.print_summary())

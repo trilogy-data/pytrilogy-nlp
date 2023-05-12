@@ -2,26 +2,9 @@ from promptimize.suite import Suite
 from promptimize.reports import Report
 from preql_nlp.prompts.prompt_executor import BasePreqlPromptCase
 from promptimize.utils import serialize_object
-from typing import List, Callable, Type
+from typing import List, Callable
 from pydantic import BaseModel
 
-
-# def validate_object(input: str, fields: str | list[str], matches: List[str]) -> bool:
-#     if isinstance(fields, str):
-#         fields = [fields]
-#     field_vals: list[str] = []
-#     jobject = extract_json_objects(input)[0]
-#     print(jobject)
-#     for field in fields:
-#         print('getting')
-#         print(field)
-#         field_vals+=jobject.get(field, [])
-#     print('for matches', matches)
-#     print(field_vals)
-#     output = all([any(x in field for field in field_vals) for x in matches])
-#     print('BOOLEAN')
-#     print(output)
-#     return output
 
 def validate_model(input:BaseModel, accessor:Callable[[BaseModel], List[str]], matches: List[str])->bool:
     field_vals = accessor(input)

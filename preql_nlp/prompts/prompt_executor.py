@@ -15,6 +15,7 @@ from preql_nlp.models import (
 )
 from preql_nlp.cache_providers.base import BaseCache
 from preql_nlp.cache_providers.local_sqlite import SqlliteCache
+from preql_nlp.helpers import retry_with_exponential_backoff
 from pydantic import BaseModel, ValidationError
 from typing import List, Optional, Callable, Union, Type, overload
 import uuid
@@ -53,6 +54,7 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         self.fail_on_parse_error = fail_on_parse_error
         self.stash: BaseCache = SqlliteCache()
 
+    @retry_with_exponential_backoff
     def execute_prompt(self, prompt_str):
         # if we already have a local result
         # skip hitting remote
@@ -177,7 +179,7 @@ def log_prompt_info(prompt: TemplatedPromptCase, session_uuid: uuid.UUID):
 
 
 @overload
-def run_prompt( # type: ignore
+def run_prompt(  # type: ignore
     prompt: SemanticExtractionPromptCase,
     debug: bool = False,
     log_info: bool = True,
@@ -187,7 +189,7 @@ def run_prompt( # type: ignore
 
 
 @overload
-def run_prompt( # type: ignore
+def run_prompt(  # type: ignore
     prompt: SemanticToTokensPromptCase,
     debug: bool = False,
     log_info: bool = True,

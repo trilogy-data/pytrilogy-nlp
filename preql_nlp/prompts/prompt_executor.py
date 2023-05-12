@@ -8,15 +8,18 @@ from preql_nlp.constants import logger
 from preql_nlp.prompts.query_semantic_extraction import EXTRACTION_PROMPT_V1
 from preql_nlp.prompts.semantic_to_tokens import STRUCTURED_PROMPT_V1
 from preql_nlp.prompts.final_selection import SELECTION_TEMPLATE_V1
-from preql_nlp.models import InitialParseResponse, ConceptSelectionResponse, SemanticTokenResponse
+from preql_nlp.models import (
+    InitialParseResponse,
+    ConceptSelectionResponse,
+    SemanticTokenResponse,
+)
+from preql_nlp.cache_providers.base import BaseCache
+from preql_nlp.cache_providers.local_sqlite import SqlliteCache
 from pydantic import BaseModel, ValidationError
-from typing import List, Optional, Callable, Union, Type
+from typing import List, Optional, Callable, Union, Type, overload
 import uuid
 import json
 import os
-import sqlite3
-
-SQLITE_ADDRESS = "local_prompt_cache.db"
 
 
 def gen_hash(obj, keys: set[str]) -> str:
@@ -35,36 +38,6 @@ def gen_hash(obj, keys: set[str]) -> str:
     return m.digest().hex()
 
 
-def get_result_if_cached(prompt_hash: str) -> str | None:
-    print("checking for cache with prompt hash ", prompt_hash)
-    con = sqlite3.connect(SQLITE_ADDRESS)
-    cur = con.cursor()
-    cur.execute(
-        "create table if not exists prompt_cache (cache_id string, prompt_type string, response string)"
-    )
-    res = cur.execute(
-        "select response, prompt_type from prompt_cache where cache_id = ?",
-        (prompt_hash,),
-    )
-    current = res.fetchone()
-    if current:
-        print("got cached response of type ", current[1])
-        return current[0]
-    return None
-
-
-def stash_result(prompt_hash: str, category: str, result: str):
-    con = sqlite3.connect(SQLITE_ADDRESS)
-    cur = con.cursor()
-    cur.execute(
-        "create table if not exists prompt_cache (cache_id string, prompt_type string, response string)"
-    )
-    cur.execute(
-        "insert into prompt_cache select ?, ?,  ?", (prompt_hash, category, result)
-    )
-    con.commit()
-
-
 class BasePreqlPromptCase(TemplatedPromptCase):
     parse_model: Type[BaseModel]
 
@@ -78,19 +51,19 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         self._prompt_hash = str(uuid.uuid4())
         self.parsed = None
         self.fail_on_parse_error = fail_on_parse_error
+        self.stash: BaseCache = SqlliteCache()
 
     def execute_prompt(self, prompt_str):
         # if we already have a local result
         # skip hitting remote
         # TODO: make the cache provider pluggable and injected
         hash_val = gen_hash(self, self.attributes_used_for_hash)
-        resp = get_result_if_cached(hash_val)
+        resp = self.stash.retrieve(hash_val)
         if resp:
-            print("GOT CACHED RESPONSE \o/")
             self.response = resp
             return self.response
         self.response = self.prompt_executor(prompt_str)
-        stash_result(hash_val, self.category, self.response)
+        self.stash.stash(hash_val, self.category, self.response)
         return self.response
 
     def get_extra_template_context(self):
@@ -110,11 +83,7 @@ class SemanticExtractionPromptCase(BasePreqlPromptCase):
     template = EXTRACTION_PROMPT_V1
     parse_model = InitialParseResponse
 
-    attributes_used_for_hash = {
-        "category",
-        "question",
-        "template"
-    }
+    attributes_used_for_hash = {"category", "question", "template"}
 
     def __init__(
         self,
@@ -145,7 +114,10 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
         super().__init__(category="semantic_to_tokens", evaluators=evaluators)
 
     def get_extra_template_context(self):
-        return {"tokens": self.tokens, "phrase_str": ", ".join([f'"{c}"' for c in self.phrases])}
+        return {
+            "tokens": self.tokens,
+            "phrase_str": ", ".join([f'"{c}"' for c in self.phrases]),
+        }
 
 
 class SelectionPromptCase(BasePreqlPromptCase):
@@ -166,7 +138,10 @@ class SelectionPromptCase(BasePreqlPromptCase):
         self.execution.score = None
 
     def get_extra_template_context(self):
-        return {"concept_string": ", ".join([f'"{c}"' for c in self.concepts]), "question": self.question}
+        return {
+            "concept_string": ", ".join([f'"{c}"' for c in self.concepts]),
+            "question": self.question,
+        }
 
 
 DATA_DIR = os.path.join(
@@ -201,12 +176,42 @@ def log_prompt_info(prompt: TemplatedPromptCase, session_uuid: uuid.UUID):
         json.dump(data, f)
 
 
+@overload
+def run_prompt(
+    prompt: SemanticExtractionPromptCase,
+    debug: bool = False,
+    log_info=True,
+    session_uuid: uuid.UUID | None = None,
+) -> InitialParseResponse:
+    ...
+
+
+@overload
+def run_prompt(
+    prompt: SemanticToTokensPromptCase,
+    debug: bool = False,
+    log_info=True,
+    session_uuid: uuid.UUID | None = None,
+) -> SemanticTokenResponse:
+    ...
+
+
+@overload
+def run_prompt(
+    prompt: SelectionPromptCase,
+    debug: bool = False,
+    log_info=True,
+    session_uuid: uuid.UUID | None = None,
+) -> ConceptSelectionResponse:
+    ...
+
+
 def run_prompt(
     prompt: BasePreqlPromptCase,
     debug: bool = False,
     log_info=True,
     session_uuid: uuid.UUID | None = None,
-) -> BaseModel:
+) -> ConceptSelectionResponse | SemanticTokenResponse | InitialParseResponse:
     if not session_uuid:
         session_uuid = uuid.uuid4()
 
@@ -224,5 +229,6 @@ def run_prompt(
 
     if log_info:
         log_prompt_info(prompt, session_uuid)
-
-    return prompt.parsed 
+    if prompt.parsed:
+        return prompt.parsed
+    raise ValueError("Could not parse prompt response!")

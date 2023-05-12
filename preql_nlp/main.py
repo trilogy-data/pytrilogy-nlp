@@ -29,6 +29,10 @@ from preql_nlp.models import (
     IntermediateParseResults,
 )
 
+from preql.core.models import WhereClause, Conditional, Comparison
+from preql.core.enums import BooleanOperator
+
+
 from typing import Any
 
 import re
@@ -236,8 +240,6 @@ def parse_order(
     return OrderBy(items=final)
 
 
-from preql.core.models import WhereClause, FilterItem, Conditional, Comparison
-from preql.core.enums import BooleanOperator
 
 
 def parse_filter(

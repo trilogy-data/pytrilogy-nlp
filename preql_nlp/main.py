@@ -19,7 +19,15 @@ from preql_nlp.prompts import (
     SemanticExtractionPromptCase,
 )
 from preql_nlp.constants import logger, DEFAULT_LIMIT
-from preql_nlp.models import InitialParseResponse, OrderResult, FilterResult, TokenInputs, SemanticTokenResponse, ConceptSelectionResponse, IntermediateParseResults
+from preql_nlp.models import (
+    InitialParseResponse,
+    OrderResult,
+    FilterResult,
+    TokenInputs,
+    SemanticTokenResponse,
+    ConceptSelectionResponse,
+    IntermediateParseResults,
+)
 
 from typing import Any
 
@@ -31,7 +39,7 @@ def split_to_tokens(input_text: str) -> list[str]:
     return list(set(re.split("\.|\_", input_text)))
 
 
-def build_token_list_by_purpose(concepts, purposes: Iterable[Purpose]):
+def build_token_list_by_purpose(concepts, purposes: Iterable[Purpose]) -> list[str]:
     concepts = {k: v for k, v in concepts.items() if v.purpose in purposes}
 
     unique = set(concepts.keys())
@@ -80,8 +88,6 @@ def tokens_to_concept(
     return found
 
 
-
-
 def coerce_list_dict(input: Any) -> List[dict]:
     if not isinstance(input, list):
         raise ValueError("Input must be a list")
@@ -113,6 +119,7 @@ def get_phrase_from_x(x):
         return x.concept
     raise ValueError
 
+
 def discover_inputs(
     input_text: str,
     input_environment: Environment,
@@ -134,34 +141,29 @@ def discover_inputs(
 
     session_uuid = uuid.uuid4()
 
-    parsed:InitialParseResponse =run_prompt(
-            SemanticExtractionPromptCase(input_text),
-            debug=debug,
-            log_info=log_info,
-            session_uuid=session_uuid,
-        )
+    parsed: InitialParseResponse = run_prompt(
+        SemanticExtractionPromptCase(input_text),
+        debug=debug,
+        log_info=log_info,
+        session_uuid=session_uuid,
+    )
     order = [x.concept for x in parsed.order]
     filtering = [f.concept for f in parsed.filtering]
-    token_inputs = TokenInputs(metrics=metrics, dimensions=dimensions,
-                               order=order,
-                               filtering=filtering)
+    token_inputs = TokenInputs(
+        metrics=metrics, dimensions=dimensions, order=order, filtering=filtering
+    )
 
     output: List[str] = []
-    for field in [
-        "metrics",
-        "dimensions",
-        "filtering",
-        "order"
-    ]:
+    for field in ["metrics", "dimensions", "filtering", "order"]:
         local_phrases = [get_phrase_from_x(x) for x in getattr(parsed, field)]
-        phrase_tokens:SemanticTokenResponse =       run_prompt(
-                SemanticToTokensPromptCase(
-                    phrases=local_phrases, tokens=getattr(token_inputs, field)
-                ),
-                debug=True,
-                session_uuid=session_uuid,
-                log_info=log_info,
-            )
+        phrase_tokens: SemanticTokenResponse = run_prompt( # type: ignore
+            SemanticToTokensPromptCase(
+                phrases=local_phrases, tokens=getattr(token_inputs, field)
+            ),
+            debug=True,
+            session_uuid=session_uuid,
+            log_info=log_info,
+        )
         token_universe = []
         for mapping in phrase_tokens:
             token_universe += mapping.tokens
@@ -179,17 +181,19 @@ def discover_inputs(
                 raise ValueError(
                     f"Could not find concept for input {mapping.phrase} with tokens {mapping.tokens}"
                 )
-    selections:ConceptSelectionResponse = run_prompt(
-            SelectionPromptCase(concepts=output, question=input_text),
-            debug=debug,
-            session_uuid=session_uuid,
-            log_info=log_info,
-        )
+    selections: ConceptSelectionResponse = run_prompt( # type: ignore
+        SelectionPromptCase(concepts=output, question=input_text),
+        debug=debug,
+        session_uuid=session_uuid,
+        log_info=log_info,
+    )
     final = list(set(selections.matches))
 
     return IntermediateParseResults(
-        select=final, limit=parsed.limit or 20, order=parsed.order,
-        filtering = parsed.filtering
+        select=final,
+        limit=parsed.limit or 20,
+        order=parsed.order,
+        filtering=parsed.filtering,
     )
 
 
@@ -214,7 +218,9 @@ def safe_parse_order_item(
     return OrderItem(expr=matched[0], order=order)
 
 
-def parse_order(input_concepts: List[Concept], ordering: List[OrderResult] | None) -> OrderBy:
+def parse_order(
+    input_concepts: List[Concept], ordering: List[OrderResult] | None
+) -> OrderBy:
     default_order = [
         OrderItem(expr=c, order=Ordering.DESCENDING)
         for c in input_concepts
@@ -229,21 +235,27 @@ def parse_order(input_concepts: List[Concept], ordering: List[OrderResult] | Non
             final.append(parsed)
     return OrderBy(items=final)
 
+
 from preql.core.models import WhereClause, FilterItem, Conditional, Comparison
 from preql.core.enums import BooleanOperator
 
-def parse_filter(input:FilterResult, input_concepts:List[Concept])->Comparison | None:
 
+def parse_filter(
+    input: FilterResult, input_concepts: List[Concept]
+) -> Comparison | None:
     matched = [c for c in input_concepts if input.concept in c.address]
     if not matched:
         return None
-    return Comparison(left=matched[0], right=input.values[0] if len(input.values) == 1 else input.values,
-                      operator=input.operator)
+    return Comparison(
+        left=matched[0],
+        right=input.values[0] if len(input.values) == 1 else input.values,
+        operator=input.operator,
+    )
 
 
-def parse_filtering(input_concepts:List[Concept],
-                filtering: List[FilterResult])->WhereClause | None:
-
+def parse_filtering(
+    input_concepts: List[Concept], filtering: List[FilterResult]
+) -> WhereClause | None:
     base = []
     for item in filtering:
         parsed = parse_filter(item, input_concepts)
@@ -253,13 +265,13 @@ def parse_filtering(input_concepts:List[Concept],
         return None
     if len(base) == 1:
         return WhereClause(conditional=base[0])
-    left:Conditional | Comparison = base.pop()
+    left: Conditional | Comparison = base.pop()
     while base:
         right = base.pop()
-        new = Conditional(left = left, right=right, operator=BooleanOperator.AND)
+        new = Conditional(left=left, right=right, operator=BooleanOperator.AND)
         left = new
     return WhereClause(conditional=left)
-    
+
 
 def parse_query(
     input_text: str,
@@ -277,8 +289,12 @@ def parse_query(
         print("Concepts found")
         for c in concepts:
             print(c.address)
-    query = Select(selection=concepts, limit=safe_limit(results.limit), order_by=order,
-                   where_clause=filtering)
+    query = Select(
+        selection=concepts,
+        limit=safe_limit(results.limit),
+        order_by=order,
+        where_clause=filtering,
+    )
     return query
 
 

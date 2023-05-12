@@ -177,20 +177,20 @@ def log_prompt_info(prompt: TemplatedPromptCase, session_uuid: uuid.UUID):
 
 
 @overload
-def run_prompt(
+def run_prompt( # type: ignore
     prompt: SemanticExtractionPromptCase,
     debug: bool = False,
-    log_info=True,
+    log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
 ) -> InitialParseResponse:
     ...
 
 
 @overload
-def run_prompt(
+def run_prompt( # type: ignore
     prompt: SemanticToTokensPromptCase,
     debug: bool = False,
-    log_info=True,
+    log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
 ) -> SemanticTokenResponse:
     ...
@@ -200,7 +200,7 @@ def run_prompt(
 def run_prompt(
     prompt: SelectionPromptCase,
     debug: bool = False,
-    log_info=True,
+    log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
 ) -> ConceptSelectionResponse:
     ...
@@ -209,7 +209,7 @@ def run_prompt(
 def run_prompt(
     prompt: BasePreqlPromptCase,
     debug: bool = False,
-    log_info=True,
+    log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
 ) -> ConceptSelectionResponse | SemanticTokenResponse | InitialParseResponse:
     if not session_uuid:

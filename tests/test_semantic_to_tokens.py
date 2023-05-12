@@ -18,12 +18,12 @@ def gen_semantic_tests(match_dict):
     return output
 
 
-output    # 347938152690149153
-
+def test_structured_input():
+    first_phrase = "number of questions per year"
     test1 = generate_test_case(
         SemanticToTokensPromptCase,
-        tests=gen_semantic_tests({"number of questions per year": ["question", "year", "count"]}),
-        phrases=["questions per year"],
+        tests=gen_semantic_tests({first_phrase: ["question", "year", "count"]}),
+        phrases=[first_phrase],
         tokens=["question", "year", "count", "albatross", "answer", "month", "quarter"],
     )
 

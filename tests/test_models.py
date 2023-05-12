@@ -22,7 +22,7 @@ def test_initial_parse_result():
 "dimensions": ["year"],
 "limit": -1,
 "order": [],
-"filtering": [{"concept":"year", "values":["2020"]}]
+"filtering": [{"concept":"year", "values":["2020"], "operator":"="}]
 }'''
 
     x = InitialParseResponse.parse_raw(response)

@@ -1,7 +1,7 @@
 from preql_nlp.prompts.prompt_executor import SemanticExtractionPromptCase
 from preql_nlp.models import InitialParseResponse, FilterResult, OrderResult
 from tests.utility import generate_test_case, evaluate_cases
-
+from preql.core.enums import Ordering, ComparisonOperator
 
 def flatten_arg_list(obj, args):
     output = []
@@ -50,7 +50,7 @@ def test_extraction_prompt(test_logger):
                 "per",
                 "year",
             ],
-            order=[OrderResult(concept="year", order="DESC")],
+            order=[OrderResult(concept="year", order=Ordering.DESCENDING)],
         ),
     )
 
@@ -59,7 +59,7 @@ def test_extraction_prompt(test_logger):
         question="How many questions were asked in the year 2020?",
         tests=gen_validate_initial_parse_result(
             selection=["question", "count"],
-            filtering=[FilterResult(concept="year", values=["2020"])],
+            filtering=[FilterResult(concept="year", values=["2020"], operator =ComparisonOperator.EQ)],
         ),
     )
     evaluate_cases([case1, case2])

@@ -15,6 +15,6 @@ AdventureWorksDW2019.bak
 
 log_data
 
-code-workspace
+.*code-workspace
 
 local_prompt_cache.db

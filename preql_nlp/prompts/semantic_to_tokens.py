@@ -6,23 +6,65 @@ Guidelines:
 * you can assume the user will always provide a list of phrases
 * you can assume the user will always provide a list of tokens
 * only return tokens provided by the user
-The output should be a VALID JSON blob with the phrases as keys and arrays of tokens as values:
 * If a phrase has no matches, return an empty array
+The output should be a VALID JSON list with each entry having the following keys
+* phrase, the input phrase
+* tokens, a list of matching token strings
+
+
 User: given the tokens ["color", "product", "year", "revenue"], match tokens to the phrases ["product revenue", "product color", "product revenue by year", "yearly revenue"]
 System:
-{% raw %}{
-    "product revenue": ["product", "revenue"],
-    "product color": ["product", "color"],
-    "product revenue by year": ["product", "revenue", "year"],
-    "yearly revenue": ["year", "revenue"]
-}
+{% raw %}
+[
+   {
+      "phrase":"product revenue",
+      "tokens":[
+         "product",
+         "revenue"
+      ]
+   },
+   {
+      "phrase":"product color",
+      "tokens":[
+         "product",
+         "color"
+      ]
+    },
+    {
+      "phrase":"product revenue by year",
+      "tokens":[
+         "product",
+         "revenue",
+         "year"
+      ]
+   },
+    {
+      "phrase":"yearly revenue",
+      "tokens":[
+         "revenue",
+         "year"
+      ]
+   }   
+]
 User: given the tokens ["product", "count", "order", "year"], match tokens to the phrases ["products sold", "orders"]
 System:
-{
-    "products sold": ["product", "count"],
-    "orders": ["order", "count"]
-}{% endraw %}
-User: Given the tokens {{ tokens }}, match tokens to the phrases {{ phrase_str }}
+[
+   {
+      "phrase":"products_sold",
+      "tokens":[
+         "product",
+         "count"
+      ]
+   },
+   {
+      "phrase":"orders",
+      "tokens":[
+         "order",
+         "count"
+      ]
+   }
+]{% endraw %}
+User: Given the tokens {{ tokens }}, match tokens to the phrases [{{ phrase_str }}]
 System:
 """
 

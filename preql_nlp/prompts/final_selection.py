@@ -23,7 +23,7 @@ User: concepts: ["product.color", "order.state", "order.year", "order.revenue.su
 System:
 {"matches": ["order.state", "order.revenue.avg"],
 "reasoning": "order.state is the best match for state, and order.revenue.avg would capture average revenue." }{% endraw %}
-User: concepts:"[{{ concept_string }}]" question: "{{ question }}"
+User: concepts: [{{ concept_string }}] question: "{{ question }}"
 System:
 
 """

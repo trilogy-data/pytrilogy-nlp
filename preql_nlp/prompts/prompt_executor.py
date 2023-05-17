@@ -152,7 +152,7 @@ class SelectionPromptCase(BasePreqlPromptCase):
 
 
 class FilterRefinementCase(BasePreqlPromptCase):
-    template = templates.get_template('prompt_final_concepts.jinja2')
+    template = templates.get_template('prompt_refine_filter.jinja2')
     parse_model = FilterRefinementResponse
 
     attributes_used_for_hash = {"value", "description"}

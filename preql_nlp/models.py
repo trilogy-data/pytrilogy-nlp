@@ -68,5 +68,6 @@ class IntermediateParseResults(BaseModel):
 
 
 class FilterRefinementResponse(BaseModel):
-    value:str
+    new_value:str
+    original_value:str
     description:str

@@ -36,7 +36,9 @@ class InitialParseResponse(BaseModel):
 
     @property
     def selection(self)->list[str]:
-        return self.metrics + self.dimensions
+        filtering = [f.concept for f in self.filtering]
+        order = [x.concept for x in self.order]
+        return self.metrics + self.dimensions + filtering + order
 
 
 class SemanticTokenMatch(BaseModel):
@@ -63,3 +65,8 @@ class IntermediateParseResults(BaseModel):
     limit: int
     order: list[OrderResult]
     filtering:list[FilterResult]
+
+
+class FilterRefinementResponse(BaseModel):
+    value:str
+    description:str

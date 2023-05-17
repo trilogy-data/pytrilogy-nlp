@@ -5,13 +5,11 @@ from promptimize.prompt_cases import TemplatedPromptCase
 # eval functions have a handle on the prompt object and are expected
 # to return a score between 0 and 1
 from preql_nlp.constants import logger
-from preql_nlp.prompts.query_semantic_extraction import EXTRACTION_PROMPT_V1
-from preql_nlp.prompts.semantic_to_tokens import STRUCTURED_PROMPT_V1
-from preql_nlp.prompts.final_selection import SELECTION_TEMPLATE_V1
 from preql_nlp.models import (
     InitialParseResponse,
     ConceptSelectionResponse,
     SemanticTokenResponse,
+    FilterRefinementResponse
 )
 from preql_nlp.cache_providers.base import BaseCache
 from preql_nlp.cache_providers.local_sqlite import SqlliteCache
@@ -21,7 +19,10 @@ from typing import List, Optional, Callable, Union, Type, overload
 import uuid
 import json
 import os
-
+from jinja2 import FileSystemLoader, Environment, Template
+from os.path import dirname
+loader = FileSystemLoader(searchpath=dirname(__file__))
+templates = Environment(loader=loader, autoescape=True)
 
 def gen_hash(obj, keys: set[str]) -> str:
     """Generate a deterministic hash for an object across multiple runs"""
@@ -41,6 +42,7 @@ def gen_hash(obj, keys: set[str]) -> str:
 
 class BasePreqlPromptCase(TemplatedPromptCase):
     parse_model: Type[BaseModel]
+    template:Template
 
     def __init__(
         self,
@@ -79,10 +81,13 @@ class BasePreqlPromptCase(TemplatedPromptCase):
             print(self.response)
             if self.fail_on_parse_error:
                 raise e
+            
+    def render(self,):
+        return self.template.render(**self.jinja_context)
 
 
 class SemanticExtractionPromptCase(BasePreqlPromptCase):
-    template = EXTRACTION_PROMPT_V1
+    template = templates.get_template('prompt_query_semantic_groupings.jinja2')
     parse_model = InitialParseResponse
 
     attributes_used_for_hash = {"category", "question", "template"}
@@ -100,7 +105,7 @@ class SemanticExtractionPromptCase(BasePreqlPromptCase):
 
 
 class SemanticToTokensPromptCase(BasePreqlPromptCase):
-    template = STRUCTURED_PROMPT_V1
+    template = templates.get_template('prompt_semantic_to_tokens.jinja2')
     parse_model = SemanticTokenResponse
 
     attributes_used_for_hash = {"tokens", "phrases", "category", "template"}
@@ -123,7 +128,7 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
 
 
 class SelectionPromptCase(BasePreqlPromptCase):
-    template = SELECTION_TEMPLATE_V1
+    template = templates.get_template('prompt_final_concepts.jinja2')
     parse_model = ConceptSelectionResponse
 
     attributes_used_for_hash = {"question", "concepts", "category", "template"}
@@ -143,6 +148,29 @@ class SelectionPromptCase(BasePreqlPromptCase):
         return {
             "concept_string": ", ".join([f'"{c}"' for c in self.concepts]),
             "question": self.question,
+        }
+
+
+class FilterRefinementCase(BasePreqlPromptCase):
+    template = templates.get_template('prompt_final_concepts.jinja2')
+    parse_model = FilterRefinementResponse
+
+    attributes_used_for_hash = {"value", "description"}
+
+    def __init__(
+        self,
+        value:str,
+        description:str,
+        evaluators: Optional[Union[Callable, List[Callable]]] = None,
+    ):
+        self.value = value
+        self.description = description
+        super().__init__(evaluators=evaluators, category="filter_refinement")
+
+    def get_extra_template_context(self):
+        return {
+            "value": self.value,
+            "description": self.description
         }
 
 
@@ -208,12 +236,22 @@ def run_prompt(
     ...
 
 
+@overload
+def run_prompt(
+    prompt: FilterRefinementCase,
+    debug: bool = False,
+    log_info: bool = True,
+    session_uuid: uuid.UUID | None = None,
+) -> FilterRefinementResponse:
+    ...
+
+
 def run_prompt(
     prompt: BasePreqlPromptCase,
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> ConceptSelectionResponse | SemanticTokenResponse | InitialParseResponse:
+) -> ConceptSelectionResponse | SemanticTokenResponse | InitialParseResponse | FilterRefinementResponse:
     if not session_uuid:
         session_uuid = uuid.uuid4()
 

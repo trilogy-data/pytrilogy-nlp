@@ -15,21 +15,10 @@ logger.addHandler(StreamHandler())
 environment = models["bigquery.usa_names"]
 
 
-processed_query = build_query(
-    "Most common names in the state of VT in 1990?",
+processed_query = parse_query(
+    "Most common names in Vermont in 1990?",
     environment,
     debug=True,
 )
 
-for key in processed_query.output_columns:
-    print(key)
-
-executor = Dialects.BIGQUERY.default_executor(
-    environment=environment, hooks=[DebuggingHook()]
-)
-
-render_query(processed_query)
-
-results = executor.execute_query(processed_query)
-for row in results:
-    print(row)
+print(render_query(processed_query))

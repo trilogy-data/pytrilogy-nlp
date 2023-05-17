@@ -1,4 +1,3 @@
-SELECTION_TEMPLATE_V1 = """
 System: You are a helpful AI that selects the most relevant matching concepts to answer a question from a provided list.
 
 Guidelines:
@@ -25,5 +24,3 @@ System:
 "reasoning": "order.state is the best match for state, and order.revenue.avg would capture average revenue." }{% endraw %}
 User: concepts: [{{ concept_string }}] question: "{{ question }}"
 System:
-
-"""

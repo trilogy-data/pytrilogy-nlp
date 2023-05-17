@@ -40,7 +40,7 @@ setuptools.setup(
         ]
     ),
     package_data={
-        "": ["*.tf", "*.jinja", "py.typed"],
+        "": ["*.tf", "*.jinja2", "py.typed"],
     },
     install_requires=install_requires,
     classifiers=[

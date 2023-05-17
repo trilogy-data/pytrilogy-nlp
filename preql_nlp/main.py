@@ -17,6 +17,7 @@ from preql_nlp.prompts import (
     SemanticToTokensPromptCase,
     SelectionPromptCase,
     SemanticExtractionPromptCase,
+    FilterRefinementCase
 )
 from preql_nlp.constants import logger, DEFAULT_LIMIT
 from preql_nlp.models import (
@@ -192,6 +193,14 @@ def discover_inputs(
         log_info=log_info,
     )
     final = list(set(selections.matches))
+
+    for item in parsed.filtering:
+        instance = input_environment.concepts[item.concept]
+        if instance.metadata:
+            item.concept = run_prompt( # type: ignore
+                FilterRefinementCase(value=item.concept,
+                                    description = instance.metadata.description )
+            ).new_value
 
     return IntermediateParseResults(
         select=final,

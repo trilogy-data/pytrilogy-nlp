@@ -9,7 +9,7 @@ from preql_nlp.models import (
     InitialParseResponse,
     ConceptSelectionResponse,
     SemanticTokenResponse,
-    FilterRefinementResponse
+    FilterRefinementResponse,
 )
 from preql_nlp.cache_providers.base import BaseCache
 from preql_nlp.cache_providers.local_sqlite import SqlliteCache
@@ -21,8 +21,10 @@ import json
 import os
 from jinja2 import FileSystemLoader, Environment, Template
 from os.path import dirname
+
 loader = FileSystemLoader(searchpath=dirname(__file__))
 templates = Environment(loader=loader)
+
 
 def gen_hash(obj, keys: set[str]) -> str:
     """Generate a deterministic hash for an object across multiple runs"""
@@ -46,7 +48,7 @@ def gen_hash(obj, keys: set[str]) -> str:
 
 class BasePreqlPromptCase(TemplatedPromptCase):
     parse_model: Type[BaseModel]
-    template:Template
+    template: Template
 
     def __init__(
         self,
@@ -86,13 +88,15 @@ class BasePreqlPromptCase(TemplatedPromptCase):
             print(self.response)
             if self.fail_on_parse_error:
                 raise e
-            
-    def render(self,):
+
+    def render(
+        self,
+    ):
         return self.template.render(**self.jinja_context)
 
 
 class SemanticExtractionPromptCase(BasePreqlPromptCase):
-    template = templates.get_template('prompt_query_semantic_groupings.jinja2')
+    template = templates.get_template("prompt_query_semantic_groupings.jinja2")
     parse_model = InitialParseResponse
 
     attributes_used_for_hash = {"category", "question", "template"}
@@ -110,7 +114,7 @@ class SemanticExtractionPromptCase(BasePreqlPromptCase):
 
 
 class SemanticToTokensPromptCase(BasePreqlPromptCase):
-    template = templates.get_template('prompt_semantic_to_tokens.jinja2')
+    template = templates.get_template("prompt_semantic_to_tokens.jinja2")
     parse_model = SemanticTokenResponse
 
     attributes_used_for_hash = {"tokens", "phrases", "category", "template"}
@@ -122,7 +126,7 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         self.tokens = sorted(tokens)
-        self.phrases =sorted(phrases)
+        self.phrases = sorted(phrases)
         super().__init__(category="semantic_to_tokens", evaluators=evaluators)
 
     def get_extra_template_context(self):
@@ -133,7 +137,7 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
 
 
 class SelectionPromptCase(BasePreqlPromptCase):
-    template = templates.get_template('prompt_final_concepts.jinja2')
+    template = templates.get_template("prompt_final_concepts.jinja2")
     parse_model = ConceptSelectionResponse
 
     attributes_used_for_hash = {"question", "concepts", "category", "template"}
@@ -157,15 +161,15 @@ class SelectionPromptCase(BasePreqlPromptCase):
 
 
 class FilterRefinementCase(BasePreqlPromptCase):
-    template = templates.get_template('prompt_refine_filter.jinja2')
+    template = templates.get_template("prompt_refine_filter.jinja2")
     parse_model = FilterRefinementResponse
 
     attributes_used_for_hash = {"values", "description", "template"}
 
     def __init__(
         self,
-        values:list[str],
-        description:str,
+        values: list[str],
+        description: str,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         self.values = values
@@ -175,7 +179,7 @@ class FilterRefinementCase(BasePreqlPromptCase):
     def get_extra_template_context(self):
         return {
             "values": ", ".join([f'"{x}"' for x in self.values]),
-            "description": self.description
+            "description": self.description,
         }
 
 
@@ -212,6 +216,16 @@ def log_prompt_info(prompt: TemplatedPromptCase, session_uuid: uuid.UUID):
 
 
 @overload
+def run_prompt( # type: ignore
+    prompt: SelectionPromptCase,
+    debug: bool = False,
+    log_info: bool = True,
+    session_uuid: uuid.UUID | None = None,
+) -> ConceptSelectionResponse:
+    ...
+
+
+@overload
 def run_prompt(  # type: ignore
     prompt: SemanticExtractionPromptCase,
     debug: bool = False,
@@ -232,17 +246,7 @@ def run_prompt(  # type: ignore
 
 
 @overload
-def run_prompt(
-    prompt: SelectionPromptCase,
-    debug: bool = False,
-    log_info: bool = True,
-    session_uuid: uuid.UUID | None = None,
-) -> ConceptSelectionResponse:
-    ...
-
-
-@overload
-def run_prompt(
+def run_prompt( # type: ignore
     prompt: FilterRefinementCase,
     debug: bool = False,
     log_info: bool = True,
@@ -256,7 +260,12 @@ def run_prompt(
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> ConceptSelectionResponse | SemanticTokenResponse | InitialParseResponse | FilterRefinementResponse:
+) -> (
+    ConceptSelectionResponse
+    | SemanticTokenResponse
+    | InitialParseResponse
+    | FilterRefinementResponse
+):
     if not session_uuid:
         session_uuid = uuid.uuid4()
 

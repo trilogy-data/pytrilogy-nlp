@@ -14,8 +14,7 @@ def generate_test_case(
     evaluators = []
     evaluators.append(lambda x: prompt.parse_model.parse_raw(x) is not None)
     for idx, test in enumerate(tests):
-        evaluators.append(lambda x, idx=idx, test=test: test(prompt.parse_model.parse_raw(x)) )
-
+        evaluators.append(lambda x, idx=idx, test=test: test(prompt.parse_model.parse_raw(x)) ) # type: ignore
 
     case = prompt(
         **kwargs,

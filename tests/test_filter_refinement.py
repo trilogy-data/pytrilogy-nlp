@@ -3,9 +3,10 @@ from preql_nlp.models import FilterRefinementResponse
 from tests.utility import generate_test_case, evaluate_cases
 
 
-def gen_select_test(word):
+def gen_select_test(word:list[str]):
     def select_test(x: FilterRefinementResponse):
-        return x.new_value == word
+        print(x.new_values, word)
+        return x.new_values == word
 
     return [select_test]
 
@@ -13,7 +14,7 @@ def test_filter_refinement():
     case1 = generate_test_case(
         FilterRefinementCase,
         values=["California",],
-        description="Field storing two digit state codes, ex MA for Massachusetts",
+        description="The common two character abbreviation for a state, such as MA for Massachusetts or CT for Connecticut.",
         tests=gen_select_test(["CA",],
             
         ),
@@ -23,7 +24,7 @@ def test_filter_refinement():
         FilterRefinementCase,
         values=["95%",],
         description="Field storing a float representing the percentage of the population that likes coconuts",
-        tests=gen_select_test([".95",],
+        tests=gen_select_test(['0.95',],
             
         ),
     )

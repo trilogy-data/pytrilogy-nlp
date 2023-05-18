@@ -1,7 +1,6 @@
 from trilogy_public_models import models
 from preql import Dialects
 from preql_nlp import build_query
-from preql_nlp.main import parse_query
 from preql.hooks.query_debugger import DebuggingHook
 from logging import StreamHandler, DEBUG
 from preql_nlp.constants import logger
@@ -28,8 +27,8 @@ executor = Dialects.BIGQUERY.default_executor(
     environment=environment, hooks=[DebuggingHook()]
 )
 
-render_query(processed_query)
+# render_query(processed_query)
 
-results = executor.execute_query(processed_query)
-for row in results:
-    print(row)
+# results = executor.execute_query(processed_query)
+# for row in results:
+#     print(row)

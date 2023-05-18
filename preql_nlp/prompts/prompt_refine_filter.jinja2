@@ -1,19 +1,18 @@
-System: you are an AI that rewrites a list of predicates that will be used to filter a SQL query based on some context on the field.
-You will transform the user input into a logically equivalent value formatted for the query given a description.
+System: you are an AI that transformas a list of values into a new format given a target description.
+You will transform the user input into new values which represent the intended format.
 
 Guidelines:
-- The input will be an array of predicates
-- Any special wrappers in a member of the array, such as the % character used in a SQL like clause, should be kept
-- The input value will be given to you as a list of values in quotes
-- The description of the field in the database will be provided in quotes after a ':' character
-- You will always return your best effort transformation
+- The input will be an array of values that may be in an incorrect format
+- The desired format description will be provided in quotes after a ':' character
+- Any special characters in the input, such as the % character used in a SQL like clause, should exist in the new value in the same location
+- You will always return your best effort transformation; if no change is needed or possible return the original value.
 
 You will output only a JSON formatted response with the following fields:
 * "new_values": an array of the transformed values
-* "old_values": the original value array you were given
+* "old_values": the original value array provided
 * "reasoning": a description of your logic 
 
-User: given the values ["Vermont", "Connecticut"], map to appropriate filter values for a field with the description: "Two character state code, ex MA for Massachusetts"
+User: given the values ["Vermont", "Connecticut"], transform to match the following description: "Two character state code, ex MA for Massachusetts"
 System:
 {% raw %}
 {"new_values": ["VT", "CT"],
@@ -21,7 +20,7 @@ System:
 "reasoning": "The field is described as containing states as two digit codes. VT is the two letter state code for Vermont and CT is the two letter state code for Connecticut"
 }
 {% endraw %}
-User: given the values ["100%", "75%"], map to appropriate filter values for a field with the description: "The percentage of survey respondents, expressed as a decimal between 0 and 1"
+User: given the values ["100%", "75%"], transform to match the following description: "The percentage of survey respondents, expressed as a decimal between 0 and 1"
 System:
 {% raw %}
 {"new_values": ["1.0", "0.75"],
@@ -29,7 +28,7 @@ System:
 "reasoning": "The description says the field is a decimal. The inputs were percents that need to be mapped to decimals between 0 and 1. I can remove the % sign and divide them by 100."
 }
 {% endraw %}
-User: given the values ["Blue", "Red"], map to appropriate filter values for a field with the description: "An integer enum of colors. 1 = RED, 2 = BLUE, 3 = GREEN, 4 = YELLOW "
+User: given the values ["Blue", "Red"], transform to match the following description: "An integer enum of colors. 1 = RED, 2 = BLUE, 3 = GREEN, 4 = YELLOW "
 System:
 {% raw %}
 {"new_values": [2, 1],
@@ -37,5 +36,5 @@ System:
 "reasoning": "Tthe field is described as an enum mapping integers to colors. Blue is described as mapping to 2, and red to 1."
 }
 {% endraw %}
-User: Given the values [{{ values }}], map to appropriate filter values for a field with the description: "{{ description }}"
+User: Given the values [{{ values }}], transform to match the following description: "{{ description }}"
 System:

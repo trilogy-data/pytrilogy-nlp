@@ -10,14 +10,14 @@ def flatten_arg_list(obj, args):
         output += getattr(obj, arg)
     return output
 
+
 def coerce_list(item):
     if not isinstance(item, list):
         return [item]
     return item
 
+
 def validator_factory(key, test_values):
-
-
     def validator(input: InitialParseResponse, lkey=key, test_values=test_values):
         lkey = key
         ltest = coerce_list(test_values)
@@ -26,26 +26,33 @@ def validator_factory(key, test_values):
         check = all(
             [
                 any(
-                    (test == partial or (isinstance(partial, str) and test in partial)) for partial in field_values
+                    (test == partial or (isinstance(partial, str) and test in partial))
+                    for partial in field_values
                 )
                 for test in ltest
             ]
         )
         if not check:
-            raise ValueError("could not find ", test_values, " in ", key, " with ", field_values)
-            print(
+            raise ValueError(
                 "could not find ", test_values, " in ", key, " with ", field_values
             )
+            print("could not find ", test_values, " in ", key, " with ", field_values)
         return check
+
     return validator
+
 
 def gen_validate_initial_parse_result(**kwargs):
     outputs = []
-    for key, test_values in kwargs.items(): 
+    for key, test_values in kwargs.items():
         # CRITICAL
         # we need to assign the values here in the loop to defaults on the lambda
         # to avoid lazy binding
-        outputs.append( lambda x, test_values=test_values, key=key:  validator_factory(key, test_values)(x))
+        outputs.append(
+            lambda x, test_values=test_values, key=key: validator_factory(
+                key, test_values
+            )(x)
+        )
     return outputs
 
 
@@ -54,10 +61,7 @@ def test_extraction_prompt(test_logger):
         SemanticExtractionPromptCase,
         question="How many questions are asked per year? Order results by year desc",
         tests=gen_validate_initial_parse_result(
-            selection=[
-                "count",
-                "year"
-            ],
+            selection=["count", "year"],
             order=[OrderResult(concept="year", order=Ordering.DESCENDING)],
         ),
     )
@@ -79,8 +83,12 @@ def test_extraction_prompt(test_logger):
         SemanticExtractionPromptCase,
         question="50 most common names by count in the state of VT in the year 2010?",
         tests=gen_validate_initial_parse_result(
-            selection=["names", "count", "state", ],
-            limit = 50,
+            selection=[
+                "names",
+                "count",
+                "state",
+            ],
+            limit=50,
             filtering=[
                 FilterResult(
                     concept="year", values=["2010"], operator=ComparisonOperator.EQ
@@ -97,7 +105,7 @@ def test_extraction_prompt(test_logger):
         question="What were the 50 most common names by count in Vermont in the year 2010?",
         tests=gen_validate_initial_parse_result(
             selection=["name", "count", "state", "year"],
-            limit = 50,
+            limit=50,
             filtering=[
                 FilterResult(
                     concept="year", values=["2010"], operator=ComparisonOperator.EQ
@@ -110,16 +118,18 @@ def test_extraction_prompt(test_logger):
     )
     evaluate_cases([case1, case2, case3, case4])
 
+
 def test_like_predicates():
     case1 = generate_test_case(
         SemanticExtractionPromptCase,
         question="SO answers where the body contains the word jaguar?",
         tests=gen_validate_initial_parse_result(
-            selection=["answer", "body"],
-            limit = 50,
+            selection=["body"],
             filtering=[
                 FilterResult(
-                    concept="body", values=["%jaguar%"], operator=ComparisonOperator.EQ
+                    concept="body",
+                    values=["%jaguar%"],
+                    operator=ComparisonOperator.LIKE,
                 ),
             ],
         ),

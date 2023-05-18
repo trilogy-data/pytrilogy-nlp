@@ -26,6 +26,8 @@ executor = Dialects.BIGQUERY.default_executor(
     environment=environment, hooks=[DebuggingHook()]
 )
 
-results = executor.execute_query(processed_query)
-for row in results:
-    print(row)
+# render_query(processed_query)
+
+# results = executor.execute_query(processed_query)
+# for row in results:
+#     print(row)

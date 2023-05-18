@@ -6,11 +6,6 @@ from typing import List, Callable
 from pydantic import BaseModel
 
 
-def validate_model(input:BaseModel, accessor:Callable[[BaseModel], List[str]], matches: List[str])->bool:
-    field_vals = accessor(input)
-    success = all([any(x in field for field in field_vals) for x in matches])
-    return success
-
 def generate_test_case(
     prompt: BasePreqlPromptCase,
     tests:List[Callable[[BaseModel], bool]],
@@ -18,8 +13,9 @@ def generate_test_case(
 ):
     evaluators = []
     evaluators.append(lambda x: prompt.parse_model.parse_raw(x) is not None)
-    for test in tests:
-        evaluators.append(lambda x: test(prompt.parse_model.parse_raw(x)) )
+    for idx, test in enumerate(tests):
+        evaluators.append(lambda x, idx=idx, test=test: test(prompt.parse_model.parse_raw(x)) ) # type: ignore
+
     case = prompt(
         **kwargs,
         evaluators=evaluators,
@@ -43,7 +39,6 @@ def evaluate_cases(cases:List[BasePreqlPromptCase]):
         # limit=limit,
     )
     output_report = Report.from_suite(suite)
-
     # print results to log
     print(serialize_object(output_report.data.to_dict(), highlighted=False, style="yaml"))
     # print(output_report.print_summary())

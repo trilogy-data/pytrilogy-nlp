@@ -5,13 +5,11 @@ from promptimize.prompt_cases import TemplatedPromptCase
 # eval functions have a handle on the prompt object and are expected
 # to return a score between 0 and 1
 from preql_nlp.constants import logger
-from preql_nlp.prompts.query_semantic_extraction import EXTRACTION_PROMPT_V1
-from preql_nlp.prompts.semantic_to_tokens import STRUCTURED_PROMPT_V1
-from preql_nlp.prompts.final_selection import SELECTION_TEMPLATE_V1
 from preql_nlp.models import (
     InitialParseResponse,
     ConceptSelectionResponse,
     SemanticTokenResponse,
+    FilterRefinementResponse,
 )
 from preql_nlp.cache_providers.base import BaseCache
 from preql_nlp.cache_providers.local_sqlite import SqlliteCache
@@ -21,6 +19,11 @@ from typing import List, Optional, Callable, Union, Type, overload
 import uuid
 import json
 import os
+from jinja2 import FileSystemLoader, Environment, Template
+from os.path import dirname
+
+loader = FileSystemLoader(searchpath=dirname(__file__))
+templates = Environment(loader=loader)
 
 
 def gen_hash(obj, keys: set[str]) -> str:
@@ -32,7 +35,11 @@ def gen_hash(obj, keys: set[str]) -> str:
     # we need to hash things in a deterministic order
     key_list = sorted(list(keys), key=lambda x: x)
     for key in key_list:
-        s = str(getattr(obj, key))
+        x = getattr(obj, key)
+        if isinstance(x, Template):
+            s = x.render()
+        else:
+            s = str(x)
 
         m.update(s.encode("utf-8"))
 
@@ -41,6 +48,7 @@ def gen_hash(obj, keys: set[str]) -> str:
 
 class BasePreqlPromptCase(TemplatedPromptCase):
     parse_model: Type[BaseModel]
+    template: Template
 
     def __init__(
         self,
@@ -75,14 +83,20 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         try:
             self.parsed = self.parse_model.parse_raw(self.response)
         except ValidationError as e:
+            print(self.render())
             print("was unable to parse response using ", str(self.parse_model))
             print(self.response)
             if self.fail_on_parse_error:
                 raise e
 
+    def render(
+        self,
+    ):
+        return self.template.render(**self.jinja_context)
+
 
 class SemanticExtractionPromptCase(BasePreqlPromptCase):
-    template = EXTRACTION_PROMPT_V1
+    template = templates.get_template("prompt_query_semantic_groupings.jinja2")
     parse_model = InitialParseResponse
 
     attributes_used_for_hash = {"category", "question", "template"}
@@ -100,7 +114,7 @@ class SemanticExtractionPromptCase(BasePreqlPromptCase):
 
 
 class SemanticToTokensPromptCase(BasePreqlPromptCase):
-    template = STRUCTURED_PROMPT_V1
+    template = templates.get_template("prompt_semantic_to_tokens.jinja2")
     parse_model = SemanticTokenResponse
 
     attributes_used_for_hash = {"tokens", "phrases", "category", "template"}
@@ -111,19 +125,19 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
         phrases: List[str],
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
-        self.tokens = tokens
-        self.phrases = phrases
+        self.tokens = sorted(tokens)
+        self.phrases = sorted(phrases)
         super().__init__(category="semantic_to_tokens", evaluators=evaluators)
 
     def get_extra_template_context(self):
         return {
-            "tokens": self.tokens,
+            "tokens": ", ".join([f'"{c}"' for c in self.tokens]),
             "phrase_str": ", ".join([f'"{c}"' for c in self.phrases]),
         }
 
 
 class SelectionPromptCase(BasePreqlPromptCase):
-    template = SELECTION_TEMPLATE_V1
+    template = templates.get_template("prompt_final_concepts.jinja2")
     parse_model = ConceptSelectionResponse
 
     attributes_used_for_hash = {"question", "concepts", "category", "template"}
@@ -146,6 +160,29 @@ class SelectionPromptCase(BasePreqlPromptCase):
         }
 
 
+class FilterRefinementCase(BasePreqlPromptCase):
+    template = templates.get_template("prompt_refine_filter.jinja2")
+    parse_model = FilterRefinementResponse
+
+    attributes_used_for_hash = {"values", "description", "template"}
+
+    def __init__(
+        self,
+        values: list[str],
+        description: str,
+        evaluators: Optional[Union[Callable, List[Callable]]] = None,
+    ):
+        self.values = values
+        self.description = description
+        super().__init__(evaluators=evaluators, category="filter_refinement")
+
+    def get_extra_template_context(self):
+        return {
+            "values": ", ".join([f'"{x}"' for x in self.values]),
+            "description": self.description,
+        }
+
+
 DATA_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "log_data"
 )
@@ -156,7 +193,7 @@ if not os.path.exists(DATA_DIR):
 def log_prompt_info(prompt: TemplatedPromptCase, session_uuid: uuid.UUID):
     prompt_hash = prompt.prompt_hash
     prompt_context = prompt.jinja_context
-    template = prompt.template
+    template = prompt.template.render(**prompt.jinja_context)
     category = prompt.category
 
     data = {
@@ -176,6 +213,16 @@ def log_prompt_info(prompt: TemplatedPromptCase, session_uuid: uuid.UUID):
             )
         )
         json.dump(data, f)
+
+
+@overload
+def run_prompt( # type: ignore
+    prompt: SelectionPromptCase,
+    debug: bool = False,
+    log_info: bool = True,
+    session_uuid: uuid.UUID | None = None,
+) -> ConceptSelectionResponse:
+    ...
 
 
 @overload
@@ -199,12 +246,12 @@ def run_prompt(  # type: ignore
 
 
 @overload
-def run_prompt(
-    prompt: SelectionPromptCase,
+def run_prompt( # type: ignore
+    prompt: FilterRefinementCase,
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> ConceptSelectionResponse:
+) -> FilterRefinementResponse:
     ...
 
 
@@ -213,7 +260,12 @@ def run_prompt(
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> ConceptSelectionResponse | SemanticTokenResponse | InitialParseResponse:
+) -> (
+    ConceptSelectionResponse
+    | SemanticTokenResponse
+    | InitialParseResponse
+    | FilterRefinementResponse
+):
     if not session_uuid:
         session_uuid = uuid.uuid4()
 

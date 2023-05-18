@@ -4,7 +4,6 @@ from preql_nlp import build_query
 from preql.hooks.query_debugger import DebuggingHook
 from logging import StreamHandler, DEBUG
 from preql_nlp.constants import logger
-from preql.parsing.render import render_query
 
 logger.setLevel(DEBUG)
 logger.addHandler(StreamHandler())

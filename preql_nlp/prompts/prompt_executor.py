@@ -22,7 +22,7 @@ import os
 from jinja2 import FileSystemLoader, Environment, Template
 from os.path import dirname
 loader = FileSystemLoader(searchpath=dirname(__file__))
-templates = Environment(loader=loader, autoescape=True)
+templates = Environment(loader=loader)
 
 def gen_hash(obj, keys: set[str]) -> str:
     """Generate a deterministic hash for an object across multiple runs"""
@@ -33,7 +33,11 @@ def gen_hash(obj, keys: set[str]) -> str:
     # we need to hash things in a deterministic order
     key_list = sorted(list(keys), key=lambda x: x)
     for key in key_list:
-        s = str(getattr(obj, key))
+        x = getattr(obj, key)
+        if isinstance(x, Template):
+            s = x.render()
+        else:
+            s = str(x)
 
         m.update(s.encode("utf-8"))
 
@@ -77,6 +81,7 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         try:
             self.parsed = self.parse_model.parse_raw(self.response)
         except ValidationError as e:
+            print(self.render())
             print("was unable to parse response using ", str(self.parse_model))
             print(self.response)
             if self.fail_on_parse_error:
@@ -116,13 +121,13 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
         phrases: List[str],
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
-        self.tokens = tokens
-        self.phrases = phrases
+        self.tokens = sorted(tokens)
+        self.phrases =sorted(phrases)
         super().__init__(category="semantic_to_tokens", evaluators=evaluators)
 
     def get_extra_template_context(self):
         return {
-            "tokens": self.tokens,
+            "tokens": ", ".join([f'"{c}"' for c in self.tokens]),
             "phrase_str": ", ".join([f'"{c}"' for c in self.phrases]),
         }
 
@@ -155,21 +160,21 @@ class FilterRefinementCase(BasePreqlPromptCase):
     template = templates.get_template('prompt_refine_filter.jinja2')
     parse_model = FilterRefinementResponse
 
-    attributes_used_for_hash = {"value", "description"}
+    attributes_used_for_hash = {"values", "description", "template"}
 
     def __init__(
         self,
-        value:str,
+        values:list[str],
         description:str,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
-        self.value = value
+        self.values = values
         self.description = description
         super().__init__(evaluators=evaluators, category="filter_refinement")
 
     def get_extra_template_context(self):
         return {
-            "value": self.value,
+            "values": ", ".join([f'"{x}"' for x in self.values]),
             "description": self.description
         }
 
@@ -184,7 +189,7 @@ if not os.path.exists(DATA_DIR):
 def log_prompt_info(prompt: TemplatedPromptCase, session_uuid: uuid.UUID):
     prompt_hash = prompt.prompt_hash
     prompt_context = prompt.jinja_context
-    template = prompt.template
+    template = prompt.template.render(**prompt.jinja_context)
     category = prompt.category
 
     data = {

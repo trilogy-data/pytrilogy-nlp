@@ -9,13 +9,22 @@ def gen_select_test(word):
 
     return [select_test]
 
-def test_filter_refinemnet():
+def test_filter_refinement():
     case1 = generate_test_case(
         FilterRefinementCase,
-        value="Vermont",
+        values=["California",],
         description="Field storing two digit state codes, ex MA for Massachusetts",
-        tests=gen_select_test("VT",
+        tests=gen_select_test(["CA",],
             
         ),
     )
-    evaluate_cases([case1])
+
+    case2 = generate_test_case(
+        FilterRefinementCase,
+        values=["95%",],
+        description="Field storing a float representing the percentage of the population that likes coconuts",
+        tests=gen_select_test([".95",],
+            
+        ),
+    )
+    evaluate_cases([case1, case2])

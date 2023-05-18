@@ -21,6 +21,6 @@ System:
 User: concepts: ["product.color", "order.state", "order.year", "order.revenue.sum", "order.revenue.avg", "product.name", "order.month", "order.day", "product.manufacturer"]  question: "What are the average sales by state?"
 System:
 {"matches": ["order.state", "order.revenue.avg"],
-"reasoning": "order.state is the best match for state, and order.revenue.avg would capture average revenue." }{% endraw %}
+"reasoning": "order.state is the best match for state, and order.revenue.avg references the average of revenue for an order, which is conceptually closest to sales." }{% endraw %}
 User: concepts: [{{ concept_string }}] question: "{{ question }}"
 System:

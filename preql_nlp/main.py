@@ -152,8 +152,8 @@ def discover_inputs(
         log_info=log_info,
         session_uuid=session_uuid,
     )
-    order = [x.concept for x in parsed.order]
-    filtering = [f.concept for f in parsed.filtering]
+    filtering =  build_token_list_by_purpose( concepts, (Purpose.METRIC, Purpose.KEY, Purpose.CONSTANT, Purpose.PROPERTY))
+    order = list(set(filtering+metrics+dimensions))
     token_inputs = TokenInputs(
         metrics=metrics, dimensions=dimensions, order=order, filtering=filtering
     )
@@ -161,9 +161,10 @@ def discover_inputs(
     output: List[str] = []
     for field in ["metrics", "dimensions", "filtering", "order"]:
         local_phrases = [get_phrase_from_x(x) for x in getattr(parsed, field)]
+        all_tokens = getattr(token_inputs, field)
         phrase_tokens: SemanticTokenResponse = run_prompt( # type: ignore
             SemanticToTokensPromptCase(
-                phrases=local_phrases, tokens=getattr(token_inputs, field)
+                phrases=local_phrases, tokens=all_tokens
             ),
             debug=True,
             session_uuid=session_uuid,
@@ -173,16 +174,20 @@ def discover_inputs(
         for mapping in phrase_tokens:
             token_universe += mapping.tokens
         for mapping in phrase_tokens:
-            concepts = tokens_to_concept(
-                mapping.tokens,
-                [c for c in final_concept_list],
-                limits=5,
-                universe=token_universe,
-            )
-            logger.info(f"For phrase {mapping.phrase} got {concepts}")
-            if concepts:
-                output += concepts
-            else:
+            found = False
+            for universe in [token_universe]:
+                concepts = tokens_to_concept(
+                    mapping.tokens,
+                    [c for c in final_concept_list],
+                    limits=5,
+                    universe=universe
+                )
+                if concepts:
+                    logger.info(f"For phrase {mapping.phrase} got {concepts}")
+                    output += concepts
+                    found=True
+                    break
+            if not found:
                 raise ValueError(
                     f"Could not find concept for input {mapping.phrase} with tokens {mapping.tokens}"
                 )
@@ -197,10 +202,10 @@ def discover_inputs(
     for item in parsed.filtering:
         instance = input_environment.concepts[item.concept]
         if instance.metadata:
-            item.concept = run_prompt( # type: ignore
-                FilterRefinementCase(value=item.concept,
+            item.values = run_prompt( # type: ignore
+                FilterRefinementCase(values=item.values,
                                     description = instance.metadata.description )
-            ).new_value
+            ).new_values
 
     return IntermediateParseResults(
         select=final,

@@ -61,7 +61,7 @@ def test_extraction_prompt(test_logger):
         SemanticExtractionPromptCase,
         question="How many questions are asked per year? Order results by year desc",
         tests=gen_validate_initial_parse_result(
-            selection=["count", "year"],
+            selection=["question", "year"],
             order=[OrderResult(concept="year", order=Ordering.DESCENDING)],
         ),
     )
@@ -70,7 +70,7 @@ def test_extraction_prompt(test_logger):
         SemanticExtractionPromptCase,
         question="How many questions were asked in the year 2020?",
         tests=gen_validate_initial_parse_result(
-            selection=["question", "count"],
+            selection=["question"],
             filtering=[
                 FilterResult(
                     concept="year", values=["2020"], operator=ComparisonOperator.EQ

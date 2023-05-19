@@ -36,7 +36,6 @@ def validator_factory(key, test_values):
             raise ValueError(
                 "could not find ", test_values, " in ", key, " with ", field_values
             )
-            print("could not find ", test_values, " in ", key, " with ", field_values)
         return check
 
     return validator

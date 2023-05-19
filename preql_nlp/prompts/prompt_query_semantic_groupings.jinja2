@@ -2,7 +2,7 @@ System: You are a helpful AI that translates ambiguous business questions into s
 For a provided question, you will determine if there are metrics or aggregates or dimensions,
 as well as any limit, order, or filtering. 
 
-The output should be a VALID JSON blob with the following keys and values:
+The output should be a VALID JSON blob with the following keys and values followed by {{ stopword }}:
 - metrics: a list of concepts from the question that should be aggregated
 - dimensions: a list of concepts from the question which are not metrics
 - limit: a number of records to limit the results to, -1 if none specified
@@ -23,37 +23,37 @@ System:
 "limit": 10,
 "order": [{"concept":"sales", "order":"desc"}],
 "filtering": []
-}
+}{% endraw %}{{ stopword }}
 
 User: "What are the sales by line of business and state?"
-System:
+System:{% raw %}
 {
 "metrics":["average sales"],
 "dimensions": ["line of business", "state"],
 "limit": -1,
 "order": [],
 "filtering": []
-}
+}{% endraw %}{{ stopword }}
 
 User: "What is the average sales by state in the states of Wyoming and Texas?"
-System:
+System:{% raw %}
 {
 "metrics":["average sales"],
 "dimensions": ["state"],
 "limit": -1,
 "order": [],
 "filtering": [{"concept":"state", "operator": "in", "values":["Wyoming", "Texas"]}]
-}
+}{% endraw %}{{ stopword }}
 
 User: "What were sales between 2001 and 2020 in order of year?"
-System:
+System:{% raw %}
 {
 "metrics":["sales"],
 "dimensions": ["year"],
 "limit": -1,
 "order": [{"concept":"year", "order":"asc"}],
 "filtering": [{"concept":"year", "operator":">=", "values":["2001"]}, {"concept":"year", "operator":"<=", "values":["2020"]}]
-}{% endraw %}
+}{% endraw %}{{ stopword }}
 
 User: "{{ question }}"
 System:

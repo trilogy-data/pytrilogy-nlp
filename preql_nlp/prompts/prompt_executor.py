@@ -22,6 +22,8 @@ import os
 from jinja2 import FileSystemLoader, Environment, Template
 from os.path import dirname
 
+PROMPT_STOPWORD = '<EOM>'
+
 loader = FileSystemLoader(searchpath=dirname(__file__))
 templates = Environment(loader=loader)
 
@@ -56,11 +58,27 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         fail_on_parse_error: bool = True,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
-        super().__init__(category=category, evaluators=evaluators)
+        # this will be used in the parent init
+        # so must come before
+        self.stopword = PROMPT_STOPWORD
+
+        # this isn't actually the right way to pass through a stopword to the complete prompt
+        # so we're splitting in the response
+        # TODO: figure out how to do this when we figure out how to group prompts in one API call
+        super().__init__(category=category, evaluators=evaluators, prompt_executor_kwargs={'stopword':PROMPT_STOPWORD})
         self._prompt_hash = str(uuid.uuid4())
         self.parsed = None
         self.fail_on_parse_error = fail_on_parse_error
         self.stash: BaseCache = SqlliteCache()
+
+
+    def prompt_executor(self):
+        from langchain.chat_models import ChatOpenAI
+        model_name = os.environ.get("OPENAI_MODEL") or "text-davinci-003"
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        self.prompt_executor_kwargs = {"model_name": model_name}
+        return ChatOpenAI(model_name=model_name, openai_api_key=openai_api_key)
+        # return ChatOpenAI()
 
     @retry_with_exponential_backoff
     def execute_prompt(self, prompt_str):
@@ -77,11 +95,11 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         return self.response
 
     def get_extra_template_context(self):
-        raise NotImplementedError("This class can't be used directly.")
+        return {'stopword': self.stopword}
 
     def post_run(self):
         try:
-            self.parsed = self.parse_model.parse_raw(self.response)
+            self.parsed = self.parse_model.parse_raw(self.response.split(self.stopword)[0])
         except ValidationError as e:
             print(self.render())
             print("was unable to parse response using ", str(self.parse_model))
@@ -110,7 +128,7 @@ class SemanticExtractionPromptCase(BasePreqlPromptCase):
         super().__init__(category="semantic_extraction", evaluators=evaluators)
 
     def get_extra_template_context(self):
-        return {"question": self.question}
+        return {**super().get_extra_template_context(), "question": self.question}
 
 
 class SemanticToTokensPromptCase(BasePreqlPromptCase):
@@ -124,14 +142,18 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
         tokens: List[str],
         phrases: List[str],
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
-    ):
+    ):  
+        
         self.tokens = sorted(tokens)
-        self.phrases = sorted(phrases)
+        # we need to ensure that we always have a list
+        # for chat-gpt to understand the prompt properly
+        # pad out the inputs with a random phrase
+        self.phrases = sorted(phrases + ['democratic elections'])
         super().__init__(category="semantic_to_tokens", evaluators=evaluators)
 
     def get_extra_template_context(self):
-        return {
-            "tokens": ", ".join([f'"{c}"' for c in self.tokens]),
+        return {**super().get_extra_template_context(), 
+            "tokens": ", ".join([f'"{c}"' for c in self.tokens if c]),
             "phrase_str": ", ".join([f'"{c}"' for c in self.phrases]),
         }
 
@@ -154,7 +176,7 @@ class SelectionPromptCase(BasePreqlPromptCase):
         self.execution.score = None
 
     def get_extra_template_context(self):
-        return {
+        return {**super().get_extra_template_context(), 
             "concept_string": ", ".join([f'"{c}"' for c in self.concepts]),
             "question": self.question,
         }
@@ -177,7 +199,7 @@ class FilterRefinementCase(BasePreqlPromptCase):
         super().__init__(evaluators=evaluators, category="filter_refinement")
 
     def get_extra_template_context(self):
-        return {
+        return {**super().get_extra_template_context(), 
             "values": ", ".join([f'"{x}"' for x in self.values]),
             "description": self.description,
         }

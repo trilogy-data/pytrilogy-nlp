@@ -8,7 +8,7 @@ from preql.core.models import (
 )
 from preql.core.query_processor import process_query_v2
 from preql.core.enums import Purpose
-from typing import Iterable, List
+from typing import Iterable, List, Tuple
 from collections import defaultdict
 
 from preql.core.models import Environment
@@ -66,7 +66,7 @@ def tokens_to_concept(
     concepts: List[str],
     limits: int = 5,
     universe: list[str] | None = None,
-):
+)->list[str] | None:
     tokens = list(set(tokens))
     universe_list = list(set(universe or []))
     mappings = {x: split_to_tokens(x) for x in concepts}
@@ -125,6 +125,8 @@ def get_phrase_from_x(x):
     raise ValueError
 
 
+
+
 def discover_inputs(
     input_text: str,
     input_environment: Environment,
@@ -161,6 +163,8 @@ def discover_inputs(
     )
 
     output: List[str] = []
+    # this will be used to map back for filters
+    phrase_map = {}
     for field in ["metrics", "dimensions", "filtering", "order"]:
         local_phrases = [get_phrase_from_x(x) for x in getattr(parsed, field)]
         all_tokens = getattr(token_inputs, field)
@@ -170,21 +174,26 @@ def discover_inputs(
             session_uuid=session_uuid,
             log_info=log_info,
         )
+        # now reduce to only the phrases we actually input
+        # to avoid hallucination and any padded phrases
+        phrase_tokens.__root__ = [x for x in phrase_tokens.__root__ if x.phrase in local_phrases]
         token_universe = []
+
         for mapping in phrase_tokens:
             token_universe += mapping.tokens
         for mapping in phrase_tokens:
             found = False
             for universe in [token_universe]:
-                concepts = tokens_to_concept(
+                concepts_str_matches = tokens_to_concept(
                     mapping.tokens,
                     [c for c in final_concept_list],
                     limits=5,
                     universe=universe,
                 )
-                if concepts:
-                    logger.info(f"For phrase {mapping.phrase} got {concepts}")
-                    output += concepts
+                phrase_map[mapping.phrase] = concepts_str_matches
+                if concepts_str_matches:
+                    logger.info(f"For phrase {mapping.phrase} got {concepts_str_matches}")
+                    output += concepts_str_matches
                     found = True
                     break
             if not found:
@@ -200,8 +209,15 @@ def discover_inputs(
     final = list(set(selections.matches))
 
     for item in parsed.filtering:
-        instance = input_environment.concepts[item.concept]
-        if instance.metadata:
+        #TODO : this is not the ideal way to match out
+        filter_item_candidates = phrase_map.get(item.concept, [])
+        if not filter_item_candidates:
+            continue
+        parsed_filter = parse_filter(item, [input_environment.concepts[x] for x in filter_item_candidates])
+        if not parsed_filter:
+            continue
+        instance = parsed_filter.left
+        if isinstance(instance, Concept) and instance.metadata and instance.metadata.description:
             item.values = run_prompt(  # type: ignore
                 FilterRefinementCase(
                     values=item.values,
@@ -274,22 +290,25 @@ def parse_filter(
 
 def parse_filtering(
     input_concepts: List[Concept], filtering: List[FilterResult]
-) -> WhereClause | None:
+) -> Tuple[WhereClause | None, List[Concept]]:
     base = []
+    concepts:List[Concept] = []
     for item in filtering:
         parsed = parse_filter(item, input_concepts)
         if parsed:
             base.append(parsed)
+            if isinstance(parsed.left, Concept):
+                concepts.append(parsed.left)
     if not base:
-        return None
+        return None, []
     if len(base) == 1:
-        return WhereClause(conditional=base[0])
+        return WhereClause(conditional=base[0]), concepts
     left: Conditional | Comparison = base.pop()
     while base:
         right = base.pop()
         new = Conditional(left=left, right=right, operator=BooleanOperator.AND)
         left = new
-    return WhereClause(conditional=left)
+    return WhereClause(conditional=left), concepts
 
 
 def parse_query(
@@ -303,7 +322,13 @@ def parse_query(
     )
     concepts = [input_environment.concepts[x] for x in results.select]
     order = parse_order(concepts, results.order)
-    filtering = parse_filtering(concepts, results.filtering)
+    for x in order.items:
+        concepts.append(x.expr)
+        
+    filtering, extra = parse_filtering(concepts, results.filtering)
+    concepts += extra
+    from preql.core.models import unique
+    concepts = unique(concepts, 'address')
     if debug:
         print("Concepts found")
         for c in concepts:

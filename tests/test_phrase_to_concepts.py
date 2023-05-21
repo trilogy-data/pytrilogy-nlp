@@ -15,7 +15,7 @@ def test_selection_prompt(test_logger):
         SelectionPromptCase,
         tests=gen_select_test(["question.creation_date.year", "question.id.count"]),
         question="How many questions are asked per year?",
-        concepts=[
+        concept_names=[
             "question.creation_date.year",
             "question.id",
             "question.id.count",
@@ -27,7 +27,7 @@ def test_selection_prompt(test_logger):
         SelectionPromptCase,
         tests=gen_select_test(["question.author", "question.id"]),
         question="Author of question id 2?",
-        concepts=[
+        concept_names=[
             "question.creation_date.year",
             "question.id",
             "question.id.count",

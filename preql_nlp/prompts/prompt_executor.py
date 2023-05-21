@@ -162,22 +162,22 @@ class SelectionPromptCase(BasePreqlPromptCase):
     template = templates.get_template("prompt_final_concepts.jinja2")
     parse_model = ConceptSelectionResponse
 
-    attributes_used_for_hash = {"question", "concepts", "category", "template"}
+    attributes_used_for_hash = {"question", "concept_names", "category", "template"}
 
     def __init__(
         self,
         question: str,
-        concepts: List[str],
+        concept_names: List[str],
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         self.question = question
-        self.concepts = sorted(list(set(concepts)), key=lambda x: x)
+        self.concept_names = sorted(list(set(concept_names)), key=lambda x: x)
         super().__init__(evaluators=evaluators, category="selection")
         self.execution.score = None
 
     def get_extra_template_context(self):
         return {**super().get_extra_template_context(), 
-            "concept_string": ", ".join([f'"{c}"' for c in self.concepts]),
+            "concept_string": ", ".join([f'"{c}"' for c in self.concept_names]),
             "question": self.question,
         }
 

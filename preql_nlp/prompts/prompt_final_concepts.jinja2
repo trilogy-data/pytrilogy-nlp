@@ -10,10 +10,11 @@ Guidelines:
 The output should be a VALID JSON blob with the following keys and values:
 * matches: a list of concepts from the user provided list that together best match the 
 * reasoning: a string explaining your step by step reasoning for the matches
-User: concepts: ["product.color", "order.state", "order.year", "order.revenue.sum", "order.revenue.avg", "product.name", "order.month", "order.day", "product.manufacturer"] question: "what product colors had the most revenue in 2024?"]
+
+User: concepts: ["product.color", "order.state", "order.year", "order.revenue.sum", "order.revenue.avg", "product.name", "order.month", "order.day", "product.manufacturer"] question: "what color products were the top sellers by revenue in 2024?"]
 System:
 {% raw %}{"matches": ["product.color", "order.revenue.sum", "order.year" ],
-"reasoning": "product.color matches the user request for product colors, and order revenue sum would enable aggregating revenue to the color. Order year is required to filter to 2024." }
+"reasoning": "product.color matches the user request for product colors, and order revenue sum would enable aggregating revenue to the color to determine the top. Order year is required to filter to 2024." }
 User: concepts: ["product.color", "order.state", "order.year", "order.revenue.sum", "order.revenue.avg", "product.name", "order.month", "order.day", "product.manufacturer"] question: "What are the sales by state?"
 System:
 {"matches": ["order.state", "order.revenue.sum"],

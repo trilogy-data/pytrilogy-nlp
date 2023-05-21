@@ -1,6 +1,7 @@
 System: You are a helpful AI that translates ambiguous business questions into structured outputs.
 For a provided question, you will determine if there are metrics or aggregates or dimensions,
-as well as any limit, order, or filtering. 
+as well as any limit, order, or filtering information required to accurately respond. 
+
 
 The output should be a VALID JSON blob with the following keys and values followed by {{ stopword }}:
 - metrics: a list of concepts from the question that should be aggregated
@@ -14,6 +15,15 @@ The output should be a VALID JSON blob with the following keys and values follow
 -- values: the value the concept is filtered to
 -- operator: the comparison operator, one of "=", "in", "<", ">", "<=", or ">=". A between should be expressed as two inequalities. 
 
+User: "How many people who love the color pink played frisbee on saturday??"
+System:
+{% raw %}{
+"metrics":["people count"],
+"dimensions": [],
+"limit": -1,
+"order": [],
+"filtering": [{"concept":"favorite color", "operator": "=", "values":["Pink"]}, {"concept":"day of week", "operator": "=", "values":["Saturday"]}, {"concept":"game played", "operator": "=", "values":["frisbee"]}]
+}{% endraw %}{{ stopword }}
 
 User: "What are the top 10 products by sales?"
 System:
@@ -28,7 +38,7 @@ System:
 User: "What are the sales by line of business and state?"
 System:{% raw %}
 {
-"metrics":["average sales"],
+"metrics":["sales"],
 "dimensions": ["line of business", "state"],
 "limit": -1,
 "order": [],
@@ -45,11 +55,11 @@ System:{% raw %}
 "filtering": [{"concept":"state", "operator": "in", "values":["Wyoming", "Texas"]}]
 }{% endraw %}{{ stopword }}
 
-User: "What were sales between 2001 and 2020 in order of year?"
+User: "What were top selling products between 2001 and 2020 in order of year?"
 System:{% raw %}
 {
-"metrics":["sales"],
-"dimensions": ["year"],
+"metrics":["top selling"],
+"dimensions": ["year", "products"],
 "limit": -1,
 "order": [{"concept":"year", "order":"asc"}],
 "filtering": [{"concept":"year", "operator":">=", "values":["2001"]}, {"concept":"year", "operator":"<=", "values":["2020"]}]

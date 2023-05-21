@@ -34,7 +34,8 @@ def validator_factory(key, test_values):
         )
         if not check:
             raise ValueError(
-                "could not find ", test_values, " in ", key, " with ", field_values
+                "could not find ", test_values, " in ", key, " with ", field_values, "from",
+                str(input)
             )
         return check
 
@@ -60,7 +61,7 @@ def test_extraction_prompt(test_logger):
         SemanticExtractionPromptCase,
         question="How many questions are asked per year? Order results by year desc",
         tests=gen_validate_initial_parse_result(
-            selection=["question", "year"],
+            selection=["question", "year", "count"],
             order=[OrderResult(concept="year", order=Ordering.DESCENDING)],
         ),
     )
@@ -83,7 +84,7 @@ def test_extraction_prompt(test_logger):
         question="50 most common names by count in the state of VT in the year 2010?",
         tests=gen_validate_initial_parse_result(
             selection=[
-                "names",
+                "name",
                 "count",
                 "state",
             ],

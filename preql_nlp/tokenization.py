@@ -37,24 +37,32 @@ def tokens_to_concept(
     universe: list[str] | None = None,
 )->list[str] | None:
     tokens = list(set(tokens))
-    universe_list = list(set(universe or []))
+    universe_list = list(set(universe or [])  )
     mappings = {x: split_to_tokens(x) for x in concepts}
-    candidates = [x for x in concepts if all(token in mappings[x] for token in tokens)]
+    candidates =[x for x in concepts if any(token in mappings[x] for token in tokens)]
     pickings = defaultdict(list)
 
     if not candidates:
         return None
     tiers = set()
+    
     for candidate in candidates:
-        tier = sum(
-            [1 if token in mappings[candidate] else 0 for token in universe_list]
-        )
-        pickings[tier].append(candidate)
-        tiers.add(tier)
+        score  = 0
+        candidate_tokens = mappings[candidate]
+        # exact match to concept is +2
+        for x in candidate_tokens:
+            if x in tokens:
+                score +=2
+        # universe context is + 1
+        for y in universe_list:
+            if y in tokens:
+                score +=1
+        pickings[score].append(candidate)
+        tiers.add(score)
     tier_list = sorted(list(tiers), key=lambda x: -x)
-
     found: List[str] = []
     while len(found) < limits and tier_list:
+
         stier = tier_list.pop(0)
         candidates = sorted(pickings[stier], key=lambda x: len(x))
         required = limits - len(found)

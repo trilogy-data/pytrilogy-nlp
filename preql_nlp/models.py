@@ -38,7 +38,7 @@ class InitialParseResponse(BaseModel):
     def selection(self)->list[str]:
         filtering = [f.concept for f in self.filtering]
         order = [x.concept for x in self.order]
-        return self.metrics + self.dimensions + filtering + order
+        return list(set(self.metrics + self.dimensions + filtering + order))
 
 
 class IntermediateParseResults(BaseModel):

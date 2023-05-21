@@ -51,16 +51,13 @@ def gen_hash(obj, keys: set[str]) -> str:
 class BasePreqlPromptCase(TemplatedPromptCase):
     parse_model: Type[BaseModel]
     template: Template
-
+    stopword = PROMPT_STOPWORD
     def __init__(
         self,
         category: str,
         fail_on_parse_error: bool = True,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
-        # this will be used in the parent init
-        # so must come before
-        self.stopword = PROMPT_STOPWORD
 
         # this isn't actually the right way to pass through a stopword to the complete prompt
         # so we're splitting in the response
@@ -71,6 +68,9 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         self.fail_on_parse_error = fail_on_parse_error
         self.stash: BaseCache = SqlliteCache()
 
+    @classmethod
+    def parse_response(cls, response:str):
+        return cls.parse_model.parse_raw(response.split(cls.stopword)[0])
 
     def prompt_executor(self):
         from langchain.chat_models import ChatOpenAI
@@ -99,7 +99,7 @@ class BasePreqlPromptCase(TemplatedPromptCase):
 
     def post_run(self):
         try:
-            self.parsed = self.parse_model.parse_raw(self.response.split(self.stopword)[0])
+            self.parsed = self.parse_response(self.response)
         except ValidationError as e:
             print(self.render())
             print("was unable to parse response using ", str(self.parse_model))

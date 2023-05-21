@@ -9,7 +9,7 @@ from preql.core.models import (
 from preql.core.query_processor import process_query_v2
 from preql.core.enums import Purpose
 from typing import List, Union
-from preql.core.models import Environment, SelectItem, unique
+from preql.core.models import Environment, unique
 from preql_nlp.prompts import (
     run_prompt,
     SemanticToTokensPromptCase,

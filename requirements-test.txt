@@ -4,4 +4,3 @@ duckdb
 duckdb-engine
 mypy
 ruff
-trilogy-public-models

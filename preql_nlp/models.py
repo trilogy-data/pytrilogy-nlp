@@ -1,19 +1,8 @@
 from pydantic import BaseModel
-from preql.core.enums import ComparisonOperator
-from preql.core.enums import Ordering
+from preql.core.enums import ComparisonOperator, Ordering
+from preql.core.models import Concept
 
-''''- metrics: a list of concepts from the question that should be aggregated
-- dimensions: a list of concepts from the question which are not metrics
-- limit: a number of records to limit the results to, -1 if none specified
-- order: a list of fields to order the results by, with the option to specify ascending or descending
-- filtering: a list of criteria to restrict the results by'''
-
-class TokenInputs(BaseModel):
-    """The inputs to the tokenization prompt"""
-    metrics:list[str]
-    dimensions:list[str]
-    order:list[str]
-    filtering:list[str]
+### Intermediate Models
 
 class FilterResult(BaseModel):
     """The result of the filter prompt"""
@@ -21,9 +10,20 @@ class FilterResult(BaseModel):
     values:list[str]
     operator:ComparisonOperator
 
+
+class FinalFilterResult(BaseModel):
+    concept:Concept
+    values:list[str]
+    operator:ComparisonOperator
+
 class OrderResult(BaseModel):
     """The result of the order prompt"""
     concept:str
+    order: Ordering
+
+class FinalOrderResult(BaseModel):
+    """The processed result of the order prompt"""
+    concept:Concept
     order: Ordering
 
 class InitialParseResponse(BaseModel):
@@ -38,8 +38,17 @@ class InitialParseResponse(BaseModel):
     def selection(self)->list[str]:
         filtering = [f.concept for f in self.filtering]
         order = [x.concept for x in self.order]
-        return self.metrics + self.dimensions + filtering + order
+        return list(set(self.metrics + self.dimensions + filtering + order))
 
+
+class IntermediateParseResults(BaseModel):
+    select: list[Concept]
+    limit: int
+    order: list[FinalOrderResult]
+    filtering:list[FinalFilterResult]
+
+
+### Parse Result Models
 
 class SemanticTokenMatch(BaseModel):
     phrase: str
@@ -57,14 +66,6 @@ class SemanticTokenResponse(BaseModel):
 class ConceptSelectionResponse(BaseModel):
     matches:list[str]
     reasoning:str
-
-
-
-class IntermediateParseResults(BaseModel):
-    select: list[str]
-    limit: int
-    order: list[OrderResult]
-    filtering:list[FilterResult]
 
 
 class FilterRefinementResponse(BaseModel):

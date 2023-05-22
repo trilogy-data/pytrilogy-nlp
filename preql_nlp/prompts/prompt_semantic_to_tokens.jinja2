@@ -1,16 +1,18 @@
-System: you are an AI that helps a user map phrases to tokens by associating a phrase with tokens most related to the words
-in the phrase.
+System: you are a helpful AI that maps a list of phrases to the most related words from a provided set. Multiple
+words can related to a phrase, but you should not include any that have no relation at all.
+
 Guidelines:
 * you can assume the user will always provide a list of phrases
-* you can assume the user will always provide a list of tokens
-* only return tokens that appear in the list provided by the user
+* you can assume the user will always provide a list of words
+* only return words that appear in the list provided by the user
 * If a phrase has no matches, return an empty array
-The output should be a VALID JSON list with each entry having the following keys
+The output should be a VALID JSON list. Each JSON list entry should have following keys.
 * phrase, the input phrase
-* tokens, a list of matching token strings
+* tokens, the user provided words that are most related to the phrase
+The full ohutput should be followed by {{stopword}}.
 
 
-User: given the tokens ["color", "product", "year", "revenue"], match tokens to the phrases ["product revenue", "product color", "product revenue by year", "yearly revenue"]
+User: given the words ["color", "product", "year", "revenue"], find the most relevant words for each phrase in ["product revenue is up", "products with green color", "product revenue by year", "yearly revenue"]
 System:
 {% raw %}
 [
@@ -43,25 +45,28 @@ System:
          "year"
       ]
    }   
-]
-User: given the tokens ["product", "count", "order", "year"], match tokens to the phrases ["fairy_dust"]
-System:
+]{% endraw %}{{ stopword }}
+User: given the words ["state", "motto", "taxes", "expenses"], find the most relevant words for each phrase in ["vermont budget shortfall "]
+System:{% raw %}
 [
    {
-      "phrase":"fairy_dust",
+      "phrase":"vermont budget shortfall",
       "tokens":[
-         "product"
+         "state",
+         "taxes",
+         "expenses"
       ]
    }
-]
-User: given the tokens ["product", "count", "order", "year"], match tokens to the phrases ["products sold", "orders"]
-System:
+]{% endraw %}{{ stopword }}
+User: given the words ["product", "count", "order", "year"], find the most relevant words for each phrase in ["top selling products", "order flow"]
+System:{% raw %}
 [
    {
-      "phrase":"products_sold",
+      "phrase":"products sold",
       "tokens":[
          "product",
-         "count"
+         "count",
+         "order"
       ]
    },
    {
@@ -71,6 +76,6 @@ System:
          "count"
       ]
    }
-]{% endraw %}
-User: Given the tokens [{{ tokens }}], match tokens to the phrases [{{ phrase_str }}]
+]{% endraw %}{{ stopword }}
+User: Given the words [{{ tokens }}], find the most relevant words for each phrase in [{{ phrase_str }}]
 System:

@@ -1,4 +1,5 @@
 from preql_nlp.cache_providers.base import BaseCache
+from preql_nlp.constants import logger
 import sqlite3
 
 DEFAULT_SQLITE_ADDRESS = "local_prompt_cache.db"
@@ -13,7 +14,7 @@ class SqlliteCache(BaseCache):
 
     
     def retrieve(self, prompt_hash: str) -> str | None:
-        print("checking for cache with prompt hash ", prompt_hash)
+        logger.info(f"checking for cache with prompt hash {prompt_hash}")
         con = sqlite3.connect(self.sqlite_address)
         cur = con.cursor()
         cur.execute(
@@ -25,13 +26,14 @@ class SqlliteCache(BaseCache):
         )
         current = res.fetchone()
         if current:
-            print("got cached response of type ", current[1])
+            logger.info(f"Got cached response of type {current[1]}")
             return current[0]
+        logger.info('No cache available for key')
         return None
 
 
 
-    def stash(self, prompt_hash: str, category: str, result: str):
+    def store(self, prompt_hash: str, category: str, result: str):
         con = sqlite3.connect(self.sqlite_address)
         cur = con.cursor()
         cur.execute(

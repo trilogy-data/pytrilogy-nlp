@@ -33,7 +33,7 @@ class SqlliteCache(BaseCache):
 
 
 
-    def stash(self, prompt_hash: str, category: str, result: str):
+    def store(self, prompt_hash: str, category: str, result: str):
         con = sqlite3.connect(self.sqlite_address)
         cur = con.cursor()
         cur.execute(

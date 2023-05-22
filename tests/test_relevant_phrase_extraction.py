@@ -91,10 +91,10 @@ def test_extraction_prompt(test_logger):
             limit=50,
             filtering=[
                 FilterResult(
-                    concept="year", values=["2010"], operator=ComparisonOperator.EQ
+                    concept="year", values=["2010"], operator='='
                 ),
                 FilterResult(
-                    concept="state", values=["VT"], operator=ComparisonOperator.EQ
+                    concept="state", values=["VT"], operator='='
                 ),
             ],
         ),

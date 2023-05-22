@@ -1,45 +1,45 @@
+import uuid
+from typing import List, Union
+
+from preql.core.enums import BooleanOperator, Purpose
 from preql.core.models import (
-    Select,
-    ProcessedQuery,
+    Comparison,
     Concept,
-    OrderItem,
+    Conditional,
+    Environment,
     OrderBy,
     Ordering,
+    OrderItem,
+    ProcessedQuery,
+    Select,
+    WhereClause,
+    unique,
 )
 from preql.core.query_processor import process_query_v2
-from preql.core.enums import Purpose
-from typing import List, Union
-from preql.core.models import Environment, unique
-from preql_nlp.prompts import (
-    run_prompt,
-    SemanticToTokensPromptCase,
-    SelectionPromptCase,
-    SemanticExtractionPromptCase,
-    FilterRefinementCase,
-)
-from preql_nlp.constants import logger, DEFAULT_LIMIT
+
+from preql_nlp.constants import DEFAULT_LIMIT, logger
 from preql_nlp.models import (
-    InitialParseResponse,
-    OrderResult,
+    ConceptSelectionResponse,
     FilterResult,
+    FinalFilterResult,
+    FinalOrderResult,
+    InitialParseResponse,
+    IntermediateParseResults,
+    OrderResult,
     # TokenInputs,
     SemanticTokenResponse,
-    ConceptSelectionResponse,
-    IntermediateParseResults,
-    FinalFilterResult,
-    FinalOrderResult
 )
-
-from preql.core.models import WhereClause, Conditional, Comparison
-from preql.core.enums import BooleanOperator
+from preql_nlp.prompts import (
+    FilterRefinementCase,
+    SelectionPromptCase,
+    SemanticExtractionPromptCase,
+    SemanticToTokensPromptCase,
+    run_prompt,
+)
 from preql_nlp.tokenization import build_token_list_by_purpose, tokens_to_concept
 
 
-import uuid
-
-
-
-def get_phrase_from_x(x:Union[str, FilterResult, OrderResult]):
+def get_phrase_from_x(x: Union[str, FilterResult, OrderResult]):
     if isinstance(x, str):
         return x
     elif isinstance(x, FilterResult):
@@ -48,20 +48,27 @@ def get_phrase_from_x(x:Union[str, FilterResult, OrderResult]):
         return x.concept
     raise ValueError
 
-def tokenize_phrases(phrase_list:List[str], tokens:List[str], session_uuid, log_info:bool)->SemanticTokenResponse:
 
+def tokenize_phrases(
+    phrase_list: List[str], tokens: List[str], session_uuid, log_info: bool
+) -> SemanticTokenResponse:
     phrase_tokens: SemanticTokenResponse = run_prompt(  # type: ignore
         SemanticToTokensPromptCase(phrases=phrase_list, tokens=tokens),
         debug=True,
         session_uuid=session_uuid,
         log_info=log_info,
     )
-    phrase_tokens.__root__ = [x for x in phrase_tokens.__root__ if x.phrase in phrase_list]
+    phrase_tokens.__root__ = [
+        x for x in phrase_tokens.__root__ if x.phrase in phrase_list
+    ]
     return phrase_tokens
 
-def concept_names_from_token_response(phrase_tokens:SemanticTokenResponse, concepts:dict[str, Concept])->list[str]:
+
+def concept_names_from_token_response(
+    phrase_tokens: SemanticTokenResponse, concepts: dict[str, Concept]
+) -> list[str]:
     token_universe = []
-    output:list[str] = []
+    output: list[str] = []
 
     for mapping in phrase_tokens:
         token_universe += mapping.tokens
@@ -84,7 +91,8 @@ def concept_names_from_token_response(phrase_tokens:SemanticTokenResponse, conce
             )
     return output
 
-def enrich_filter(input:FinalFilterResult, log_info:bool, session_uuid):
+
+def enrich_filter(input: FinalFilterResult, log_info: bool, session_uuid):
     if not (input.concept.metadata and input.concept.metadata.description):
         return input
     input.values = run_prompt(  # type: ignore
@@ -97,7 +105,8 @@ def enrich_filter(input:FinalFilterResult, log_info:bool, session_uuid):
     ).new_values
 
 
-def discover_inputs(input_text: str,
+def discover_inputs(
+    input_text: str,
     input_environment: Environment,
     debug: bool = False,
     log_info: bool = True,
@@ -111,9 +120,9 @@ def discover_inputs(input_text: str,
     # LLM: final selection of concepts (final get the concept result we want)
     # DETERMINISTIC: map phrases to final concepts
     # LLM: enrich filter values
-    # DETERMINISTIC: return results 
+    # DETERMINISTIC: return results
 
-    #DETERMINISTIC: setup logging
+    # DETERMINISTIC: setup logging
     session_uuid = uuid.uuid4()
     env_concepts = input_environment.concepts
 
@@ -128,24 +137,33 @@ def discover_inputs(input_text: str,
     # LLM: tokenization of all strings (reduce search space over all concepts)
     concept_candidates = []
     global_phrase_token_map = {}
-    for semantic_category, valid_purposes in {"metrics":[Purpose.METRIC], "dimensions":[Purpose.KEY,Purpose.PROPERTY,
-                                                                                        Purpose.CONSTANT], "filtering":list(Purpose), "order":list(Purpose)}.items():
-        category_tokens = build_token_list_by_purpose(
-        env_concepts, valid_purposes
-    )
-        local_phrases = [get_phrase_from_x(x) for x in getattr(parsed, semantic_category)]
+    for semantic_category, valid_purposes in {
+        "metrics": [Purpose.METRIC],
+        "dimensions": [Purpose.KEY, Purpose.PROPERTY, Purpose.CONSTANT],
+        "filtering": list(Purpose),
+        "order": list(Purpose),
+    }.items():
+        category_tokens = build_token_list_by_purpose(env_concepts, valid_purposes)
+        local_phrases = [
+            get_phrase_from_x(x) for x in getattr(parsed, semantic_category)
+        ]
         # skip if we have no relevant phrases
         if not local_phrases:
             continue
-        token_mapping = tokenize_phrases(local_phrases, category_tokens, log_info=log_info, session_uuid=session_uuid)
-        
-        
+        token_mapping = tokenize_phrases(
+            local_phrases, category_tokens, log_info=log_info, session_uuid=session_uuid
+        )
+
         for item in token_mapping:
             if not all([x in category_tokens] for x in item.tokens):
                 invalid = [x for x in item.tokens if x not in category_tokens]
-                raise ValueError(f'Phrase {item.phrase} return invalid tokens {invalid}')
+                raise ValueError(
+                    f"Phrase {item.phrase} return invalid tokens {invalid}"
+                )
             global_phrase_token_map[item.phrase] = item.tokens
-        concept_candidates += concept_names_from_token_response(token_mapping, env_concepts)
+        concept_candidates += concept_names_from_token_response(
+            token_mapping, env_concepts
+        )
 
     # DETERMINISTIC: concept candidates from tokens (map reduced search space to candidates)
     selections: ConceptSelectionResponse = run_prompt(  # type: ignore
@@ -158,33 +176,45 @@ def discover_inputs(input_text: str,
 
     for selection in selected_concepts:
         if selection not in env_concepts:
-            raise ValueError(f"Returned concept {selection} that does not actually exist in environment!")
+            raise ValueError(
+                f"Returned concept {selection} that does not actually exist in environment!"
+            )
 
     # DETERMINISTIC: map phrases to final concepts
-    phrase_to_concept_map:dict[str, Concept] = {}
+    phrase_to_concept_map: dict[str, Concept] = {}
     for key, tokens in global_phrase_token_map.items():
-        mapped = tokens_to_concept(concepts=selected_concepts, tokens=tokens, limits = 1)
+        mapped = tokens_to_concept(concepts=selected_concepts, tokens=tokens, limits=1)
         if mapped:
             phrase_to_concept_map[key] = env_concepts[mapped[0]]
 
-    final_ordering = [FinalOrderResult(concept=phrase_to_concept_map[order.concept],
-                                      order=order.order) for order in parsed.order if phrase_to_concept_map[order.concept]]
-    
+    final_ordering = [
+        FinalOrderResult(
+            concept=phrase_to_concept_map[order.concept], order=order.order
+        )
+        for order in parsed.order
+        if phrase_to_concept_map[order.concept]
+    ]
 
-    final_filters_pre = [FinalFilterResult(concept = phrase_to_concept_map[filter.concept],
-                                           operator = filter.operator,
-                                           values=filter.values) for filter in parsed.filtering]
+    final_filters_pre = [
+        FinalFilterResult(
+            concept=phrase_to_concept_map[filter.concept],
+            operator=filter.operator,
+            values=filter.values,
+        )
+        for filter in parsed.filtering
+    ]
 
     # LLM: enrich filter values
     for item in final_filters_pre:
         enrich_filter(item, log_info=log_info, session_uuid=session_uuid)
-    # DETERMINISTIC: return results 
+    # DETERMINISTIC: return results
     return IntermediateParseResults(
         select=[env_concepts[c] for c in selected_concepts],
         limit=parsed.limit or 20,
         order=final_ordering,
-        filtering=final_filters_pre
+        filtering=final_filters_pre,
     )
+
 
 def safe_limit(input: int | None) -> int:
     if not input:
@@ -192,6 +222,7 @@ def safe_limit(input: int | None) -> int:
     if input in (-1, 0):
         return DEFAULT_LIMIT
     return input
+
 
 def parse_order(
     input_concepts: List[Concept], ordering: List[FinalOrderResult] | None
@@ -209,9 +240,7 @@ def parse_order(
     return OrderBy(items=final)
 
 
-def parse_filter(
-    input: FinalFilterResult
-) -> Comparison | None:
+def parse_filter(input: FinalFilterResult) -> Comparison | None:
     return Comparison(
         left=input.concept,
         right=input.values[0] if len(input.values) == 1 else input.values,
@@ -219,8 +248,7 @@ def parse_filter(
     )
 
 
-def parse_filtering(filtering: List[FinalFilterResult]
-) -> WhereClause | None:
+def parse_filtering(filtering: List[FinalFilterResult]) -> WhereClause | None:
     base = []
     for item in filtering:
         parsed = parse_filter(item)
@@ -248,7 +276,7 @@ def parse_query(
         input_text, input_environment, debug=debug, log_info=log_info
     )
     order = parse_order(intermediate_results.select, intermediate_results.order)
-        
+
     filtering = parse_filtering(intermediate_results.filtering)
     # from preql.core.models import unique
     # concepts = unique(concepts, 'address')
@@ -257,7 +285,7 @@ def parse_query(
         for c in intermediate_results.select:
             print(c.address)
     query = Select(
-        selection=unique(intermediate_results.select, 'address'),
+        selection=unique(intermediate_results.select, "address"),
         limit=safe_limit(intermediate_results.limit),
         order_by=order,
         where_clause=filtering,

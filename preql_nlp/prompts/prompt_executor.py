@@ -77,7 +77,7 @@ class BasePreqlPromptCase(TemplatedPromptCase):
     def parse_response(cls, response: str):
         return cls.parse_model.parse_raw(response.split(cls.stopword)[0])
 
-    def prompt_executor(self):
+    def get_prompt_executor(self):
         from langchain.chat_models import ChatOpenAI
 
         model_name = os.environ.get("OPENAI_MODEL") or "text-davinci-003"
@@ -87,17 +87,17 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         # return ChatOpenAI()
 
     @retry_with_exponential_backoff
-    def execute_prompt(self, prompt_str):
+    def execute_prompt(self, prompt_str, skip_cache: bool = False):
         # if we already have a local result
         # skip hitting remote
         # TODO: make the cache provider pluggable and injected
         hash_val = gen_hash(self, self.attributes_used_for_hash)
         resp = self.stash.retrieve(hash_val)
-        if resp:
+        if resp and not skip_cache:
             self.response = resp
             return self.response
         self.response = self.prompt_executor(prompt_str)
-        self.stash.stash(hash_val, self.category, self.response)
+        self.stash.store(hash_val, self.category, self.response)
         return self.response
 
     def get_extra_template_context(self):
@@ -105,7 +105,7 @@ class BasePreqlPromptCase(TemplatedPromptCase):
 
     def rerun(self):
         self.prompt = self.prompt + self.response + "\n" + self.retry_prompt
-        self.execute_prompt(self.prompt)
+        self.execute_prompt(self.prompt, skip_cache=True)
 
     def post_run(self):
         try:

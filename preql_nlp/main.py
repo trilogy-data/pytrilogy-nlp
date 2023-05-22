@@ -65,20 +65,22 @@ def tokenize_phrases(
 
 
 def concept_names_from_token_response(
-    phrase_tokens: SemanticTokenResponse, concepts: dict[str, Concept]
+    phrase_tokens: SemanticTokenResponse, concepts: dict[str, Concept],
+    token_universe:list | None
 ) -> list[str]:
-    token_universe = []
+    token_universe_internal = token_universe or []
     output: list[str] = []
 
     for mapping in phrase_tokens:
-        token_universe += mapping.tokens
+        token_universe_internal += mapping.tokens
+    token_universe_internal = list(set(token_universe_internal))
     for mapping in phrase_tokens:
         found = False
         concepts_str_matches = tokens_to_concept(
             mapping.tokens,
             [c for c in concepts.keys()],
             limits=5,
-            universe=token_universe,
+            universe=token_universe_internal,
         )
         if concepts_str_matches:
             logger.info(f"For phrase {mapping.phrase} got {concepts_str_matches}")
@@ -137,6 +139,7 @@ def discover_inputs(
     # LLM: tokenization of all strings (reduce search space over all concepts)
     concept_candidates = []
     global_phrase_token_map = {}
+    token_response_mapping:dict[str, SemanticTokenResponse] = {}
     for semantic_category, valid_purposes in {
         "metrics": [Purpose.METRIC],
         "dimensions": [Purpose.KEY, Purpose.PROPERTY, Purpose.CONSTANT],
@@ -153,8 +156,23 @@ def discover_inputs(
         token_mapping = tokenize_phrases(
             local_phrases, category_tokens, log_info=log_info, session_uuid=session_uuid
         )
+        token_response_mapping[semantic_category] = token_mapping
 
-        for item in token_mapping:
+    # DETERMINISTIC
+    token_universe = set()
+    for key, token_mapping_pass_one in token_response_mapping.items():
+        for mapping in token_mapping_pass_one:
+            for t in mapping.tokens:
+                token_universe.add(t)
+    token_universe_list = list(token_universe)
+
+    # for key, debug in token_response_mapping.items():
+    #     print(key)
+    #     print(debug)
+    # raise ValueError('eel')
+
+    for key, token_mapping_pass_two in token_response_mapping.items():
+        for item in token_mapping_pass_two:
             if not all([x in category_tokens] for x in item.tokens):
                 invalid = [x for x in item.tokens if x not in category_tokens]
                 raise ValueError(
@@ -162,7 +180,7 @@ def discover_inputs(
                 )
             global_phrase_token_map[item.phrase] = item.tokens
         concept_candidates += concept_names_from_token_response(
-            token_mapping, env_concepts
+            token_mapping_pass_two, env_concepts, token_universe=token_universe_list
         )
 
     # DETERMINISTIC: concept candidates from tokens (map reduced search space to candidates)
@@ -192,7 +210,7 @@ def discover_inputs(
             concept=phrase_to_concept_map[order.concept], order=order.order
         )
         for order in parsed.order
-        if phrase_to_concept_map[order.concept]
+        if order.concept in phrase_to_concept_map
     ]
 
     final_filters_pre = [
@@ -201,7 +219,7 @@ def discover_inputs(
             operator=filter.operator,
             values=filter.values,
         )
-        for filter in parsed.filtering
+        for filter in parsed.filtering if filter.concept in phrase_to_concept_map
     ]
 
     # LLM: enrich filter values

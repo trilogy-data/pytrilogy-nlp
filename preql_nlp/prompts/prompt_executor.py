@@ -77,14 +77,14 @@ class BasePreqlPromptCase(TemplatedPromptCase):
     def parse_response(cls, response: str):
         return cls.parse_model.parse_raw(response.split(cls.stopword)[0])
 
-    def get_prompt_executor(self):
-        from langchain.chat_models import ChatOpenAI
+    # def get_prompt_executor(self):
+    #     from langchain.chat_models import ChatOpenAI
 
-        model_name = os.environ.get("OPENAI_MODEL") or "text-davinci-003"
-        openai_api_key = os.environ.get("OPENAI_API_KEY")
-        self.prompt_executor_kwargs = {"model_name": model_name}
-        return ChatOpenAI(model_name=model_name, openai_api_key=openai_api_key)
-        # return ChatOpenAI()
+    #     model_name = os.environ.get("OPENAI_MODEL") or "text-davinci-003"
+    #     openai_api_key = os.environ.get("OPENAI_API_KEY")
+    #     self.prompt_executor_kwargs = {"model_name": model_name}
+    #     return ChatOpenAI(model_name=model_name, openai_api_key=openai_api_key)
+    #     # return ChatOpenAI()
 
     @retry_with_exponential_backoff
     def execute_prompt(self, prompt_str, skip_cache: bool = False):

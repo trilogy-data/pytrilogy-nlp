@@ -131,11 +131,20 @@ def test_like_predicates():
         tests=gen_validate_initial_parse_result(
             selection=["body"],
             filtering=[
-                FilterResult(
-                    concept="body",
-                    values=["%jaguar%"],
-                    operator=ComparisonOperator.LIKE,
-                ),
+                MultiModeFilterMatch(
+                    valid=[
+                        FilterResult(
+                            concept="body",
+                            values=["%jaguar%"],
+                            operator=ComparisonOperator.LIKE,
+                        ),
+                        FilterResult(
+                            concept="post body",
+                            values=["%jaguar%"],
+                            operator=ComparisonOperator.LIKE,
+                        ),
+                    ]
+                )
             ],
         ),
     )

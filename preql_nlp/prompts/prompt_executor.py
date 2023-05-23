@@ -218,8 +218,6 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
                 self.execute_prompt(self.prompt, skip_cache=True)
                 return self.post_run()
             else:
-                print('debug')
-                print(self.prompt)
                 raise ValueError(
                     f"LLM returned token {token} that does not exist in input names, cannot progress - returned {self.parsed}"
                 )
@@ -280,8 +278,6 @@ class SelectionPromptCase(BasePreqlPromptCase):
                 self.execute_prompt(self.prompt, skip_cache=True)
                 return self.post_run()
             else:
-                print('debug')
-                print(self.prompt)
                 raise ValueError(
                     f"LLM returned concept {selection} that does not exist in input names, cannot progress - returned {self.parsed}"
                 )

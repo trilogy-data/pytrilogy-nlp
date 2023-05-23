@@ -169,9 +169,6 @@ def discover_inputs(
     # DETERMINISTIC - generate concept candidates from tokens (map reduced search space to candidates)
     token_universe = set()
     for _, token_mapping_pass_one in token_response_mapping.items():
-        print("YAGHLKDSHKLG")
-        print(_)
-        print(token_mapping_pass_one)
         for mapping in token_mapping_pass_one:
             for t in mapping.tokens:
                 token_universe.add(t)
@@ -187,9 +184,6 @@ def discover_inputs(
         concept_candidates += concept_names_from_token_response(
             token_mapping_pass_two, env_concepts, token_universe=token_universe_list
         )
-        print("YAGHLKDSHKLG")
-        print(_)
-        print(token_mapping_pass_two)
 
     # LLM - use our concept candidates to generate the final output
     selections: FinalParseResponse = run_prompt(  # type: ignore

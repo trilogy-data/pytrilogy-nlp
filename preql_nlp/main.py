@@ -119,8 +119,7 @@ def discover_inputs(
     # LLM: semantic extraction
     # LLM: tokenization of all strings (reduce search space over all concepts)
     # DETERMINISTIC: concept candidates from tokens (map reduced search space to candidates)
-    # LLM: final selection of concepts (final get the concept result we want)
-    # DETERMINISTIC: map phrases to final concepts
+    # LLM: final selection of concepts and mapping to output roles
     # LLM: enrich filter values
     # DETERMINISTIC: return results
 

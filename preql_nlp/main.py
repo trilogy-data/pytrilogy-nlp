@@ -19,7 +19,6 @@ from preql.core.query_processor import process_query_v2
 
 from preql_nlp.constants import DEFAULT_LIMIT, logger
 from preql_nlp.models import (
-    ConceptSelectionResponse,
     FilterResult,
     FinalFilterResult,
     FinalOrderResult,
@@ -28,6 +27,7 @@ from preql_nlp.models import (
     OrderResult,
     # TokenInputs,
     SemanticTokenResponse,
+    FinalParseResponse
 )
 from preql_nlp.prompts import (
     FilterRefinementCase,
@@ -50,10 +50,10 @@ def get_phrase_from_x(x: Union[str, FilterResult, OrderResult]):
 
 
 def tokenize_phrases(
-    phrase_list: List[str], tokens: List[str], session_uuid, log_info: bool
+    purpose:str, phrase_list: List[str], tokens: List[str], session_uuid, log_info: bool
 ) -> SemanticTokenResponse:
     phrase_tokens: SemanticTokenResponse = run_prompt(  # type: ignore
-        SemanticToTokensPromptCase(phrases=phrase_list, tokens=tokens),
+        SemanticToTokensPromptCase(phrases=phrase_list, tokens=tokens, purpose=purpose),
         debug=True,
         session_uuid=session_uuid,
         log_info=log_info,
@@ -65,20 +65,22 @@ def tokenize_phrases(
 
 
 def concept_names_from_token_response(
-    phrase_tokens: SemanticTokenResponse, concepts: dict[str, Concept]
+    phrase_tokens: SemanticTokenResponse, concepts: dict[str, Concept],
+    token_universe:list | None
 ) -> list[str]:
-    token_universe = []
+    token_universe_internal = token_universe or []
     output: list[str] = []
 
     for mapping in phrase_tokens:
-        token_universe += mapping.tokens
+        token_universe_internal += mapping.tokens
+    token_universe_internal = list(set(token_universe_internal))
     for mapping in phrase_tokens:
         found = False
         concepts_str_matches = tokens_to_concept(
             mapping.tokens,
             [c for c in concepts.keys()],
-            limits=5,
-            universe=token_universe,
+            limits=10,
+            universe=token_universe_internal,
         )
         if concepts_str_matches:
             logger.info(f"For phrase {mapping.phrase} got {concepts_str_matches}")
@@ -117,8 +119,7 @@ def discover_inputs(
     # LLM: semantic extraction
     # LLM: tokenization of all strings (reduce search space over all concepts)
     # DETERMINISTIC: concept candidates from tokens (map reduced search space to candidates)
-    # LLM: final selection of concepts (final get the concept result we want)
-    # DETERMINISTIC: map phrases to final concepts
+    # LLM: final selection of concepts and mapping to output roles
     # LLM: enrich filter values
     # DETERMINISTIC: return results
 
@@ -137,6 +138,7 @@ def discover_inputs(
     # LLM: tokenization of all strings (reduce search space over all concepts)
     concept_candidates = []
     global_phrase_token_map = {}
+    token_response_mapping:dict[str, SemanticTokenResponse] = {}
     for semantic_category, valid_purposes in {
         "metrics": [Purpose.METRIC],
         "dimensions": [Purpose.KEY, Purpose.PROPERTY, Purpose.CONSTANT],
@@ -151,10 +153,25 @@ def discover_inputs(
         if not local_phrases:
             continue
         token_mapping = tokenize_phrases(
-            local_phrases, category_tokens, log_info=log_info, session_uuid=session_uuid
+            semantic_category, local_phrases, category_tokens, log_info=log_info, session_uuid=session_uuid
         )
+        token_response_mapping[semantic_category] = token_mapping
 
-        for item in token_mapping:
+    # DETERMINISTIC
+    token_universe = set()
+    for key, token_mapping_pass_one in token_response_mapping.items():
+        for mapping in token_mapping_pass_one:
+            for t in mapping.tokens:
+                token_universe.add(t)
+    token_universe_list = list(token_universe)
+
+    # for key, debug in token_response_mapping.items():
+    #     print(key)
+    #     print(debug)
+    # raise ValueError('eel')
+
+    for key, token_mapping_pass_two in token_response_mapping.items():
+        for item in token_mapping_pass_two:
             if not all([x in category_tokens] for x in item.tokens):
                 invalid = [x for x in item.tokens if x not in category_tokens]
                 raise ValueError(
@@ -162,46 +179,35 @@ def discover_inputs(
                 )
             global_phrase_token_map[item.phrase] = item.tokens
         concept_candidates += concept_names_from_token_response(
-            token_mapping, env_concepts
+            token_mapping_pass_two, env_concepts, token_universe=token_universe_list
         )
 
+
     # DETERMINISTIC: concept candidates from tokens (map reduced search space to candidates)
-    selections: ConceptSelectionResponse = run_prompt(  # type: ignore
+    selections: FinalParseResponse = run_prompt(  # type: ignore
         SelectionPromptCase(concept_names=concept_candidates, question=input_text),
         debug=debug,
         session_uuid=session_uuid,
         log_info=log_info,
     )
-    selected_concepts = list(set(selections.matches))
+    selected_concepts = list(set(selections.selection))
 
-    for selection in selected_concepts:
-        if selection not in env_concepts:
-            raise ValueError(
-                f"Returned concept {selection} that does not actually exist in environment!"
-            )
-
-    # DETERMINISTIC: map phrases to final concepts
-    phrase_to_concept_map: dict[str, Concept] = {}
-    for key, tokens in global_phrase_token_map.items():
-        mapped = tokens_to_concept(concepts=selected_concepts, tokens=tokens, limits=1)
-        if mapped:
-            phrase_to_concept_map[key] = env_concepts[mapped[0]]
 
     final_ordering = [
         FinalOrderResult(
-            concept=phrase_to_concept_map[order.concept], order=order.order
+            concept=env_concepts[order.concept], order=order.order
         )
-        for order in parsed.order
-        if phrase_to_concept_map[order.concept]
+        for order in selections.order
+
     ]
 
     final_filters_pre = [
         FinalFilterResult(
-            concept=phrase_to_concept_map[filter.concept],
+            concept=env_concepts[filter.concept],
             operator=filter.operator,
             values=filter.values,
         )
-        for filter in parsed.filtering
+        for filter in selections.filtering
     ]
 
     # LLM: enrich filter values

@@ -1,0 +1,70 @@
+System: You are a helpful AI that selects the most relevant matching concepts to answer a question from a provided list.
+
+Guidelines:
+* the user will always provide a list of phrases
+* the user will always provide a question
+* the user may provide some filters they wish to use
+* only return concepts provided by the user
+* concepts are dot seperated and in quotes, e.g. "sales" or "product.revenue"
+* return the concepts that together best match the user question
+* reason about each match step by step, e.g. "first match the concept 'product' to the word 'product' in the question, then match the concept 'revenue' to the word 'revenue' in the question, and together these enable aggregating revenue by year"
+
+
+The output should be a VALID JSON blob with the following keys and values followed by {{ stopword }}:
+- selection: a list of concepts that together can completely answer the question in a way understandable to a human
+- limit: a number of records to limit the results to, -1 if none specified
+- order: a list of  objects to order the results by, with the option to specify ascending or descending
+-- concept: a concept to order by
+-- order: the direction of ordering, "asc" or "desc"
+- filtering: a list of objects to filter the results on, where each object has the following keys:
+-- concept: a concept to filter on
+-- values: the value the concept is filtered to
+-- operator: the comparison operator, one of "=", "in", "<", ">", "<=", "like", or ">=". A range, or between, should be expressed as two inequalities. 
+
+User: concepts: ["people.id", "people.id.count", "people.favorite_color", "people.age", "people.gender", "activity.id", "activity.name", "activity.date", "activity.date.year", "activity.date.month", "activity.date.day_of_week"] question: "How many people who love the color pink played frisbee on saturday??"
+System:
+{% raw %}{
+"selection": ["people.id.count", "people.favorite_color", "activity.name", "activity.date.day_of_week"],
+"limit": -1,
+"order": [],
+"filtering": [{"concept":"people.favorite_color", "operator": "=", "values":["Pink"]}, {"concept":"activity.date.day_of_week", "operator": "=", "values":["Saturday"]}, {"concept":"activity.name", "operator": "=", "values":["frisbee"]}]
+}{% endraw %}{{ stopword }},
+
+User: concepts: ["order.source", "order.source.line_of_business", "order.customer.id", "order.customer.state", "order.revenue", "order.revenue.sum", "order.id", "order.date", "product.id", "product.name", "product.color", "product.brand"] question: "What are the top 10 products by sales?"
+System:
+{% raw %}{
+"selection": ["product.id", "product.name", "order.revenue.sum"]
+"limit": 10,
+"order": [{"concept":"order.revenue.sum", "order":"desc"}],
+"filtering": []
+}{% endraw %}{{ stopword }}
+
+User: concepts: ["order.source", "order.source.line_of_business", "order.customer.id", "order.customer.state", "order.revenue", "order.revenue.sum", "order.revenue.avg", "order.id", "order.date", "product.id", "product.name", "product.color", "product.brand"] question: "What are the sales by line of business and state?"
+System:{% raw %}
+{
+"selection": ["order.revenue.sum", "order.source.line_of_business", "order.customer.state"],
+"limit": -1,
+"order": [],
+"filtering": []
+}{% endraw %}{{ stopword }}
+
+User: concepts: ["order.source", "order.source.line_of_business", "order.customer.id", "order.customer.state", "order.revenue", "order.revenue.sum", "order.revenue.avg", "order.id", "order.date", "product.id", "product.name", "product.color", "product.brand"]  question: "What is the average sales by state in the states of Wyoming and Texas?"
+System:{% raw %}
+{
+"selection": ["order.customer.state", "order.revenue.avg"],
+"limit": -1,
+"order": [],
+"filtering": [{"concept":"order.customer.state", "operator": "in", "values":["Wyoming", "Texas"]}]
+}{% endraw %}{{ stopword }}
+
+User: concepts: ["order.source", "order.source.line_of_business", "order.customer.id", "order.customer.state", "order.revenue", "order.revenue.sum", "order.revenue.avg", "order.id", "order.date", "order.date.year", "product.id", "product.revenue_rank.yearly", "product.name", "product.color", "product.brand"]  question: "What were top selling products between 2001 and 2020 in order of year?"
+System:{% raw %}
+{
+"selection": ["product.id", "product.name", "order.revenue.sum", "product.revenue_rank.yearly"],
+"limit": -1,
+"order": [{"concept":"order.date.year", "order":"asc"}],
+"filtering": [{"concept": "product.revenue_rank.yearly", "operator": "<", "values":[10]},{"concept":"order.year", "operator":">=", "values":["2001"]}, {"concept":"order.year", "operator":"<=", "values":["2020"]}]
+}{% endraw %}{{ stopword }}
+
+User: concepts: [{{concept_string}}] question: "{{ question }}"
+System:

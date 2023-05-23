@@ -1,12 +1,15 @@
 from preql_nlp.prompts.prompt_executor import SelectionPromptCase
-from preql_nlp.models import ConceptSelectionResponse
+from preql_nlp.models import FinalParseResponse
 from tests.utility import generate_test_case, evaluate_cases
 
 
-def gen_select_test(words):
-    def select_test(x: ConceptSelectionResponse):
-        return set(x.matches) == set(words)
-
+def gen_select_test(words, filters:list[str] | None = None):
+    def select_test(x: FinalParseResponse):
+        return set(x.selection) == set(words)
+    if filters:
+        def filter_test(x:FinalParseResponse):
+            return set([z.concept for z in x.filtering]) == set(filters)
+        return [select_test, filter_test]
     return [select_test]
 
 
@@ -25,7 +28,7 @@ def test_selection_prompt(test_logger):
 
     test2 = generate_test_case(
         SelectionPromptCase,
-        tests=gen_select_test(["question.author", "question.id"]),
+        tests=gen_select_test(["question.author"], ["question.id"]),
         question="Author of question id 2?",
         concept_names=[
             "question.creation_date.year",

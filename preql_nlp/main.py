@@ -19,7 +19,6 @@ from preql.core.query_processor import process_query_v2
 
 from preql_nlp.constants import DEFAULT_LIMIT, logger
 from preql_nlp.models import (
-    ConceptSelectionResponse,
     FilterResult,
     FinalFilterResult,
     FinalOrderResult,

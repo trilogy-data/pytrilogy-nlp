@@ -25,6 +25,7 @@ def test_structured_input():
         tests=gen_semantic_tests({first_phrase: ["question", "year", "count"]}),
         phrases=[first_phrase],
         tokens=["question", "year", "count", "albatross", "answer", "month", "quarter"],
+        purpose = 'Metric'
     )
 
     evaluate_cases([test1])

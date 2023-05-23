@@ -7,6 +7,7 @@ def test_retry():
     test = SemanticToTokensPromptCase(
         tokens=["alphabet", "soup", "apple", "fruit", "shape", "orange"],
         phrases=["round fruits"],
+        purpose = "Dimension"
     )
 
     test.execute_prompt = (

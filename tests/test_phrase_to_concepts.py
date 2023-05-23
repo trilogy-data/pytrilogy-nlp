@@ -3,12 +3,14 @@ from preql_nlp.models import FinalParseResponse
 from tests.utility import generate_test_case, evaluate_cases
 
 
-def gen_select_test(words, filters:list[str] | None = None):
+def gen_select_test(words, filters: list[str] | None = None):
     def select_test(x: FinalParseResponse):
         return set(x.selection) == set(words)
+
     if filters:
-        def filter_test(x:FinalParseResponse):
+        def filter_test(x: FinalParseResponse):
             return set([z.concept for z in x.filtering]) == set(filters)
+
         return [select_test, filter_test]
     return [select_test]
 

@@ -41,16 +41,12 @@ def tokens_to_concept(
     mappings = {x: split_to_tokens(x) for x in concepts}
     candidates =[x for x in concepts if any(token in mappings[x] for token in tokens)]
     pickings = defaultdict(list)
-    log = 'count' in tokens
 
     if not candidates:
         return None
     tiers = set()
 
     for candidate in candidates:
-        # print('scoring')
-        # print(candidate)
-        # print("---")
         score  = 0
         candidate_tokens = mappings[candidate]
         # exact match to concept is +2
@@ -66,29 +62,13 @@ def tokens_to_concept(
         pickings[score].append(candidate)
         tiers.add(score)
     tier_list = sorted(list(tiers), key=lambda x: -x)
-    if log:
-        print('FOR TOKENS')
-        print(tokens)
-        print('in universe')
-        print(universe_list)
-        print('candidates are')
-    for key, value in pickings.items():
-        candidates = sorted(value, key=lambda x: len(x))
-        if log:
-            print('----')
-            print(key)
-        for match in candidates:
-            if log:
-                print(match)
     found: List[str] = []
     while len(found) < limits and tier_list:
 
         stier = tier_list.pop(0)
-        candidates = sorted(pickings[stier], key=lambda x: len(x))
+        # sort within list by length ascending, then alphabetical
+        # for consistency
+        candidates = sorted(pickings[stier], key=lambda x: (len(x), x))
         required = limits - len(found)
         found += candidates[:required]
-    if log:
-        print('FINAL RETURN IS')
-        print('xxxxx')
-        print(found)
     return found

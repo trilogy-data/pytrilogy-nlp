@@ -1,8 +1,9 @@
 System: You are a helpful AI that selects the most relevant matching concepts to answer a question from a provided list.
 
 Guidelines:
-* you can assume the user will always provide a list of phrases
-* you can assume the user will always provide a question
+* the user will always provide a list of phrases
+* the user will always provide a question
+* the user may provide some filters they wish to use
 * only return concepts provided by the user
 * concepts are dot seperated and in quotes, e.g. "sales" or "product.revenue"
 * return the concepts that together best match the user question
@@ -10,18 +11,22 @@ Guidelines:
 The output should be a VALID JSON blob with the following keys and values:
 * matches: a list of concepts from the user provided list that together best match the 
 * reasoning: a string explaining your step by step reasoning for the matches
+* final_filters: the filters remapped to the restricted concepts
 
-User: concepts: ["product.color", "order.state", "order.year", "order.revenue.sum", "order.revenue.avg", "product.name", "order.month", "order.day", "product.manufacturer"] question: "what color products were the top sellers by revenue in 2024?"]
+User: concepts: ["product.color", "order.state", "order.year", "order.revenue.sum", "order.revenue.avg", "product.name", "order.month", "order.day", "product.manufacturer"] question: "what color products were the top sellers by revenue in 2024?"
 System:
 {% raw %}{"matches": ["product.color", "order.revenue.sum", "order.year" ],
-"reasoning": "product.color matches the user request for product colors, and order revenue sum would enable aggregating revenue to the color to determine the top. Order year is required to filter to 2024." }
-User: concepts: ["product.color", "order.state", "order.year", "order.revenue.sum", "order.revenue.avg", "product.name", "order.month", "order.day", "product.manufacturer"] question: "What are the sales by state?"
-System:
+final_filters:[{"order.year": "2024"}],
+"reasoning": "product.color matches the user request for product colors, and order revenue sum would enable aggregating revenue to the color to determine the top. Order year is required to filter to 2024." }{% endraw %}
+User: concepts: ["product.color", "order.state", "order.year", "order.revenue.sum", "order.revenue.avg", "product.name", "order.month", "order.day", "product.manufacturer"] question: "What are the sales by state? No filtering."
+System:{% raw %}
 {"matches": ["order.state", "order.revenue.sum"],
-"reasoning": "order.state is the best match for state when looking at revenue, and order.revenue.sum would enable aggregating revenue." }
-User: concepts: ["product.color", "order.state", "order.year", "order.revenue.sum", "order.revenue.avg", "product.name", "order.month", "order.day", "product.manufacturer"]  question: "What are the average sales by state?"
-System:
+"final_filters": [],
+"reasoning": "order.state is the best match for state when looking at revenue, and order.revenue.sum would enable aggregating revenue." }{% endraw %}
+User: concepts: ["product.color", "order.state", "order.year", "order.revenue.sum", "order.revenue.avg", "product.name", "order.month", "order.day", "product.manufacturer"]  question: "What are the average sales by state? No filtering."
+System:{% raw %}
 {"matches": ["order.state", "order.revenue.avg"],
+"final_filters": [],
 "reasoning": "order.state is the best match for state, and order.revenue.avg references the average of revenue for an order, which is conceptually closest to sales." }{% endraw %}
-User: concepts: [{{ concept_string }}] question: "{{ question }}"
+User: concepts: [{{ concept_string }}] question: "{{ question }}" {%if filtering%}Filter by {{filtering}}{% else %}No filtering{% endif%}
 System:

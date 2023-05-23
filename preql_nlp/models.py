@@ -41,6 +41,14 @@ class InitialParseResponse(BaseModel):
         return list(set(self.metrics + self.dimensions + filtering + order))
 
 
+class FinalParseResponse(BaseModel):
+    """The result of the initial parse"""
+    selection:list[str]
+    limit:int
+    order:list[OrderResult]
+    filtering:list[FilterResult]
+
+
 class IntermediateParseResults(BaseModel):
     select: list[Concept]
     limit: int

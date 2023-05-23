@@ -135,3 +135,21 @@ def test_like_predicates():
         ),
     )
     evaluate_cases([case1])
+
+
+def test_abstract_terms():
+    case1 = generate_test_case(
+        SemanticExtractionPromptCase,
+        question="Shoe sales on christmas day?",
+        tests=gen_validate_initial_parse_result(
+            selection=["product", "sale"],
+            filtering=[
+                FilterResult(
+                    concept="day",
+                    values=["Christmas Day"],
+                    operator=ComparisonOperator.EQ,
+                ),
+            ],
+        ),
+    )
+    evaluate_cases([case1])

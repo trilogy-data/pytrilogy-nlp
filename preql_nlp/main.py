@@ -193,7 +193,11 @@ def discover_inputs(
 
     # LLM - use our concept candidates to generate the final output
     selections: FinalParseResponse = run_prompt(  # type: ignore
-        SelectionPromptCase(concept_names=concept_candidates, question=input_text),
+        SelectionPromptCase(
+            concept_names=concept_candidates,
+            all_concept_names=list(env_concepts.keys()),
+            question=input_text,
+        ),
         debug=debug,
         session_uuid=session_uuid,
         log_info=log_info,

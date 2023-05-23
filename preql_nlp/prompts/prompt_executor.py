@@ -184,6 +184,7 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
         self.padding_phrase = "democratic elections"
         self.phrases = sorted(phrases + [self.padding_phrase])
         super().__init__(category="semantic_to_tokens", evaluators=evaluators)
+        self.retries = 0
 
     def get_extra_template_context(self):
         return {
@@ -199,7 +200,30 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
         x for x in self.parsed.__root__ if x.phrase != self.padding_phrase
     ]
 
-
+        tokens = []
+        for x in self.parsed.__root__:
+            tokens+= x.tokens
+        missing = False
+        tokens = list(set(tokens))
+        for token in tokens:
+            if token not in self.tokens:
+                missing = True
+                break
+        if missing:
+            self.retries += 1
+            valid = ", ".join([f'"{c}"' for c in self.tokens if c]),
+            retry_prompt = f'User: The token "{token}" in your answer was  not in the provided list, please return a new answer without any unprovided lists. Valid tokens are [{valid}] Return only the corrected JSON, do not apologize. \nSystem: '
+            self.prompt = self.prompt + "\n" + self.response + "\n" + retry_prompt
+            if self.retries < MAX_REFINMENT_TRIES:
+                self.execute_prompt(self.prompt, skip_cache=True)
+                return self.post_run()
+            else:
+                print('debug')
+                print(self.prompt)
+                raise ValueError(
+                    f"LLM returned token {token} that does not exist in input names, cannot progress - returned {self.parsed}"
+                )
+                
 class SelectionPromptCase(BasePreqlPromptCase):
     template = templates.get_template("prompt_final_concepts_v2.jinja2")
     parse_model = FinalParseResponse
@@ -215,9 +239,11 @@ class SelectionPromptCase(BasePreqlPromptCase):
         self,
         question: str,
         concept_names: List[str],
+        all_concept_names:List[str] | None = None,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         self.question = question
+        self.all_concept_names_internal = all_concept_names or concept_names
         self.concept_names = sorted(list(set(concept_names)), key=lambda x: x)
         super().__init__(evaluators=evaluators, category="selection")
         self.execution.score = None
@@ -242,7 +268,7 @@ class SelectionPromptCase(BasePreqlPromptCase):
         missing = False
         selected_concepts = list(set(selected_concepts))
         for selection in selected_concepts:
-            if selection not in self.concept_names:
+            if selection not in self.all_concept_names_internal:
                 missing = True
                 break
         if missing:

@@ -2,6 +2,9 @@ from preql_nlp.prompts.prompt_executor import SemanticExtractionPromptCase
 from preql_nlp.models import InitialParseResponse, FilterResult, OrderResult
 from tests.utility import generate_test_case, evaluate_cases
 from preql.core.enums import Ordering, ComparisonOperator
+from pydantic import BaseModel
+
+from typing import List
 
 
 def flatten_arg_list(obj, args):
@@ -34,8 +37,14 @@ def validator_factory(key, test_values):
         )
         if not check:
             raise ValueError(
-                "could not find ", test_values, " in ", key, " with ", field_values, "from",
-                str(input)
+                "could not find ",
+                test_values,
+                " in ",
+                key,
+                " with ",
+                field_values,
+                "from",
+                str(input),
             )
         return check
 
@@ -90,12 +99,8 @@ def test_extraction_prompt(test_logger):
             ],
             limit=50,
             filtering=[
-                FilterResult(
-                    concept="year", values=["2010"], operator='='
-                ),
-                FilterResult(
-                    concept="state", values=["VT"], operator='='
-                ),
+                FilterResult(concept="year", values=["2010"], operator="="),
+                FilterResult(concept="state", values=["VT"], operator="="),
             ],
         ),
     )
@@ -126,11 +131,59 @@ def test_like_predicates():
         tests=gen_validate_initial_parse_result(
             selection=["body"],
             filtering=[
-                FilterResult(
-                    concept="body",
-                    values=["%jaguar%"],
-                    operator=ComparisonOperator.LIKE,
-                ),
+                MultiModeFilterMatch(
+                    valid=[
+                        FilterResult(
+                            concept="body",
+                            values=["%jaguar%"],
+                            operator=ComparisonOperator.LIKE,
+                        ),
+                        FilterResult(
+                            concept="post body",
+                            values=["%jaguar%"],
+                            operator=ComparisonOperator.LIKE,
+                        ),
+                    ]
+                )
+            ],
+        ),
+    )
+    evaluate_cases([case1])
+
+
+class MultiModeFilterMatch(BaseModel):
+    valid: List[FilterResult]
+
+    def __eq__(self, x):
+        return any([x == v for v in self.valid])
+
+
+def test_abstract_terms():
+    case1 = generate_test_case(
+        SemanticExtractionPromptCase,
+        question="Shoe sales on christmas day?",
+        tests=gen_validate_initial_parse_result(
+            selection=["product", "sale"],
+            filtering=[
+                MultiModeFilterMatch(
+                    valid=[
+                        FilterResult(
+                            concept="day",
+                            values=["Christmas Day"],
+                            operator=ComparisonOperator.EQ,
+                        ),
+                        FilterResult(
+                            concept="day of year",
+                            values=["December 25"],
+                            operator=ComparisonOperator.EQ,
+                        ),
+                        FilterResult(
+                            concept="day of year",
+                            values=["12/25"],
+                            operator=ComparisonOperator.EQ,
+                        ),
+                    ]
+                )
             ],
         ),
     )

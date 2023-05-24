@@ -4,17 +4,19 @@ from preql.core.enums import Purpose
 import re
 from collections import defaultdict
 
+
 class Token(str):
     def __init__(*args):
         super.__init__(*args)
-    
 
 
 def split_to_tokens(input_text: str) -> list[str]:
     return list(set(re.split("\.|\_", input_text)))
 
 
-def build_token_list_by_purpose(concepts:Dict[str, Concept], purposes: Iterable[Purpose]) -> list[str]:
+def build_token_list_by_purpose(
+    concepts: Dict[str, Concept], purposes: Iterable[Purpose]
+) -> list[str]:
     concepts = {k: v for k, v in concepts.items() if v.purpose in purposes}
 
     unique = set(concepts.keys())
@@ -29,17 +31,16 @@ def build_token_list_by_purpose(concepts:Dict[str, Concept], purposes: Iterable[
     return list(final)
 
 
-
 def tokens_to_concept(
     tokens: list[str],
     concepts: List[str],
     limits: int = 5,
     universe: list[str] | None = None,
-)->list[str] | None:
+) -> list[str] | None:
     tokens = list(set(tokens))
-    universe_list = list(set(universe or [])  )
+    universe_list = list(set(universe or []))
     mappings = {x: split_to_tokens(x) for x in concepts}
-    candidates =[x for x in concepts if any(token in mappings[x] for token in tokens)]
+    candidates = [x for x in concepts if any(token in mappings[x] for token in tokens)]
     pickings = defaultdict(list)
 
     if not candidates:
@@ -47,24 +48,23 @@ def tokens_to_concept(
     tiers = set()
 
     for candidate in candidates:
-        score  = 0
+        score = 0
         candidate_tokens = mappings[candidate]
         # exact match to concept is +2
         for x in tokens:
             if x in candidate_tokens:
                 # print(f'+2 score from token {x} in candidate list')
-                score +=10
+                score += 10
         # universe context is + 1
         for y in universe_list:
             if y in candidate_tokens:
                 # print(f"+1 score from token {y} in universe")
-                score +=1
+                score += 1
         pickings[score].append(candidate)
         tiers.add(score)
     tier_list = sorted(list(tiers), key=lambda x: -x)
     found: List[str] = []
     while len(found) < limits and tier_list:
-
         stier = tier_list.pop(0)
         # sort within list by length ascending, then alphabetical
         # for consistency

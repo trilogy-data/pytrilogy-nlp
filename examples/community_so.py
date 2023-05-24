@@ -13,7 +13,7 @@ environment = models["bigquery.stack_overflow"]
 
 
 processed_query = parse_query(
-    "How many questions were asked on Christmas day 2013?",
+    "How many questions were asked by users in Crotia on Christmas day 2013?",
     environment,
     debug=True,
 )

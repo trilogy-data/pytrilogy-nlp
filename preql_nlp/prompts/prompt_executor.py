@@ -10,8 +10,7 @@ from preql_nlp.models import (
     ConceptSelectionResponse,
     SemanticTokenResponse,
     FilterRefinementResponse,
-    FinalParseResponse
-
+    FinalParseResponse,
 )
 from preql_nlp.cache_providers.base import BaseCache
 from preql_nlp.cache_providers.local_sqlite import SqlliteCache
@@ -25,6 +24,8 @@ from jinja2 import FileSystemLoader, Environment, Template
 from os.path import dirname
 
 PROMPT_STOPWORD = "<EOM>"
+
+MAX_REFINMENT_TRIES = 4
 
 loader = FileSystemLoader(searchpath=dirname(__file__))
 templates = Environment(loader=loader)
@@ -101,7 +102,8 @@ class BasePreqlPromptCase(TemplatedPromptCase):
                 self.response = resp
                 return self.response
         self.response = self.prompt_executor(prompt_str)
-        self.stash.store(hash_val, self.category, self.response)
+        if not skip_cache:
+            self.stash.store(hash_val, self.category, self.response)
         return self.response
 
     def get_extra_template_context(self):
@@ -111,7 +113,6 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         self.prompt = self.prompt + self.response + "\n" + self.retry_prompt
         self.has_rerun = True
         self.execute_prompt(self.prompt, skip_cache=True)
-
 
     def post_run(self):
         try:
@@ -126,7 +127,6 @@ class BasePreqlPromptCase(TemplatedPromptCase):
             if self.fail_on_parse_error:
                 raise e
 
-    
     def render(
         self,
     ):
@@ -137,7 +137,11 @@ class SemanticExtractionPromptCase(BasePreqlPromptCase):
     template = templates.get_template("prompt_query_semantic_groupings.jinja2")
     parse_model = InitialParseResponse
 
-    attributes_used_for_hash = {"category", "question", "template",}
+    attributes_used_for_hash = {
+        "category",
+        "question",
+        "template",
+    }
 
     def __init__(
         self,
@@ -154,24 +158,33 @@ class SemanticExtractionPromptCase(BasePreqlPromptCase):
 class SemanticToTokensPromptCase(BasePreqlPromptCase):
     template = templates.get_template("prompt_semantic_to_tokens.jinja2")
     parse_model = SemanticTokenResponse
+    
 
-    attributes_used_for_hash = {"tokens", "phrases", "category", "template", "purpose",}
+    attributes_used_for_hash = {
+        "tokens",
+        "phrases",
+        "category",
+        "template",
+        "purpose",
+    }
 
     def __init__(
         self,
-        purpose:str,
+        purpose: str,
         tokens: List[str],
         phrases: List[str],
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
-    ):  
+    ):
         tokens = [token for token in tokens if token]
         self.tokens = sorted(tokens)
         self.purpose = purpose
         # we need to ensure that we always have a list
-        # for chat-gpt to understand the prompt properly
+        # for some LLMs to understand the prompt properly
         # pad out the inputs with a random phrase
-        self.phrases = sorted(phrases + ["democratic elections"])
+        self.padding_phrase = "democratic elections"
+        self.phrases = sorted(phrases + [self.padding_phrase])
         super().__init__(category="semantic_to_tokens", evaluators=evaluators)
+        self.retries = 0
 
     def get_extra_template_context(self):
         return {
@@ -181,20 +194,54 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
             "phrase_str": ", ".join([f'"{c}"' for c in self.phrases]),
         }
 
+    def post_run(self):
+        super().post_run()
+        self.parsed.__root__ = [
+        x for x in self.parsed.__root__ if x.phrase != self.padding_phrase
+    ]
 
+        tokens = []
+        for x in self.parsed.__root__:
+            tokens+= x.tokens
+        missing = False
+        tokens = list(set(tokens))
+        for token in tokens:
+            if token not in self.tokens:
+                missing = True
+                break
+        if missing:
+            self.retries += 1
+            valid = ", ".join([f'"{c}"' for c in self.tokens if c]),
+            retry_prompt = f'User: The token "{token}" in your answer was  not in the provided list, please return a new answer without any unprovided lists. Valid tokens are [{valid}] Return only the corrected JSON, do not apologize. \nSystem: '
+            self.prompt = self.prompt + "\n" + self.response + "\n" + retry_prompt
+            if self.retries < MAX_REFINMENT_TRIES:
+                self.execute_prompt(self.prompt, skip_cache=True)
+                return self.post_run()
+            else:
+                raise ValueError(
+                    f"LLM returned token {token} that does not exist in input names, cannot progress - returned {self.parsed}"
+                )
+                
 class SelectionPromptCase(BasePreqlPromptCase):
     template = templates.get_template("prompt_final_concepts_v2.jinja2")
     parse_model = FinalParseResponse
 
-    attributes_used_for_hash = {"question", "concept_names", "category", "template",}
+    attributes_used_for_hash = {
+        "question",
+        "concept_names",
+        "category",
+        "template",
+    }
 
     def __init__(
         self,
         question: str,
         concept_names: List[str],
+        all_concept_names:List[str] | None = None,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         self.question = question
+        self.all_concept_names_internal = all_concept_names or concept_names
         self.concept_names = sorted(list(set(concept_names)), key=lambda x: x)
         super().__init__(evaluators=evaluators, category="selection")
         self.execution.score = None
@@ -204,35 +251,47 @@ class SelectionPromptCase(BasePreqlPromptCase):
         return {
             **super().get_extra_template_context(),
             "concept_string": ", ".join([f'"{c}"' for c in self.concept_names]),
-            "question": self.question
+            "question": self.question,
         }
-    
+
     def post_run(self):
         super().post_run()
 
-        selected_concepts:List[str] = self.parsed.selection
+        selected_concepts: List[str] = self.parsed.selection
         for item in self.parsed.filtering:
             selected_concepts.append(item.concept)
         for item in self.parsed.order:
             selected_concepts.append(item.concept)
 
+        missing = False
+        selected_concepts = list(set(selected_concepts))
         for selection in selected_concepts:
-            if selection not in self.concept_names:
-                self.retries +=1
-                retry_prompt = f'User: Return value {selection} was not provided by me, please return a new answer with only concepts I provided.\nSystem: '
-                self.prompt = self.prompt + self.response + "\n" + retry_prompt
-                if self.retries<4:
-                    self.execute_prompt(self.prompt, skip_cache=True)
-                    self.post_run()
-                else:
-                    raise ValueError(f"LLM returned concept {selection} that do not exist ininput names, cannot progress - returned {self.parsed}")
-
+            if selection not in self.all_concept_names_internal:
+                missing = True
+                break
+        if missing:
+            self.retries += 1
+            valid = ", ".join([f'"{c}"' for c in self.concept_names])
+            retry_prompt = f'User: The concept "{selection}" in your answer was invalid, please return a new answer with only concepts I provided. Valid concepts are [{valid}] Return only the corrected JSON, do not apologize. \nSystem: '
+            self.prompt = self.prompt + "\n" + self.response + "\n" + retry_prompt
+            if self.retries < MAX_REFINMENT_TRIES:
+                self.execute_prompt(self.prompt, skip_cache=True)
+                return self.post_run()
+            else:
+                raise ValueError(
+                    f"LLM returned concept {selection} that does not exist in input names, cannot progress - returned {self.parsed}"
+                )
+                
 
 class FilterRefinementCase(BasePreqlPromptCase):
     template = templates.get_template("prompt_refine_filter.jinja2")
     parse_model = FilterRefinementResponse
 
-    attributes_used_for_hash = {"values", "description", "template",}
+    attributes_used_for_hash = {
+        "values",
+        "description",
+        "template",
+    }
 
     def __init__(
         self,

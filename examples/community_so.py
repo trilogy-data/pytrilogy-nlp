@@ -1,6 +1,6 @@
 from trilogy_public_models import models
 from preql_nlp.main import parse_query
-from logging import StreamHandler, DEBUG, INFO
+from logging import StreamHandler, INFO
 from preql_nlp.constants import logger
 from preql.parsing.render import render_query
 

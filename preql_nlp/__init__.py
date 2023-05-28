@@ -1,6 +1,7 @@
-from .monkeypatch import patch_promptimize
+from .monkeypatch import patch_promptimize, patch_langchain
 
 patch_promptimize()
+patch_langchain()
 
 from .main import build_query  # noqa: E402
 

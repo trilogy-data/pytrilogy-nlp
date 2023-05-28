@@ -1,19 +1,19 @@
 from trilogy_public_models import models
 from preql_nlp.main import parse_query
-from logging import StreamHandler, DEBUG
+from logging import StreamHandler, DEBUG, INFO
 from preql_nlp.constants import logger
 from preql.parsing.render import render_query
 
-logger.setLevel(DEBUG)
+logger.setLevel(INFO)
 logger.addHandler(StreamHandler())
 
 
 # grab the model we want to parse
-environment = models["bigquery.stack_overflow"]
+environment = models["bigquery.thelook_ecommerce"]
 
 
 processed_query = parse_query(
-    "How many questions were asked by users in Crotia on Christmas day 2013?",
+    "what were the top 10 cities for cancelled orders in 2020?  ",
     environment,
     debug=True,
 )

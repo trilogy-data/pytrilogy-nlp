@@ -1,6 +1,21 @@
-from promptimize.prompt_cases import BasePromptCase, utils
-
 # patched method while waiting for upstream PR to be merged
+import logging
+from typing import (
+    Any,
+    Callable,
+    Union,
+)
+
+from langchain.llms import openai as langchain_openai
+from promptimize.prompt_cases import BasePromptCase, utils
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
+
 
 def patch_promptimize():
     def test(self):
@@ -16,5 +31,31 @@ def patch_promptimize():
             self.execution.results = test_results
         self.was_tested = True
 
-
     BasePromptCase.test = test
+
+
+def patch_langchain():
+    def create_retry_decorator(
+        llm: Union[langchain_openai.BaseOpenAI, langchain_openai.OpenAIChat]
+    ) -> Callable[[Any], Any]:
+        import openai
+
+        min_seconds = 4
+        max_seconds = 10
+        # Wait 2^x * 1 second between each retry starting with
+        # 4 seconds, then up to 10 seconds, then 10 seconds afterwards
+        return retry(
+            reraise=True,
+            stop=stop_after_attempt(llm.max_retries),
+            wait=wait_exponential(multiplier=1, min=min_seconds, max=max_seconds),
+            retry=(
+                retry_if_exception_type(openai.error.Timeout)
+                | retry_if_exception_type(openai.error.APIError)
+                | retry_if_exception_type(openai.error.APIConnectionError)
+                # | retry_if_exception_type(openai.error.RateLimitError)
+                | retry_if_exception_type(openai.error.ServiceUnavailableError)
+            ),
+            before_sleep=before_sleep_log(langchain_openai.logger, logging.WARNING), 
+        )
+
+    langchain_openai._create_retry_decorator = create_retry_decorator

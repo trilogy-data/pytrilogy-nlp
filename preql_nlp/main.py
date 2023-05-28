@@ -84,10 +84,10 @@ def concept_names_from_token_response(
         concepts_str_matches = tokens_to_concept(
             mapping.tokens,
             [c for c in concepts.keys()],
-            limits=10,
+            limits=50,
             universe=token_universe_internal,
         )
-        logger.info(f"For phrase {mapping.phrase} got {concepts_str_matches}")
+        logger.debug(f"For phrase {mapping.phrase} got {concepts_str_matches}")
         if concepts_str_matches:
             # logger.info(f"For phrase {mapping.phrase} got {concepts_str_matches}")
             output += concepts_str_matches
@@ -157,6 +157,8 @@ def discover_inputs(
         # skip if we have no relevant phrases
         if not local_phrases:
             continue
+        if not category_tokens:
+            raise ValueError("No tokens for category")
         token_mapping = tokenize_phrases(
             semantic_category,
             local_phrases,
@@ -284,7 +286,9 @@ def parse_query(
     intermediate_results = discover_inputs(
         input_text, input_environment, debug=debug, log_info=log_info
     )
-    order = parse_order(intermediate_results.select, intermediate_results.order)
+    selection = unique(intermediate_results.select, "address")
+
+    order = parse_order(selection, intermediate_results.order)
 
     filtering = parse_filtering(intermediate_results.filtering)
     # from preql.core.models import unique
@@ -294,7 +298,7 @@ def parse_query(
         for c in intermediate_results.select:
             print(c.address)
     query = Select(
-        selection=unique(intermediate_results.select, "address"),
+        selection=selection,
         limit=safe_limit(intermediate_results.limit),
         order_by=order,
         where_clause=filtering,

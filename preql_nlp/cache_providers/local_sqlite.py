@@ -14,7 +14,7 @@ class SqlliteCache(BaseCache):
 
     
     def retrieve(self, prompt_hash: str) -> str | None:
-        logger.info(f"checking for cache with prompt hash {prompt_hash}")
+        logger.debug(f"checking for cache with prompt hash {prompt_hash}")
         con = sqlite3.connect(self.sqlite_address)
         cur = con.cursor()
         cur.execute(
@@ -26,9 +26,9 @@ class SqlliteCache(BaseCache):
         )
         current = res.fetchone()
         if current:
-            logger.info(f"Got cached response of type {current[1]}")
+            logger.debug(f"Got cached response of type {current[1]}")
             return current[0]
-        logger.info('No cache available for key')
+        logger.debug('No cache available for key')
         return None
 
 

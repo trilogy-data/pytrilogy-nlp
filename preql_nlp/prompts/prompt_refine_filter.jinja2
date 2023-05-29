@@ -12,7 +12,7 @@ You will output only a JSON formatted response with the following fields:
 * "old_values": the original value array provided
 * "reasoning": a description of your logic 
 
-User: given the values ["Vermont", "Connecticut"], transform to match the following description: "Two character state code, ex MA for Massachusetts"
+User: given the values ["Vermont", "Connecticut"], transform to match the following description of a STRING field: "Two character state code, ex MA for Massachusetts"
 System:
 {% raw %}
 {"new_values": ["VT", "CT"],
@@ -20,7 +20,7 @@ System:
 "reasoning": "The field is described as containing states as two digit codes. VT is the two letter state code for Vermont and CT is the two letter state code for Connecticut"
 }
 {% endraw %}
-User: given the values ["100%", "75%"], transform to match the following description: "The percentage of survey respondents, expressed as a decimal between 0 and 1"
+User: given the values ["100%", "75%"], transform to match the following description of a DECIMAL field: "The percentage of survey respondents, expressed as a decimal between 0 and 1"
 System:
 {% raw %}
 {"new_values": ["1.0", "0.75"],
@@ -28,13 +28,13 @@ System:
 "reasoning": "The description says the field is a decimal. The inputs were percents that need to be mapped to decimals between 0 and 1. I can remove the % sign and divide them by 100."
 }
 {% endraw %}
-User: given the values ["Blue", "Red"], transform to match the following description: "An integer enum of colors. 1 = RED, 2 = BLUE, 3 = GREEN, 4 = YELLOW "
+User: given the values ["Blue", "Red"], transform to match the following description of an INTEGER field: "An integer enum of colors. 1 = RED, 2 = BLUE, 3 = GREEN, 4 = YELLOW "
 System:
 {% raw %}
 {"new_values": [2, 1],
 "old_values": ["Blue", "Red"],
-"reasoning": "The field is described as an enum mapping integers to colors. Blue is described as mapping to 2, and red to 1."
+"reasoning": "The field type is described as an enum mapping integers to colors. Blue is described as mapping to 2, and red to 1."
 }
 {% endraw %}
-User: Given the values [{{ values }}], transform to match the following description: "{{ description }}"
+User: Given the values [{{ values }}], transform to match the following description of a {{datatype}} field: "{{ description }}"
 System:

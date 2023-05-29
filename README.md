@@ -46,6 +46,27 @@ for row in results:
     print(row)
 ```
 
+## Don't Expecct Perfection
+
+Results are non-determistic and may not always be accurate.
+
+```sql
+# generated from prompt: What is Taylor Swift's birthday? How many questions were asked on that day in 2020?
+SELECT
+    question.count,
+    answer.creation_date.year,
+    question.creation_date.year,
+    question.creation_date,
+WHERE
+    question.creation_date.year = 1989
+ORDER BY
+    question.count desc,
+
+    question.count desc
+
+LIMIT 100;
+```
+
 
 
 ## Setting Up Your Environment

@@ -25,7 +25,7 @@ from os.path import dirname
 
 PROMPT_STOPWORD = "<EOM>"
 
-MAX_REFINMENT_TRIES = 4
+MAX_REFINEMENT_TRIES = 4
 
 loader = FileSystemLoader(searchpath=dirname(__file__))
 templates = Environment(loader=loader)
@@ -117,6 +117,9 @@ class BasePreqlPromptCase(TemplatedPromptCase):
     def post_run(self):
         try:
             self.parsed = self.parse_response(self.response)
+            logger.info(
+                f"Sucessfully parsed response to {self.category}: {self.parsed.json()}"
+            )
         except ValidationError as e:
             if not self.has_rerun:
                 self.rerun()
@@ -158,7 +161,6 @@ class SemanticExtractionPromptCase(BasePreqlPromptCase):
 class SemanticToTokensPromptCase(BasePreqlPromptCase):
     template = templates.get_template("prompt_semantic_to_tokens.jinja2")
     parse_model = SemanticTokenResponse
-    
 
     attributes_used_for_hash = {
         "tokens",
@@ -194,34 +196,43 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
             "phrase_str": ", ".join([f'"{c}"' for c in self.phrases]),
         }
 
+    def _process_tokens(self, input_tokens):
+        input_tokens.tokens = [t for t in input_tokens.tokens if t in self.tokens]
+        return input_tokens
+
     def post_run(self):
         super().post_run()
         self.parsed.__root__ = [
-        x for x in self.parsed.__root__ if x.phrase != self.padding_phrase
-    ]
+            self._process_tokens(x)
+            for x in self.parsed.__root__
+            if x.phrase != self.padding_phrase
+        ]
+        # TODO: evaluate tradeoffs
+        # do we ask to refine, or just silently drop invalid tokens?
+        # tokens = []
+        # for x in self.parsed.__root__:
+        #     tokens+= x.tokens
+        # missing = False
+        # tokens = list(set(tokens))
+        # for token in tokens:
+        #     if token not in self.tokens:
+        #         missing = True
+        #         break
+        # if missing:
+        #     self.retries += 1
+        #     valid = ", ".join([f'"{c}"' for c in self.tokens if c]),
+        #     retry_prompt = f'User: The token "{token}" in your answer was not in the provided list, please return a new answer without any unprovided lists. Valid tokens are [{valid}] Return only the corrected JSON, do not apologize. \nSystem: '
+        #     self.prompt = self.prompt + "\n" + self.response + "\n" + retry_prompt
+        #     if self.retries < MAX_REFINEMENT_TRIES:
+        #         self.execute_prompt(self.prompt, skip_cache=True)
+        #         return self.post_run()
+        #     else:
+        #         print(self.prompt)
+        #         raise ValueError(
+        #             f"After {self.retries} attempts, LLM returned token {token} that does not exist in input tokens, cannot progress - returned {self.parsed}"
+        #         )
 
-        tokens = []
-        for x in self.parsed.__root__:
-            tokens+= x.tokens
-        missing = False
-        tokens = list(set(tokens))
-        for token in tokens:
-            if token not in self.tokens:
-                missing = True
-                break
-        if missing:
-            self.retries += 1
-            valid = ", ".join([f'"{c}"' for c in self.tokens if c]),
-            retry_prompt = f'User: The token "{token}" in your answer was  not in the provided list, please return a new answer without any unprovided lists. Valid tokens are [{valid}] Return only the corrected JSON, do not apologize. \nSystem: '
-            self.prompt = self.prompt + "\n" + self.response + "\n" + retry_prompt
-            if self.retries < MAX_REFINMENT_TRIES:
-                self.execute_prompt(self.prompt, skip_cache=True)
-                return self.post_run()
-            else:
-                raise ValueError(
-                    f"LLM returned token {token} that does not exist in input names, cannot progress - returned {self.parsed}"
-                )
-                
+
 class SelectionPromptCase(BasePreqlPromptCase):
     template = templates.get_template("prompt_final_concepts_v2.jinja2")
     parse_model = FinalParseResponse
@@ -237,13 +248,13 @@ class SelectionPromptCase(BasePreqlPromptCase):
         self,
         question: str,
         concept_names: List[str],
-        all_concept_names:List[str] | None = None,
+        all_concept_names: List[str] | None = None,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         self.question = question
         self.all_concept_names_internal = all_concept_names or concept_names
         self.concept_names = sorted(list(set(concept_names)), key=lambda x: x)
-        super().__init__(evaluators=evaluators, category="selection")
+        super().__init__(evaluators=evaluators, category="final_concept_selection")
         self.execution.score = None
         self.retries = 0
 
@@ -272,16 +283,16 @@ class SelectionPromptCase(BasePreqlPromptCase):
         if missing:
             self.retries += 1
             valid = ", ".join([f'"{c}"' for c in self.concept_names])
-            retry_prompt = f'User: The concept "{selection}" in your answer was invalid, please return a new answer with only concepts I provided. Valid concepts are [{valid}] Return only the corrected JSON, do not apologize. \nSystem: '
+            retry_prompt = f'User: The concept "{selection}" in your answer was not one in the provided valid list, please return a new answer with only valid concepts from this list: [{valid}] Return only the corrected JSON, do not apologize. \nSystem: '
             self.prompt = self.prompt + "\n" + self.response + "\n" + retry_prompt
-            if self.retries < MAX_REFINMENT_TRIES:
+            if self.retries < MAX_REFINEMENT_TRIES:
                 self.execute_prompt(self.prompt, skip_cache=True)
                 return self.post_run()
             else:
                 raise ValueError(
-                    f"LLM returned concept {selection} that does not exist in input names, cannot progress - returned {self.parsed}"
+                    f"LLM returned concept {selection} that does not exist in input concepts, cannot progress - returned {self.parsed}"
                 )
-                
+
 
 class FilterRefinementCase(BasePreqlPromptCase):
     template = templates.get_template("prompt_refine_filter.jinja2")
@@ -332,14 +343,14 @@ def log_prompt_info(prompt: TemplatedPromptCase, session_uuid: uuid.UUID):
         "session_uuid": str(session_uuid),
         "response": prompt.response,
     }
+    path = os.path.join(
+        DATA_DIR, str(session_uuid), category + "-" + prompt_hash + ".json"
+    )
     with open(
-        os.path.join(DATA_DIR, str(session_uuid), prompt_hash + ".json"), "w"
+        path,
+        "w",
     ) as f:
-        print(
-            "printing to...{}".format(
-                os.path.join(DATA_DIR, str(session_uuid), prompt_hash + ".json")
-            )
-        )
+        logger.debug("printing to...{}".format(path))
         json.dump(data, f)
 
 

@@ -173,6 +173,11 @@ def test_abstract_terms():
                             operator=ComparisonOperator.EQ,
                         ),
                         FilterResult(
+                            concept="day of week",
+                            values=["Christmas Day"],
+                            operator=ComparisonOperator.EQ,
+                        ),
+                        FilterResult(
                             concept="day of year",
                             values=["December 25"],
                             operator=ComparisonOperator.EQ,

@@ -1,7 +1,7 @@
 import uuid
 from typing import List, Union
 
-from preql.core.enums import BooleanOperator, Purpose
+from preql.core.enums import BooleanOperator, Purpose, DataType
 from preql.core.models import (
     Comparison,
     Concept,
@@ -99,18 +99,27 @@ def concept_names_from_token_response(
             )
     return output
 
+def coerce_values(input:List[Union[str, int, float, bool]], dtype = DataType):
+    if dtype == DataType.INTEGER:
+        return [int(x) for x in input]
+    elif dtype == DataType.FLOAT:
+        return [float(x) for x in input]
+    elif dtype == DataType.BOOL:
+        return [bool(x) for x in input]
+    return input
 
 def enrich_filter(input: FinalFilterResult, log_info: bool, session_uuid):
     if not (input.concept.metadata and input.concept.metadata.description):
         return input
-    input.values = run_prompt(  # type: ignore
+    input.values = coerce_values(run_prompt(  # type: ignore
         FilterRefinementCase(
             values=input.values,
             description=input.concept.metadata.description,
+            datatype=input.concept.datatype,
         ),
         session_uuid=session_uuid,
         log_info=log_info,
-    ).new_values
+    ).new_values, input.concept.datatype)
 
 
 def discover_inputs(

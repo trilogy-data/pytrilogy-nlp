@@ -13,7 +13,7 @@ environment = models["bigquery.thelook_ecommerce"]
 
 
 processed_query = parse_query(
-    "what were the top 10 cities for cancelled orders that were created in 2020?  ",
+    "Top 10 cities with the most orders with returned status in 2020? ",
     environment,
     debug=True,
 )

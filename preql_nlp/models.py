@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from preql.core.enums import ComparisonOperator, Ordering
 from preql.core.models import Concept
+from typing import Union
 
 ### Intermediate Models
 
@@ -77,6 +78,6 @@ class ConceptSelectionResponse(BaseModel):
 
 
 class FilterRefinementResponse(BaseModel):
-    new_values:list[str]
+    new_values:list[Union[str, float, int, bool]]
     old_values:list[str]
     reasoning:str

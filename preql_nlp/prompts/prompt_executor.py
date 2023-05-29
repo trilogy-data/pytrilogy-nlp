@@ -15,6 +15,7 @@ from preql_nlp.models import (
 from preql_nlp.cache_providers.base import BaseCache
 from preql_nlp.cache_providers.local_sqlite import SqlliteCache
 from preql_nlp.helpers import retry_with_exponential_backoff
+from preql.core.enums import DataType
 from pydantic import BaseModel, ValidationError
 from typing import List, Optional, Callable, Union, Type, overload
 import uuid
@@ -308,10 +309,12 @@ class FilterRefinementCase(BasePreqlPromptCase):
         self,
         values: list[str],
         description: str,
+        datatype: DataType,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         self.values = values
         self.description = description
+        self.datatype = datatype
         super().__init__(evaluators=evaluators, category="filter_refinement")
 
     def get_extra_template_context(self):
@@ -319,6 +322,7 @@ class FilterRefinementCase(BasePreqlPromptCase):
             **super().get_extra_template_context(),
             "values": ", ".join([f'"{x}"' for x in self.values]),
             "description": self.description,
+            "datatype": self.datatype.value
         }
 
 

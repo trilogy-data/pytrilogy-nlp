@@ -40,7 +40,7 @@ def retry_with_exponential_backoff(
                 # but continue to backoff if lots of retries
                 # as there may be concurrent requests
                 if extract.match(str(e)):
-                    delay = int(m.group(1)) +1
+                    delay = int(m.group(1)) + 1
                     for x in range(num_retries):
                         delay *= exponential_base * (1 + jitter * random.random())
                 else:

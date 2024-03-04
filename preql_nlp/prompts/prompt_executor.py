@@ -14,7 +14,6 @@ from preql_nlp.models import (
 )
 from preql_nlp.cache_providers.base import BaseCache
 from preql_nlp.cache_providers.local_sqlite import SqlliteCache
-from preql_nlp.helpers import retry_with_exponential_backoff
 from preql.core.enums import DataType
 from pydantic import BaseModel, ValidationError
 from typing import List, Optional, Callable, Union, Type, overload
@@ -23,12 +22,8 @@ import json
 import os
 from jinja2 import FileSystemLoader, Environment, Template
 from os.path import dirname
-from langchain_core.prompts.chat import (
-    ChatPromptTemplate,
-    HumanMessagePromptTemplate,
-    SystemMessagePromptTemplate,
-)
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import HumanMessage
+from preql_nlp.helpers import retry_with_exponential_backoff
 
 PROMPT_STOPWORD = "<EOM>"
 
@@ -97,7 +92,7 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         return ChatOpenAI(model=model_name, openai_api_key=openai_api_key)
         # return ChatOpenAI()
 
-    # @retry_with_exponential_backoff
+    @retry_with_exponential_backoff
     def execute_prompt(self, prompt_str: str, skip_cache: bool = False):
         # if we already have a local result
         # skip hitting remote
@@ -374,7 +369,8 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> ConceptSelectionResponse: ...
+) -> ConceptSelectionResponse:
+    ...
 
 
 @overload
@@ -383,7 +379,8 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> InitialParseResponse: ...
+) -> InitialParseResponse:
+    ...
 
 
 @overload
@@ -392,7 +389,8 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> SemanticTokenResponse: ...
+) -> SemanticTokenResponse:
+    ...
 
 
 @overload
@@ -401,7 +399,8 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> FilterRefinementResponse: ...
+) -> FilterRefinementResponse:
+    ...
 
 
 def run_prompt(

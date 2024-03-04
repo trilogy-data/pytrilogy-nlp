@@ -99,7 +99,8 @@ def concept_names_from_token_response(
             )
     return output
 
-def coerce_values(input:List[Union[str, int, float, bool]], dtype = DataType):
+
+def coerce_values(input: List[Union[str, int, float, bool]], dtype=DataType):
     if dtype == DataType.INTEGER:
         return [int(x) for x in input]
     elif dtype == DataType.FLOAT:
@@ -108,18 +109,22 @@ def coerce_values(input:List[Union[str, int, float, bool]], dtype = DataType):
         return [bool(x) for x in input]
     return input
 
+
 def enrich_filter(input: FinalFilterResult, log_info: bool, session_uuid):
     if not (input.concept.metadata and input.concept.metadata.description):
         return input
-    input.values = coerce_values(run_prompt(  # type: ignore
-        FilterRefinementCase(
-            values=input.values,
-            description=input.concept.metadata.description,
-            datatype=input.concept.datatype,
-        ),
-        session_uuid=session_uuid,
-        log_info=log_info,
-    ).new_values, input.concept.datatype)
+    input.values = coerce_values(
+        run_prompt(  # type: ignore
+            FilterRefinementCase(
+                values=input.values,
+                description=input.concept.metadata.description,
+                datatype=input.concept.datatype,
+            ),
+            session_uuid=session_uuid,
+            log_info=log_info,
+        ).new_values,
+        input.concept.datatype,
+    )
 
 
 def discover_inputs(
@@ -253,7 +258,7 @@ def parse_order(
         if c.purpose == Purpose.METRIC
     ]
     if not ordering:
-        return OrderBy(default_order)
+        return OrderBy(items=default_order)
     final = []
     for order in ordering:
         final.append(OrderItem(expr=order.concept, order=order.order))

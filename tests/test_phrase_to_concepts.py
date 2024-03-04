@@ -8,8 +8,9 @@ def gen_select_test(words, filters: list[str] | None = None):
         return set(x.selection) == set(words)
 
     if filters:
+
         def filter_test(x: FinalParseResponse):
-            return set([z.concept for z in x.filtering]) == set(filters) # type: ignore
+            return set([z.concept for z in x.filtering]) == set(filters)  # type: ignore
 
         return [select_test, filter_test]
     return [select_test]

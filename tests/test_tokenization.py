@@ -30,6 +30,6 @@ def test_tokens_to_concept():
             "year",
             "question",
         ],
-        limits = 1
+        limits=1,
     )
     assert x == ["question.creation_date"]

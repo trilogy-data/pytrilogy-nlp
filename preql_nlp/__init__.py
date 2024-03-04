@@ -6,6 +6,6 @@ patch_langchain()
 from .main import build_query  # noqa: E402
 
 
-__version__ = "0.0.12"
+__version__ = "0.0.13"
 
 __all__ = ["build_query"]

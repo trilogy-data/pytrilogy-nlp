@@ -169,6 +169,11 @@ def test_abstract_terms():
                     valid=[
                         FilterResult(
                             concept="day",
+                            values=["Christmas"],
+                            operator=ComparisonOperator.EQ,
+                        ),
+                        FilterResult(
+                            concept="day",
                             values=["Christmas Day"],
                             operator=ComparisonOperator.EQ,
                         ),

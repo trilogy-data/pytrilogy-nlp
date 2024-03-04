@@ -19,7 +19,7 @@ def test_filter_refinement():
             "California",
         ],
         datatype=DataType.STRING,
-        description="The common two character abbreviation for a state, such as MA for Massachusetts or CT for Connecticut.",
+        description="The two character code for a state, such as MA for Massachusetts or CT for Connecticut.",
         tests=gen_select_test(
             [
                 "CA",

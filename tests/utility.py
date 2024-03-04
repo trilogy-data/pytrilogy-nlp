@@ -41,7 +41,7 @@ def evaluate_cases(cases:List[BasePreqlPromptCase]):
     output_report = Report.from_suite(suite)
     # print results to log
     print(serialize_object(output_report.data.to_dict(), highlighted=False, style="yaml"))
-    # print(output_report.print_summary())
+    print(output_report.print_summary())
     # actually fail the test if something doesnt pass
     for key in output_report.failed_keys:
         raise Exception(f"Failed key: {key}")

@@ -79,7 +79,7 @@ def concept_names_from_token_response(
     for mapping in phrase_tokens:
         token_universe_internal += mapping.tokens
     token_universe_internal = list(set(token_universe_internal))
-    for mapping in phrase_tokens.__root__:
+    for mapping in phrase_tokens.root:
         found = False
         concepts_str_matches = tokens_to_concept(
             mapping.tokens,

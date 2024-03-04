@@ -23,6 +23,12 @@ import json
 import os
 from jinja2 import FileSystemLoader, Environment, Template
 from os.path import dirname
+from langchain_core.prompts.chat import (
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+    SystemMessagePromptTemplate,
+)
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 
 PROMPT_STOPWORD = "<EOM>"
 
@@ -80,19 +86,19 @@ class BasePreqlPromptCase(TemplatedPromptCase):
 
     @classmethod
     def parse_response(cls, response: str):
-        return cls.parse_model.parse_raw(response.split(cls.stopword)[0])
+        return cls.parse_model.model_validate_json(response.split(cls.stopword)[0])
 
-    # def get_prompt_executor(self):
-    #     from langchain.chat_models import ChatOpenAI
+    def get_prompt_executor(self):
+        from langchain_openai import ChatOpenAI
 
-    #     model_name = os.environ.get("OPENAI_MODEL") or "text-davinci-003"
-    #     openai_api_key = os.environ.get("OPENAI_API_KEY")
-    #     self.prompt_executor_kwargs = {"model_name": model_name}
-    #     return ChatOpenAI(model_name=model_name, openai_api_key=openai_api_key)
-    #     # return ChatOpenAI()
+        model_name = os.environ.get("OPENAI_MODEL") or "text-davinci-003"
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        self.prompt_executor_kwargs = {"model_name": model_name}
+        return ChatOpenAI(model=model_name, openai_api_key=openai_api_key)
+        # return ChatOpenAI()
 
-    @retry_with_exponential_backoff
-    def execute_prompt(self, prompt_str, skip_cache: bool = False):
+    # @retry_with_exponential_backoff
+    def execute_prompt(self, prompt_str: str, skip_cache: bool = False):
         # if we already have a local result
         # skip hitting remote
         # TODO: make the cache provider pluggable and injected
@@ -102,7 +108,11 @@ class BasePreqlPromptCase(TemplatedPromptCase):
             if resp:
                 self.response = resp
                 return self.response
-        self.response = self.prompt_executor(prompt_str)
+        self.response = self.prompt_executor(
+            [
+                HumanMessage(content=prompt_str),
+            ]
+        ).content
         if not skip_cache:
             self.stash.store(hash_val, self.category, self.response)
         return self.response
@@ -203,9 +213,9 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
 
     def post_run(self):
         super().post_run()
-        self.parsed.__root__ = [
+        self.parsed.root = [
             self._process_tokens(x)
-            for x in self.parsed.__root__
+            for x in self.parsed.root
             if x.phrase != self.padding_phrase
         ]
         # TODO: evaluate tradeoffs
@@ -322,7 +332,7 @@ class FilterRefinementCase(BasePreqlPromptCase):
             **super().get_extra_template_context(),
             "values": ", ".join([f'"{x}"' for x in self.values]),
             "description": self.description,
-            "datatype": self.datatype.value
+            "datatype": self.datatype.value,
         }
 
 
@@ -364,8 +374,7 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> ConceptSelectionResponse:
-    ...
+) -> ConceptSelectionResponse: ...
 
 
 @overload
@@ -374,8 +383,7 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> InitialParseResponse:
-    ...
+) -> InitialParseResponse: ...
 
 
 @overload
@@ -384,8 +392,7 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> SemanticTokenResponse:
-    ...
+) -> SemanticTokenResponse: ...
 
 
 @overload
@@ -394,8 +401,7 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> FilterRefinementResponse:
-    ...
+) -> FilterRefinementResponse: ...
 
 
 def run_prompt(

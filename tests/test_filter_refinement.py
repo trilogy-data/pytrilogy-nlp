@@ -19,7 +19,7 @@ def test_filter_refinement():
             "California",
         ],
         datatype=DataType.STRING,
-        description="The common two character abbreviation for a state, such as MA for Massachusetts or CT for Connecticut.",
+        description="The two character code for a state, such as MA for Massachusetts or CT for Connecticut.",
         tests=gen_select_test(
             [
                 "CA",
@@ -36,7 +36,7 @@ def test_filter_refinement():
         description="Field storing a float representing the percentage of the population that likes coconuts",
         tests=gen_select_test(
             [
-                "0.95",
+                0.95,
             ],
         ),
     )

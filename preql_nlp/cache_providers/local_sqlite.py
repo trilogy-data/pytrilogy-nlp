@@ -5,14 +5,10 @@ import sqlite3
 DEFAULT_SQLITE_ADDRESS = "local_prompt_cache.db"
 
 
-
 class SqlliteCache(BaseCache):
-
-
     def __init__(self, sqlite_address: str = DEFAULT_SQLITE_ADDRESS):
         self.sqlite_address = sqlite_address
 
-    
     def retrieve(self, prompt_hash: str) -> str | None:
         logger.debug(f"checking for cache with prompt hash {prompt_hash}")
         con = sqlite3.connect(self.sqlite_address)
@@ -28,10 +24,8 @@ class SqlliteCache(BaseCache):
         if current:
             logger.debug(f"Got cached response of type {current[1]}")
             return current[0]
-        logger.debug('No cache available for key')
+        logger.debug("No cache available for key")
         return None
-
-
 
     def store(self, prompt_hash: str, category: str, result: str):
         con = sqlite3.connect(self.sqlite_address)

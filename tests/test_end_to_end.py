@@ -31,10 +31,10 @@ def test_e2e_basic(test_logger):
     location = environment.concepts["user.location"]
 
     processed_query = parse_query(
-        "Who is a user in germany?",
+        "Which users are in germany?",
         environment,
         debug=True,
     )
-    assert location in [x.content for x in processed_query.selection]
+    assert location in [x for x in processed_query.output_components]
     # assert processed_query.fil
     # print(render_query(processed_query))

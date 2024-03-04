@@ -5,8 +5,7 @@ from typing import (
     Callable,
     Union,
 )
-
-from langchain.llms import openai as langchain_openai
+import langchain_community.llms.openai as langchain_openai
 from promptimize.prompt_cases import BasePromptCase, utils
 from tenacity import (
     before_sleep_log,
@@ -49,13 +48,11 @@ def patch_langchain():
             stop=stop_after_attempt(llm.max_retries),
             wait=wait_exponential(multiplier=1, min=min_seconds, max=max_seconds),
             retry=(
-                retry_if_exception_type(openai.error.Timeout)
-                | retry_if_exception_type(openai.error.APIError)
-                | retry_if_exception_type(openai.error.APIConnectionError)
-                # | retry_if_exception_type(openai.error.RateLimitError)
-                | retry_if_exception_type(openai.error.ServiceUnavailableError)
+                retry_if_exception_type(openai.APITimeoutError)
+                | retry_if_exception_type(openai.APIError)
+                | retry_if_exception_type(openai.APIConnectionError)
             ),
-            before_sleep=before_sleep_log(langchain_openai.logger, logging.WARNING), 
+            before_sleep=before_sleep_log(langchain_openai.logger, logging.WARNING),
         )
 
     langchain_openai._create_retry_decorator = create_retry_decorator

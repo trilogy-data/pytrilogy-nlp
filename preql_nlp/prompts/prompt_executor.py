@@ -14,7 +14,6 @@ from preql_nlp.models import (
 )
 from preql_nlp.cache_providers.base import BaseCache
 from preql_nlp.cache_providers.local_sqlite import SqlliteCache
-from preql_nlp.helpers import retry_with_exponential_backoff
 from preql.core.enums import DataType
 from pydantic import BaseModel, ValidationError
 from typing import List, Optional, Callable, Union, Type, overload
@@ -23,6 +22,8 @@ import json
 import os
 from jinja2 import FileSystemLoader, Environment, Template
 from os.path import dirname
+from langchain_core.messages import HumanMessage
+from preql_nlp.helpers import retry_with_exponential_backoff
 
 PROMPT_STOPWORD = "<EOM>"
 
@@ -80,19 +81,16 @@ class BasePreqlPromptCase(TemplatedPromptCase):
 
     @classmethod
     def parse_response(cls, response: str):
-        return cls.parse_model.parse_raw(response.split(cls.stopword)[0])
+        return cls.parse_model.model_validate_json(response.split(cls.stopword)[0])
 
-    # def get_prompt_executor(self):
-    #     from langchain.chat_models import ChatOpenAI
-
-    #     model_name = os.environ.get("OPENAI_MODEL") or "text-davinci-003"
-    #     openai_api_key = os.environ.get("OPENAI_API_KEY")
-    #     self.prompt_executor_kwargs = {"model_name": model_name}
-    #     return ChatOpenAI(model_name=model_name, openai_api_key=openai_api_key)
-    #     # return ChatOpenAI()
+    def get_prompt_executor(self):
+        from langchain_openai import ChatOpenAI
+        model_name = os.environ.get("OPENAI_MODEL") or "gpt-3.5-turbo"
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        return ChatOpenAI(model=model_name, openai_api_key=openai_api_key)
 
     @retry_with_exponential_backoff
-    def execute_prompt(self, prompt_str, skip_cache: bool = False):
+    def execute_prompt(self, prompt_str: str, skip_cache: bool = False):
         # if we already have a local result
         # skip hitting remote
         # TODO: make the cache provider pluggable and injected
@@ -102,7 +100,11 @@ class BasePreqlPromptCase(TemplatedPromptCase):
             if resp:
                 self.response = resp
                 return self.response
-        self.response = self.prompt_executor(prompt_str)
+        self.response = self.prompt_executor(
+            [
+                HumanMessage(content=prompt_str),
+            ]
+        ).content
         if not skip_cache:
             self.stash.store(hash_val, self.category, self.response)
         return self.response
@@ -119,7 +121,7 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         try:
             self.parsed = self.parse_response(self.response)
             logger.info(
-                f"Sucessfully parsed response to {self.category}: {self.parsed.json()}"
+                f"Sucessfully parsed response to {self.category}: {self.parsed.model_dump_json()}"
             )
         except ValidationError as e:
             if not self.has_rerun:
@@ -203,9 +205,9 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
 
     def post_run(self):
         super().post_run()
-        self.parsed.__root__ = [
+        self.parsed.root = [
             self._process_tokens(x)
-            for x in self.parsed.__root__
+            for x in self.parsed.root
             if x.phrase != self.padding_phrase
         ]
         # TODO: evaluate tradeoffs
@@ -322,7 +324,7 @@ class FilterRefinementCase(BasePreqlPromptCase):
             **super().get_extra_template_context(),
             "values": ", ".join([f'"{x}"' for x in self.values]),
             "description": self.description,
-            "datatype": self.datatype.value
+            "datatype": self.datatype.value,
         }
 
 

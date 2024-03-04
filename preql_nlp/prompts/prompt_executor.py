@@ -85,12 +85,9 @@ class BasePreqlPromptCase(TemplatedPromptCase):
 
     def get_prompt_executor(self):
         from langchain_openai import ChatOpenAI
-
-        model_name = os.environ.get("OPENAI_MODEL") or "text-davinci-003"
+        model_name = os.environ.get("OPENAI_MODEL") or "gpt-3.5-turbo"
         openai_api_key = os.environ.get("OPENAI_API_KEY")
-        self.prompt_executor_kwargs = {"model_name": model_name}
         return ChatOpenAI(model=model_name, openai_api_key=openai_api_key)
-        # return ChatOpenAI()
 
     @retry_with_exponential_backoff
     def execute_prompt(self, prompt_str: str, skip_cache: bool = False):
@@ -124,7 +121,7 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         try:
             self.parsed = self.parse_response(self.response)
             logger.info(
-                f"Sucessfully parsed response to {self.category}: {self.parsed.json()}"
+                f"Sucessfully parsed response to {self.category}: {self.parsed.model_dump_json()}"
             )
         except ValidationError as e:
             if not self.has_rerun:

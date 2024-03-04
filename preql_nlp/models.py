@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, RootModel
 from preql.core.enums import ComparisonOperator, Ordering
 from preql.core.models import Concept
 from typing import Union
@@ -63,14 +63,14 @@ class SemanticTokenMatch(BaseModel):
     phrase: str
     tokens: list[str]
 
-class SemanticTokenResponse(BaseModel):
-    __root__:list[SemanticTokenMatch]
+class SemanticTokenResponse(RootModel):
+    root:list[SemanticTokenMatch]
 
     def __iter__(self):
-        return iter(self.__root__)
+        return iter(self.root)
 
     def __getitem__(self, idx):
-        return self.__root__.__getitem__(idx)
+        return self.root.__getitem__(idx)
 
 class ConceptSelectionResponse(BaseModel):
     matches:list[str]

@@ -15,7 +15,7 @@ from preql.core.models import (
     WhereClause,
     unique,
 )
-from preql.core.query_processor import process_query_v2
+from preql.core.query_processor import process_query
 
 from preql_nlp.constants import DEFAULT_LIMIT, logger
 from preql_nlp.models import (
@@ -322,4 +322,4 @@ def build_query(
     log_info: bool = True,
 ) -> ProcessedQuery:
     query = parse_query(input_text, input_environment, debug=debug, log_info=log_info)
-    return process_query_v2(statement=query, environment=input_environment)
+    return process_query(statement=query, environment=input_environment)

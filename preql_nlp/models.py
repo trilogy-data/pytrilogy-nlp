@@ -10,7 +10,7 @@ class FilterResult(BaseModel):
     """The result of the filter prompt"""
 
     concept: str
-    values: list[str]
+    values: list[str|int |float|bool]
     operator: ComparisonOperator
 
 

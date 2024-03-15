@@ -81,8 +81,11 @@ class BasePreqlPromptCase(TemplatedPromptCase):
 
     @classmethod
     def parse_response(cls, response: str):
-        return cls.parse_model.model_validate_json(response.split(cls.stopword)[0])
-
+        try:
+            return cls.parse_model.model_validate_json(response.split(cls.stopword)[0])
+        except ValidationError as e:
+            raise ValueError(response.split(cls.stopword)[0]+str(e))
+        
     def get_prompt_executor(self):
         from langchain_openai import ChatOpenAI
         model_name = os.environ.get("OPENAI_MODEL") or "gpt-3.5-turbo"
@@ -105,8 +108,7 @@ class BasePreqlPromptCase(TemplatedPromptCase):
                 HumanMessage(content=prompt_str),
             ]
         ).content
-        if not skip_cache:
-            self.stash.store(hash_val, self.category, self.response)
+
         return self.response
 
     def get_extra_template_context(self):
@@ -123,6 +125,8 @@ class BasePreqlPromptCase(TemplatedPromptCase):
             logger.info(
                 f"Sucessfully parsed response to {self.category}: {self.parsed.model_dump_json()}"
             )
+            hash_val = gen_hash(self, self.attributes_used_for_hash)
+            self.stash.store(hash_val, self.category, self.response)
         except ValidationError as e:
             if not self.has_rerun:
                 self.rerun()

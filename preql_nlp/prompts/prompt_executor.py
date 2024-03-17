@@ -84,10 +84,11 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         try:
             return cls.parse_model.model_validate_json(response.split(cls.stopword)[0])
         except ValidationError as e:
-            raise ValueError(response.split(cls.stopword)[0]+str(e))
-        
+            raise ValueError(response.split(cls.stopword)[0] + str(e))
+
     def get_prompt_executor(self):
         from langchain_openai import ChatOpenAI
+
         model_name = os.environ.get("OPENAI_MODEL") or "gpt-3.5-turbo"
         openai_api_key = os.environ.get("OPENAI_API_KEY")
         return ChatOpenAI(model=model_name, openai_api_key=openai_api_key)
@@ -313,7 +314,7 @@ class FilterRefinementCase(BasePreqlPromptCase):
 
     def __init__(
         self,
-        values: list[str],
+        values: list[str | int | float | bool],
         description: str,
         datatype: DataType,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,

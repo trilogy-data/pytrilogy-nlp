@@ -6,8 +6,43 @@ from preql.core.models import Datasource, Concept, ColumnAssignment, Grain, Func
 from preql.core.enums import DataType, Purpose, FunctionType
 from os.path import dirname
 from pathlib import PurePath
-from preql.parsing.render import render_environment
 from typing import Optional
+
+from preql_nlp.main_v2 import build_query as build_query_v2
+from logging import StreamHandler, DEBUG
+
+from preql_nlp.constants import logger
+from preql_nlp.main import build_query
+from preql.core.functions import function_args_to_output_purpose, arg_to_datatype
+
+
+def create_function_derived_concept(
+    name: str,
+    namespace: str,
+    operator: FunctionType,
+    arguments: list[Concept],
+    output_type: Optional[DataType] = None,
+    output_purpose: Optional[Purpose] = None,
+) -> Concept:
+    purpose = (
+        function_args_to_output_purpose(arguments)
+        if output_purpose is None
+        else output_purpose
+    )
+    output_type = arg_to_datatype(arguments[0]) if output_type is None else output_type
+    return Concept(
+        name=name,
+        namespace=namespace,
+        datatype=output_type,
+        purpose=purpose,
+        lineage=Function(
+            operator=operator,
+            arguments=arguments,
+            output_datatype=output_type,
+            output_purpose=purpose,
+            arg_count=len(arguments),
+        ),
+    )
 
 
 def setup_engine() -> Executor:
@@ -53,9 +88,18 @@ def setup_titanic(env: Environment):
         name="survived",
         namespace=namespace,
         purpose=Purpose.PROPERTY,
-        datatype=DataType.BOOL,
+        datatype=DataType.INTEGER,
         keys=[id],
     )
+
+    survived_count = create_function_derived_concept(
+        "survived_count",
+        namespace,
+        FunctionType.SUM,
+        [survived],
+        output_purpose=Purpose.METRIC,
+    )
+
     fare = Concept(
         name="fare",
         namespace=namespace,
@@ -112,6 +156,7 @@ def setup_titanic(env: Environment):
         id,
         age,
         survived,
+        survived_count,
         name,
         pclass,
         fare,
@@ -246,6 +291,18 @@ def setup_titanic_distributed(env: Environment):
         datatype=DataType.BOOL,
         keys=[id],
     )
+    survived = Concept(
+        name="survived",
+        namespace=namespace,
+        purpose=Purpose.PROPERTY,
+        datatype=DataType.BOOL,
+        keys=[id],
+    )
+
+    survived_count = create_function_derived_concept(
+        "survived_count", namespace, FunctionType.SUM, [survived]
+    )
+
     fare = Concept(
         name="fare",
         namespace=namespace,
@@ -290,7 +347,18 @@ def setup_titanic_distributed(env: Environment):
             arg_count=2,
         ),
     )
-    for x in [id, age, survived, name, pclass, fare, cabin, embarked, last_name]:
+    for x in [
+        id,
+        age,
+        survived,
+        survived_count,
+        name,
+        pclass,
+        fare,
+        cabin,
+        embarked,
+        last_name,
+    ]:
         env.add_concept(x)
 
     env.add_datasource(
@@ -346,21 +414,9 @@ def setup_titanic_distributed(env: Environment):
     return env
 
 
-from trilogy_public_models import models
-from preql import Dialects
-from preql_nlp import build_query
-from preql.hooks.query_debugger import DebuggingHook
-from logging import StreamHandler, DEBUG
-
-from preql_nlp.constants import logger
-
-
 # if main gating for python
 if __name__ == "__main__":
-    from preql import __version__
-
     executor = setup_engine()
-    from pathlib import Path
 
     env = Environment()
     model = setup_titanic(env)
@@ -372,19 +428,25 @@ if __name__ == "__main__":
     logger.setLevel(DEBUG)
     logger.addHandler(StreamHandler())
 
-
-
+    question = ("HOw many passengers survived in each cabin?",)
     processed_query = build_query(
-        "What cabin had the most survivors?",
+        question,
         environment,
         debug=True,
     )
 
-    for key in processed_query.output_columns:
-        print(key)
+    processed_query_v2 = build_query_v2(
+        question,
+        environment,
+        debug=True,
+    )
 
+    for q in [processed_query, processed_query_v2]:
+        print("output_columns")
+        for key in q.output_columns:
+            print(key)
 
-    print(executor.generator.compile_statement(processed_query))
-    results = executor.execute_query(processed_query)
-    for row in results:
-        print(row)
+        print(executor.generator.compile_statement(q))
+        results = executor.execute_query(q)
+        for row in results:
+            print(row)

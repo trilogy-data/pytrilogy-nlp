@@ -31,6 +31,8 @@ executor = Dialects.BIGQUERY.default_executor(
 )
 
 print(executor.generator.compile_statement(processed_query))
-results = executor.execute_query(executor.generator.generate_queries([processed_query])[0])
+results = executor.execute_query(
+    executor.generator.generate_queries([processed_query])[0]
+)
 for row in results:
     print(row)

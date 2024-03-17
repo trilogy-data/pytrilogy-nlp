@@ -28,8 +28,6 @@ executor = Dialects.BIGQUERY.default_executor(
 )
 
 
-results = executor.execute_query(
-    processed_query
-)
+results = executor.execute_query(processed_query)
 for row in results:
     print(row)

@@ -3,6 +3,8 @@ from preql_nlp.main import parse_query
 from logging import StreamHandler, DEBUG
 from preql_nlp.constants import logger
 from preql.parsing.render import render_query
+from preql import Dialects
+from preql.hooks.query_debugger import DebuggingHook
 
 logger.setLevel(DEBUG)
 logger.addHandler(StreamHandler())
@@ -23,3 +25,14 @@ processed_query = parse_query(
 )
 
 print(render_query(processed_query))
+
+executor = Dialects.BIGQUERY.default_executor(
+    environment=environment, hooks=[DebuggingHook()]
+)
+
+print(executor.generator.compile_statement(processed_query))
+results = executor.execute_query(
+    executor.generator.generate_queries([processed_query])[0]
+)
+for row in results:
+    print(row)

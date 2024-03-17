@@ -84,7 +84,7 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         try:
             return cls.parse_model.model_validate_json(response.split(cls.stopword)[0])
         except ValidationError as e:
-            raise ValueError(response.split(cls.stopword)[0] + str(e))
+            raise ValidationError(response.split(cls.stopword)[0] + str(e))
 
     def get_prompt_executor(self):
         from langchain_openai import ChatOpenAI

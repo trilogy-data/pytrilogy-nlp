@@ -112,6 +112,8 @@ def coerce_values(input: List[Union[str, int, float, bool]], dtype=DataType):
 
 def enrich_filter(input: FinalFilterResult, log_info: bool, session_uuid):
     if not (input.concept.metadata and input.concept.metadata.description):
+        # coerce even without description
+        input.values = coerce_values(input.values, input.concept.datatype)
         return input
     input.values = coerce_values(
         run_prompt(  # type: ignore

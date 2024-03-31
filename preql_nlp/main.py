@@ -1,7 +1,8 @@
 import uuid
 from typing import List, Union
-
+from preql_nlp.enums import Provider
 from preql.core.enums import BooleanOperator, Purpose, DataType
+from preql.core.query_processor import process_query
 from preql.core.models import (
     Comparison,
     Concept,
@@ -10,12 +11,11 @@ from preql.core.models import (
     OrderBy,
     Ordering,
     OrderItem,
-    ProcessedQuery,
     Select,
     WhereClause,
+    ProcessedQuery,
     unique,
 )
-from preql.core.query_processor import process_query
 
 from preql_nlp.constants import DEFAULT_LIMIT, logger
 from preql_nlp.models import (
@@ -298,9 +298,12 @@ def parse_query(
     input_environment: Environment,
     debug: bool = False,
     log_info: bool = True,
+    provider: Provider = Provider.OPENAI,
+    model: str | None = None
 ):
     intermediate_results = discover_inputs(
-        input_text, input_environment, debug=debug, log_info=log_info
+        input_text, input_environment, debug=debug, log_info=log_info,
+        
     )
     selection = unique(intermediate_results.select, "address")
 
@@ -327,6 +330,8 @@ def build_query(
     input_environment: Environment,
     debug: bool = False,
     log_info: bool = True,
+    provider: Provider = Provider.OPENAI,
+    model: str | None = None
 ) -> ProcessedQuery:
-    query = parse_query(input_text, input_environment, debug=debug, log_info=log_info)
+    query = parse_query(input_text, input_environment, debug=debug, log_info=log_info, provider=provider,model=model)
     return process_query(statement=query, environment=input_environment)

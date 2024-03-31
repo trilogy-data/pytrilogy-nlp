@@ -19,8 +19,8 @@ from datetime import datetime
 import json
 from pydantic import BaseModel, field_validator
 from preql.core.enums import ComparisonOperator, Ordering, Purpose, BooleanOperator
-from langchain.chat_models import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from preql_nlp.enums import Provider
 
 langchain_chat_kwargs = {
     "temperature": 0,
@@ -32,15 +32,6 @@ chat_openai_model_kwargs = {
     "frequency_penalty": 0.0,
     "presence_penalty": -1,
 }
-
-
-def get_chat_openai(model_name):
-    llm = ChatOpenAI(
-        model_name=model_name,
-        model_kwargs=chat_openai_model_kwargs,
-        **langchain_chat_kwargs,
-    )
-    return llm
 
 
 class FilterResultV2(BaseModel):
@@ -236,8 +227,24 @@ def parse_query(
     input_environment: Environment,
     debug: bool = False,
     log_info: bool = True,
+    provider: Provider = Provider.OPENAI,
+    model: Optional[str] = None,
 ):
-    llm_agent = get_chat_openai("gpt-3.5-turbo-1106")
+    if provider == Provider.OPENAI:
+        from langchain.chat_models import ChatOpenAI
+
+        llm_agent = ChatOpenAI(
+            model_name=model if model else "gpt-3.5-turbo-1106",
+            model_kwargs=chat_openai_model_kwargs,
+        )
+    elif provider == Provider.GOOGLE:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        llm_agent = ChatGoogleGenerativeAI(
+            model=model if model else "gemini-pro", convert_system_message_to_human=True
+        )
+    else:
+        raise NotImplementedError(f"Invalid provider {provider}")
 
     system = """Thought Process: You are a data analyst asstant Your job is to get questions from 
     the analyst and tell them how to write a 
@@ -369,6 +376,9 @@ def build_query(
     input_environment: Environment,
     debug: bool = False,
     log_info: bool = True,
+    provider: Provider = Provider.OPENAI,
 ) -> ProcessedQuery:
-    query = parse_query(input_text, input_environment, debug=debug, log_info=log_info)
+    query = parse_query(
+        input_text, input_environment, debug=debug, log_info=log_info, provider=provider
+    )
     return process_query(statement=query, environment=input_environment)

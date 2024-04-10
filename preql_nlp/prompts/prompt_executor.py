@@ -24,6 +24,7 @@ from jinja2 import FileSystemLoader, Environment, Template
 from os.path import dirname
 from langchain_core.messages import HumanMessage
 from preql_nlp.helpers import retry_with_exponential_backoff
+from langchain_core.language_models import BaseLanguageModel
 
 PROMPT_STOPWORD = "<EOM>"
 
@@ -63,10 +64,12 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         category: str,
         fail_on_parse_error: bool = True,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
+        llm: BaseLanguageModel = None,
     ):
         # this isn't actually the right way to pass through a stopword to the complete prompt
         # so we're splitting in the response
         # TODO: figure out how to do this when we figure out how to group prompts in one API call
+        self.llm = llm
         super().__init__(
             category=category,
             evaluators=evaluators,
@@ -87,6 +90,8 @@ class BasePreqlPromptCase(TemplatedPromptCase):
             raise e
 
     def get_prompt_executor(self):
+        if self.llm:
+            return self.llm
         from langchain_openai import ChatOpenAI
 
         model_name = os.environ.get("OPENAI_MODEL") or "gpt-3.5-turbo"
@@ -157,10 +162,11 @@ class SemanticExtractionPromptCase(BasePreqlPromptCase):
     def __init__(
         self,
         question: str,
+        llm: BaseLanguageModel = None,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         self.question = question
-        super().__init__(category="semantic_extraction", evaluators=evaluators)
+        super().__init__(category="semantic_extraction", evaluators=evaluators, llm=llm)
 
     def get_extra_template_context(self):
         return {**super().get_extra_template_context(), "question": self.question}
@@ -183,6 +189,7 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
         purpose: str,
         tokens: List[str],
         phrases: List[str],
+        llm: BaseLanguageModel = None,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         tokens = [token for token in tokens if token]
@@ -193,7 +200,7 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
         # pad out the inputs with a random phrase
         self.padding_phrase = "democratic elections"
         self.phrases = sorted(phrases + [self.padding_phrase])
-        super().__init__(category="semantic_to_tokens", evaluators=evaluators)
+        super().__init__(category="semantic_to_tokens", llm=llm, evaluators=evaluators)
         self.retries = 0
 
     def get_extra_template_context(self):
@@ -256,13 +263,16 @@ class SelectionPromptCase(BasePreqlPromptCase):
         self,
         question: str,
         concept_names: List[str],
+        llm: BaseLanguageModel = None,
         all_concept_names: List[str] | None = None,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         self.question = question
         self.all_concept_names_internal = all_concept_names or concept_names
         self.concept_names = sorted(list(set(concept_names)), key=lambda x: x)
-        super().__init__(evaluators=evaluators, category="final_concept_selection")
+        super().__init__(
+            evaluators=evaluators, llm=llm, category="final_concept_selection"
+        )
         self.execution.score = None
         self.retries = 0
 
@@ -317,12 +327,13 @@ class FilterRefinementCase(BasePreqlPromptCase):
         values: list[str | int | float | bool],
         description: str,
         datatype: DataType,
+        llm: BaseLanguageModel = None,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         self.values = values
         self.description = description
         self.datatype = datatype
-        super().__init__(evaluators=evaluators, category="filter_refinement")
+        super().__init__(evaluators=evaluators, category="filter_refinement", llm=llm)
 
     def get_extra_template_context(self):
         return {
@@ -371,8 +382,7 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> ConceptSelectionResponse:
-    ...
+) -> ConceptSelectionResponse: ...
 
 
 @overload
@@ -381,8 +391,7 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> InitialParseResponse:
-    ...
+) -> InitialParseResponse: ...
 
 
 @overload
@@ -391,8 +400,7 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> SemanticTokenResponse:
-    ...
+) -> SemanticTokenResponse: ...
 
 
 @overload
@@ -401,8 +409,7 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> FilterRefinementResponse:
-    ...
+) -> FilterRefinementResponse: ...
 
 
 def run_prompt(

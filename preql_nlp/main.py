@@ -1,6 +1,5 @@
 import uuid
 from typing import List, Union
-from preql_nlp.enums import Provider
 from preql.core.enums import BooleanOperator, Purpose, DataType
 from preql.core.query_processor import process_query
 from preql.core.models import (
@@ -37,6 +36,7 @@ from preql_nlp.prompts import (
     run_prompt,
 )
 from preql_nlp.tokenization import build_token_list_by_purpose, tokens_to_concept
+from langchain_core.language_models import BaseLanguageModel
 
 
 def get_phrase_from_x(x: Union[str, FilterResult, OrderResult]):
@@ -57,9 +57,15 @@ def tokenize_phrases(
     tokens: List[str],
     session_uuid,
     log_info: bool,
+    llm: BaseLanguageModel,
 ) -> SemanticTokenResponse:
     phrase_tokens: SemanticTokenResponse = run_prompt(  # type: ignore
-        SemanticToTokensPromptCase(phrases=phrase_list, tokens=tokens, purpose=purpose),
+        SemanticToTokensPromptCase(
+            phrases=phrase_list,
+            tokens=tokens,
+            purpose=purpose,
+            llm=llm,
+        ),
         debug=True,
         session_uuid=session_uuid,
         log_info=log_info,
@@ -72,6 +78,7 @@ def concept_names_from_token_response(
     phrase_tokens: SemanticTokenResponse,
     concepts: dict[str, Concept],
     token_universe: list | None,
+    
 ) -> list[str]:
     token_universe_internal = token_universe or []
     output: list[str] = []
@@ -110,7 +117,8 @@ def coerce_values(input: List[Union[str, int, float, bool]], dtype=DataType):
     return input
 
 
-def enrich_filter(input: FinalFilterResult, log_info: bool, session_uuid):
+def enrich_filter(input: FinalFilterResult, log_info: bool, session_uuid:str,
+                      llm: BaseLanguageModel,):
     if not (input.concept.metadata and input.concept.metadata.description):
         # coerce even without description
         input.values = coerce_values(input.values, input.concept.datatype)
@@ -121,6 +129,7 @@ def enrich_filter(input: FinalFilterResult, log_info: bool, session_uuid):
                 values=input.values,
                 description=input.concept.metadata.description,
                 datatype=input.concept.datatype,
+                llm=llm
             ),
             session_uuid=session_uuid,
             log_info=log_info,
@@ -131,9 +140,11 @@ def enrich_filter(input: FinalFilterResult, log_info: bool, session_uuid):
 
 def discover_inputs(
     input_text: str,
+    llm: BaseLanguageModel,
     input_environment: Environment,
     debug: bool = False,
     log_info: bool = True,
+    
 ) -> IntermediateParseResults:
     # the core logic flow
 
@@ -151,7 +162,7 @@ def discover_inputs(
 
     # LLM: semantic extraction
     parsed: InitialParseResponse = run_prompt(  # type:ignore
-        SemanticExtractionPromptCase(input_text),
+        SemanticExtractionPromptCase(input_text, llm=llm),
         debug=debug,
         log_info=log_info,
         session_uuid=session_uuid,
@@ -181,6 +192,7 @@ def discover_inputs(
             category_tokens,
             log_info=log_info,
             session_uuid=session_uuid,
+            llm=llm,
         )
         token_response_mapping[semantic_category] = token_mapping
 
@@ -209,6 +221,7 @@ def discover_inputs(
             concept_names=concept_candidates,
             all_concept_names=list(env_concepts.keys()),
             question=input_text,
+            llm=llm,
         ),
         debug=debug,
         session_uuid=session_uuid,
@@ -232,7 +245,7 @@ def discover_inputs(
 
     # LLM: enrich filter values
     for item in final_filters_pre:
-        enrich_filter(item, log_info=log_info, session_uuid=session_uuid)
+        enrich_filter(item, log_info=log_info, session_uuid=session_uuid, llm=llm)
 
     # DETERMINISTIC: return results
     return IntermediateParseResults(
@@ -295,15 +308,17 @@ def parse_filtering(filtering: List[FinalFilterResult]) -> WhereClause | None:
 
 def parse_query(
     input_text: str,
+    llm: BaseLanguageModel,
     input_environment: Environment,
     debug: bool = False,
     log_info: bool = True,
-    provider: Provider = Provider.OPENAI,
-    model: str | None = None
 ):
     intermediate_results = discover_inputs(
-        input_text, input_environment, debug=debug, log_info=log_info,
-        
+        input_text=input_text,
+        input_environment=input_environment,
+        debug=debug,
+        log_info=log_info,
+        llm=llm,
     )
     selection = unique(intermediate_results.select, "address")
 
@@ -328,10 +343,15 @@ def parse_query(
 def build_query(
     input_text: str,
     input_environment: Environment,
+    llm: BaseLanguageModel,
     debug: bool = False,
     log_info: bool = True,
-    provider: Provider = Provider.OPENAI,
-    model: str | None = None
 ) -> ProcessedQuery:
-    query = parse_query(input_text, input_environment, debug=debug, log_info=log_info, provider=provider,model=model)
+    query = parse_query(
+        input_text=input_text,
+        input_environment=input_environment,
+        llm=llm,
+        debug=debug,
+        log_info=log_info,
+    )
     return process_query(statement=query, environment=input_environment)

@@ -1,4 +1,3 @@
-
 from sys import path
 from os.path import dirname
 
@@ -19,6 +18,7 @@ from logging import StreamHandler, DEBUG
 
 from preql_nlp.constants import logger
 from preql_nlp.main import build_query
+from preql_nlp.core import NLPEngine
 
 
 if __name__ == "__main__":
@@ -35,19 +35,22 @@ if __name__ == "__main__":
     logger.setLevel(DEBUG)
     logger.addHandler(StreamHandler())
 
+    open_ai = NLPEngine(provider=Provider.OPENAI, model="gpt-3.5-turbo")
+    open_ai.test_connection()
+
     question = ("HOw many passengers survived in each cabin?",)
     processed_query = build_query(
         question,
         environment,
         debug=True,
-        provider=provider_type
+        llm=open_ai.llm,
     )
 
+    google_engine = NLPEngine(provider=Provider.GOOGLE)
+
+    google_engine.test_connection()
     processed_query_v2 = build_query_v2(
-        question,
-        environment,
-        debug=True,
-        provider = Provider.GOOGLE
+        question, environment, debug=True, llm=NLPEngine(provider=Provider.GOOGLE).llm
     )
 
     for q in [processed_query, processed_query_v2]:

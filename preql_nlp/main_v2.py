@@ -20,7 +20,7 @@ import json
 from pydantic import BaseModel, field_validator
 from preql.core.enums import ComparisonOperator, Ordering, Purpose, BooleanOperator
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from preql_nlp.enums import Provider
+from langchain_core.language_models import BaseLanguageModel
 
 langchain_chat_kwargs = {
     "temperature": 0,
@@ -225,26 +225,10 @@ def sql_agent_tools(environment):
 def parse_query(
     input_text: str,
     input_environment: Environment,
+    llm: BaseLanguageModel,
     debug: bool = False,
     log_info: bool = True,
-    provider: Provider = Provider.OPENAI,
-    model: Optional[str] = None,
 ):
-    if provider == Provider.OPENAI:
-        from langchain.chat_models import ChatOpenAI
-
-        llm_agent = ChatOpenAI(
-            model_name=model if model else "gpt-3.5-turbo-1106",
-            model_kwargs=chat_openai_model_kwargs,
-        )
-    elif provider == Provider.GOOGLE:
-        from langchain_google_genai import ChatGoogleGenerativeAI
-
-        llm_agent = ChatGoogleGenerativeAI(
-            model=model if model else "gemini-pro", convert_system_message_to_human=True
-        )
-    else:
-        raise NotImplementedError(f"Invalid provider {provider}")
 
     system = """Thought Process: You are a data analyst asstant Your job is to get questions from 
     the analyst and tell them how to write a 
@@ -327,13 +311,13 @@ def parse_query(
         ]
     )
     tools = sql_agent_tools(input_environment)
-    agent = create_structured_chat_agent(
-        llm=llm_agent,
+    chat_agent = create_structured_chat_agent(
+        llm=llm,
         tools=tools,
         prompt=prompt,
     )
     agent_executor = AgentExecutor(
-        agent=agent, tools=tools, verbose=True, handle_parsing_errors=True  # type: ignore
+        agent=chat_agent, tools=tools, verbose=True, handle_parsing_errors=True  # type: ignore
     )
 
     result = agent_executor.invoke({"input": input_text})
@@ -374,11 +358,15 @@ def parse_query(
 def build_query(
     input_text: str,
     input_environment: Environment,
+    llm: BaseLanguageModel,
     debug: bool = False,
     log_info: bool = True,
-    provider: Provider = Provider.OPENAI,
 ) -> ProcessedQuery:
     query = parse_query(
-        input_text, input_environment, debug=debug, log_info=log_info, provider=provider
+        input_text,
+        input_environment,
+        debug=debug,
+        llm=llm,
+        log_info=log_info,
     )
     return process_query(statement=query, environment=input_environment)

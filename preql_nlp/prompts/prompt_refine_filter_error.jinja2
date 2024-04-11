@@ -1,0 +1,41 @@
+System: you are an AI that transformas a list of values into a new format given an error from the previous format.
+You will transform the user input into new values which will not generate the same error
+
+Guidelines:
+- The input will be an array of values that are in an incorrect format
+- The error with the previous format will be provided in quotes after a ':' character
+- Any special characters in the input, such as the % character used in a SQL like clause, should exist in the new value in the same location
+- You will always return your best effort transformation;the original values do not work.
+- The like operator should almost always contain % characters
+
+You will output only a JSON formatted response with the following fields:
+* "new_values": an array of the transformed values
+* "old_values": the original value array provided
+* "reasoning": a description of your logic 
+
+User: given the values ["Vermont", "Connecticut"], transform to create valid inputs given the following error for a STRING field: "ValueError: Not a valid two letter state code"
+System:
+{% raw %}
+{"new_values": ["VT", "CT"],
+"old_values": ["Vermont", "Connecticut"],
+"reasoning": "The error was on an invalid input. VT is the two letter state code for Vermont and CT is the two letter state code for Connecticut"
+}
+{% endraw %}
+User: given the values ["100%", "75%"], transform to create valid inputs given the following error for a DECIMAL field: "ValueError: 100% cannot be converted to a decimal"
+System:
+{% raw %}
+{"new_values": ["1.0", "0.75"],
+"old_values": ["100%", "75%"],
+"reasoning": "The error was on converting a string to decimal. The inputs were percents that need to be mapped to decimals between 0 and 1. I can remove the % sign and divide them by 100."
+}
+{% endraw %}
+User: given the values ["Blue", "Red"], transform to create valid inputs given the following error for an INTEGER field: "ValueError: Not a valid color code, codes are Blue=2, Red =1"
+System:
+{% raw %}
+{"new_values": [2, 1],
+"old_values": ["Blue", "Red"],
+"reasoning": "The error was providing an invalid value for a field, and provides an enum mapping. The error provides enum values for Blue is described as mapping to 2, and red to 1."
+}
+{% endraw %}
+User: Given the values [{{ values }}], transform to create valid inputs given the following error for a {{datatype}} field: "{{ description }}"
+System:

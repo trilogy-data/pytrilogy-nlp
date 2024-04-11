@@ -30,6 +30,7 @@ from preql_nlp.models import (
 )
 from preql_nlp.prompts import (
     FilterRefinementCase,
+    FilterRefinementErrorCase,
     SelectionPromptCase,
     SemanticExtractionPromptCase,
     SemanticToTokensPromptCase,
@@ -116,27 +117,65 @@ def coerce_values(input: List[Union[str, int, float, bool]], dtype=DataType):
         return [bool(x) for x in input]
     return input
 
+def enrich_filter_parent(input: FinalFilterResult, log_info: bool, session_uuid:str, 
+                         llm: BaseLanguageModel):
+    try:
+        enrich_filter(input, log_info, session_uuid, llm)
+    except ValueError:
+        return 
 
 def enrich_filter(input: FinalFilterResult, log_info: bool, session_uuid:str,
                       llm: BaseLanguageModel,):
     if not (input.concept.metadata and input.concept.metadata.description):
         # coerce even without description
-        input.values = coerce_values(input.values, input.concept.datatype)
-        return input
-    input.values = coerce_values(
-        run_prompt(  # type: ignore
-            FilterRefinementCase(
-                values=input.values,
-                description=input.concept.metadata.description,
-                datatype=input.concept.datatype,
-                llm=llm
-            ),
-            session_uuid=session_uuid,
-            log_info=log_info,
-        ).new_values,
-        input.concept.datatype,
-    )
+        try:
+            input.values = coerce_values(input.values, input.concept.datatype)
+            return input
+        except ValueError as e:
+             input.values = coerce_values(
+                run_prompt(  # type: ignore
+                    FilterRefinementErrorCase(
+                        values=input.values,
+                        error=str(e),
+                        datatype=input.concept.datatype,
+                        llm=llm
+                    ),
+                    session_uuid=session_uuid,
+                    log_info=log_info,
+                ).new_values,
+                input.concept.datatype,
+        )
+             return input
 
+    try:
+        input.values = coerce_values(
+            run_prompt(  # type: ignore
+                FilterRefinementCase(
+                    values=input.values,
+                    description=input.concept.metadata.description,
+                    datatype=input.concept.datatype,
+                    llm=llm
+                ),
+                session_uuid=session_uuid,
+                log_info=log_info,
+            ).new_values,
+            input.concept.datatype,
+        )
+    except ValueError as e:
+        input.values = coerce_values(
+            run_prompt(  # type: ignore
+                FilterRefinementErrorCase(
+                    values=input.values,
+                    error=str(e),
+                    datatype=input.concept.datatype,
+                    llm=llm
+                ),
+                session_uuid=session_uuid,
+                log_info=log_info,
+            ).new_values,
+            input.concept.datatype,
+    )
+        return input
 
 def discover_inputs(
     input_text: str,

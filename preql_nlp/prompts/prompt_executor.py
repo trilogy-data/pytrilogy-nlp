@@ -343,6 +343,37 @@ class FilterRefinementCase(BasePreqlPromptCase):
             "datatype": self.datatype.value,
         }
 
+class FilterRefinementErrorCase(BasePreqlPromptCase):
+    template = templates.get_template("prompt_refine_filter_error.jinja2")
+    parse_model = FilterRefinementResponse
+
+    attributes_used_for_hash = {
+        "values",
+        "error",
+        "template",
+    }
+
+    def __init__(
+        self,
+        values: list[str | int | float | bool],
+        error: str,
+        datatype: DataType,
+        llm: BaseLanguageModel = None,
+        evaluators: Optional[Union[Callable, List[Callable]]] = None,
+    ):
+        self.values = values
+        self.error=error
+        self.datatype = datatype
+        super().__init__(evaluators=evaluators, category="filter_refinement_error", llm=llm)
+
+    def get_extra_template_context(self):
+        return {
+            **super().get_extra_template_context(),
+            "values": ", ".join([f'"{x}"' for x in self.values]),
+            "error": self.error,
+            "datatype": self.datatype.value,
+        }
+
 
 DATA_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "log_data"

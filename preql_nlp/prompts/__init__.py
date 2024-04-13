@@ -3,6 +3,7 @@ from .prompt_executor import (
     SelectionPromptCase,
     SemanticExtractionPromptCase,
     SemanticToTokensPromptCase,
+    FilterRefinementErrorCase,
     run_prompt,
 )
 
@@ -12,4 +13,5 @@ __all__ = [
     "SemanticExtractionPromptCase",
     "SemanticToTokensPromptCase",
     "FilterRefinementCase",
+    "FilterRefinementErrorCase",
 ]

@@ -19,8 +19,8 @@ from datetime import datetime
 import json
 from pydantic import BaseModel, field_validator
 from preql.core.enums import ComparisonOperator, Ordering, Purpose, BooleanOperator
-from langchain.chat_models import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.language_models import BaseLanguageModel
 
 langchain_chat_kwargs = {
     "temperature": 0,
@@ -32,15 +32,6 @@ chat_openai_model_kwargs = {
     "frequency_penalty": 0.0,
     "presence_penalty": -1,
 }
-
-
-def get_chat_openai(model_name):
-    llm = ChatOpenAI(
-        model_name=model_name,
-        model_kwargs=chat_openai_model_kwargs,
-        **langchain_chat_kwargs,
-    )
-    return llm
 
 
 class FilterResultV2(BaseModel):
@@ -234,11 +225,10 @@ def sql_agent_tools(environment):
 def parse_query(
     input_text: str,
     input_environment: Environment,
+    llm: BaseLanguageModel,
     debug: bool = False,
     log_info: bool = True,
 ):
-    llm_agent = get_chat_openai("gpt-3.5-turbo-1106")
-
     system = """Thought Process: You are a data analyst asstant Your job is to get questions from 
     the analyst and tell them how to write a 
     SQL query to answer them in a step by step fashion. 
@@ -320,13 +310,13 @@ def parse_query(
         ]
     )
     tools = sql_agent_tools(input_environment)
-    agent = create_structured_chat_agent(
-        llm=llm_agent,
+    chat_agent = create_structured_chat_agent(
+        llm=llm,
         tools=tools,
         prompt=prompt,
     )
     agent_executor = AgentExecutor(
-        agent=agent, tools=tools, verbose=True, handle_parsing_errors=True  # type: ignore
+        agent=chat_agent, tools=tools, verbose=True, handle_parsing_errors=True  # type: ignore
     )
 
     result = agent_executor.invoke({"input": input_text})
@@ -367,8 +357,15 @@ def parse_query(
 def build_query(
     input_text: str,
     input_environment: Environment,
+    llm: BaseLanguageModel,
     debug: bool = False,
     log_info: bool = True,
 ) -> ProcessedQuery:
-    query = parse_query(input_text, input_environment, debug=debug, log_info=log_info)
+    query = parse_query(
+        input_text,
+        input_environment,
+        debug=debug,
+        llm=llm,
+        log_info=log_info,
+    )
     return process_query(statement=query, environment=input_environment)

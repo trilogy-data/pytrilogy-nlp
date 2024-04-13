@@ -16,7 +16,7 @@ def gen_select_test(words, filters: list[str] | None = None):
     return [select_test]
 
 
-def test_selection_prompt(test_logger):
+def test_selection_prompt(engine):
     test1 = generate_test_case(
         SelectionPromptCase,
         tests=gen_select_test(["question.creation_date.year", "question.id.count"]),
@@ -27,6 +27,7 @@ def test_selection_prompt(test_logger):
             "question.id.count",
             "question.author",
         ],
+        llm=engine,
     )
 
     test2 = generate_test_case(
@@ -39,5 +40,6 @@ def test_selection_prompt(test_logger):
             "question.id.count",
             "question.author",
         ],
+        llm=engine,
     )
     evaluate_cases([test1, test2])

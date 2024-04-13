@@ -12,7 +12,7 @@ def gen_select_test(word: list[str]):
     return [select_test]
 
 
-def test_filter_refinement():
+def test_filter_refinement(engine):
     case1 = generate_test_case(
         FilterRefinementCase,
         values=[
@@ -25,6 +25,7 @@ def test_filter_refinement():
                 "CA",
             ],
         ),
+        llm=engine,
     )
 
     case2 = generate_test_case(
@@ -33,11 +34,12 @@ def test_filter_refinement():
             "95%",
         ],
         datatype=DataType.FLOAT,
-        description="Field storing a float representing the percentage of the population that likes coconuts",
+        description="Field storing a float representing the percentage of the population that likes coconuts, with a max of 1.0",
         tests=gen_select_test(
             [
                 0.95,
             ],
         ),
+        llm=engine,
     )
     evaluate_cases([case1, case2])

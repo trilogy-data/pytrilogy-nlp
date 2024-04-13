@@ -9,6 +9,7 @@ from pydantic import BaseModel
 def generate_test_case(
     prompt: BasePreqlPromptCase,
     tests: List[Callable[[BaseModel], bool]],
+    llm,
     **kwargs,
 ):
     evaluators = []
@@ -16,10 +17,7 @@ def generate_test_case(
     for idx, test in enumerate(tests):
         evaluators.append(lambda x, idx=idx, test=test: test(prompt.parse_response(x)))  # type: ignore
 
-    case = prompt(
-        **kwargs,
-        evaluators=evaluators,
-    )
+    case = prompt(**kwargs, evaluators=evaluators, llm=llm)
     return case
 
 

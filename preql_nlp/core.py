@@ -1,4 +1,4 @@
-from preql import Executor, Environment
+from preql import Environment
 from preql_nlp.enums import Provider
 from preql_nlp.main import build_query
 from preql_nlp.main_v2 import build_query as build_query_v2

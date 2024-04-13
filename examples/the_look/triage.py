@@ -13,8 +13,6 @@ from preql_nlp.main import parse_query
 from logging import StreamHandler, INFO
 from preql_nlp.constants import logger
 from preql.parsing.render import render_query
-from preql import Dialects
-from preql.hooks.query_debugger import DebuggingHook
 from preql_nlp.core import NLPEngine
 from preql_nlp import Provider
 
@@ -27,12 +25,10 @@ environment = models["bigquery.thelook_ecommerce"]
 open_ai = NLPEngine(provider=Provider.OPENAI, model="gpt-3.5-turbo")
 
 processed_query = parse_query(
-    input_text = "How many orders were placed in 2023?",
+    input_text="How many orders were placed in 2023?",
     input_environment=environment,
     debug=True,
     llm=open_ai.llm,
 )
 
 print(render_query(processed_query))
-
-

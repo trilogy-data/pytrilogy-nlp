@@ -38,6 +38,7 @@ from preql_nlp.prompts import (
 )
 from preql_nlp.tokenization import build_token_list_by_purpose, tokens_to_concept
 from langchain_core.language_models import BaseLanguageModel
+from uuid import UUID
 
 
 def get_phrase_from_x(x: Union[str, FilterResult, OrderResult]):
@@ -79,7 +80,6 @@ def concept_names_from_token_response(
     phrase_tokens: SemanticTokenResponse,
     concepts: dict[str, Concept],
     token_universe: list | None,
-    
 ) -> list[str]:
     token_universe_internal = token_universe or []
     output: list[str] = []
@@ -117,35 +117,50 @@ def coerce_values(input: List[Union[str, int, float, bool]], dtype=DataType):
         return [bool(x) for x in input]
     return input
 
-def enrich_filter_parent(input: FinalFilterResult, log_info: bool, session_uuid:str, 
-                         llm: BaseLanguageModel):
-    try:
-        enrich_filter(input, log_info, session_uuid, llm)
-    except ValueError:
-        return 
 
-def enrich_filter(input: FinalFilterResult, log_info: bool, session_uuid:str,
-                      llm: BaseLanguageModel,):
+def enrich_filter_parent(
+    input: FinalFilterResult,
+    log_info: bool,
+    llm: BaseLanguageModel,
+    session_uuid: UUID | None,
+):
+    try:
+        enrich_filter(
+            input=input,
+            log_info=log_info,
+            llm=llm,
+            session_uuid=session_uuid,
+        )
+    except ValueError:
+        return
+
+
+def enrich_filter(
+    input: FinalFilterResult,
+    log_info: bool,
+    llm: BaseLanguageModel,
+    session_uuid: UUID | None = None,
+):
     if not (input.concept.metadata and input.concept.metadata.description):
         # coerce even without description
         try:
             input.values = coerce_values(input.values, input.concept.datatype)
             return input
         except ValueError as e:
-             input.values = coerce_values(
+            input.values = coerce_values(
                 run_prompt(  # type: ignore
                     FilterRefinementErrorCase(
                         values=input.values,
                         error=str(e),
                         datatype=input.concept.datatype,
-                        llm=llm
+                        llm=llm,
                     ),
                     session_uuid=session_uuid,
                     log_info=log_info,
                 ).new_values,
                 input.concept.datatype,
-        )
-             return input
+            )
+            return input
 
     try:
         input.values = coerce_values(
@@ -154,7 +169,7 @@ def enrich_filter(input: FinalFilterResult, log_info: bool, session_uuid:str,
                     values=input.values,
                     description=input.concept.metadata.description,
                     datatype=input.concept.datatype,
-                    llm=llm
+                    llm=llm,
                 ),
                 session_uuid=session_uuid,
                 log_info=log_info,
@@ -168,14 +183,15 @@ def enrich_filter(input: FinalFilterResult, log_info: bool, session_uuid:str,
                     values=input.values,
                     error=str(e),
                     datatype=input.concept.datatype,
-                    llm=llm
+                    llm=llm,
                 ),
                 session_uuid=session_uuid,
                 log_info=log_info,
             ).new_values,
             input.concept.datatype,
-    )
+        )
         return input
+
 
 def discover_inputs(
     input_text: str,
@@ -183,7 +199,6 @@ def discover_inputs(
     input_environment: Environment,
     debug: bool = False,
     log_info: bool = True,
-    
 ) -> IntermediateParseResults:
     # the core logic flow
 

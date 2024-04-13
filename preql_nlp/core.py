@@ -2,9 +2,16 @@ from preql import Executor, Environment
 from preql_nlp.enums import Provider
 from preql_nlp.main import build_query
 from preql_nlp.main_v2 import build_query as build_query_v2
-from langchain_core.messages import BaseMessage
+
+
 class NLPEngine(object):
-    def __init__(self, provider: Provider, model: str | None = None, api_key:str | None = None, args: dict = {}):
+    def __init__(
+        self,
+        provider: Provider,
+        model: str | None = None,
+        api_key: str | None = None,
+        args: dict = {},
+    ):
         self.provider = provider
         self.debug = False
         self.model = model
@@ -26,7 +33,7 @@ class NLPEngine(object):
             llm = ChatGoogleGenerativeAI(
                 model=self.model if self.model else "gemini-pro",
                 convert_system_message_to_human=True,
-                google_api_key = self.api_key
+                google_api_key=self.api_key,
             )
         else:
             raise NotImplementedError(f"Unsupported provider {self.provider}")
@@ -55,12 +62,3 @@ class NLPEngine(object):
         )
 
 
-class NLPExecutor(Executor):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def parse_freeform_text(self, input_text: str, env: Environment):
-        nlp = NLPEngine(provider=self.dialect, model="en_core_web_trf")
-        query = nlp.build_query_from_text(input_text, env)
-        return self.execute(query, env)

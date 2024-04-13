@@ -229,7 +229,6 @@ def parse_query(
     debug: bool = False,
     log_info: bool = True,
 ):
-
     system = """Thought Process: You are a data analyst asstant Your job is to get questions from 
     the analyst and tell them how to write a 
     SQL query to answer them in a step by step fashion. 

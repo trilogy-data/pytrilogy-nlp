@@ -62,9 +62,10 @@ class BasePreqlPromptCase(TemplatedPromptCase):
     def __init__(
         self,
         category: str,
+        llm: BaseLanguageModel,
         fail_on_parse_error: bool = True,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
-        llm: BaseLanguageModel = None,
+ 
     ):
         # this isn't actually the right way to pass through a stopword to the complete prompt
         # so we're splitting in the response
@@ -162,7 +163,7 @@ class SemanticExtractionPromptCase(BasePreqlPromptCase):
     def __init__(
         self,
         question: str,
-        llm: BaseLanguageModel = None,
+        llm: BaseLanguageModel,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         self.question = question
@@ -189,7 +190,7 @@ class SemanticToTokensPromptCase(BasePreqlPromptCase):
         purpose: str,
         tokens: List[str],
         phrases: List[str],
-        llm: BaseLanguageModel = None,
+        llm: BaseLanguageModel,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         tokens = [token for token in tokens if token]
@@ -263,7 +264,7 @@ class SelectionPromptCase(BasePreqlPromptCase):
         self,
         question: str,
         concept_names: List[str],
-        llm: BaseLanguageModel = None,
+        llm: BaseLanguageModel,
         all_concept_names: List[str] | None = None,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
@@ -327,7 +328,7 @@ class FilterRefinementCase(BasePreqlPromptCase):
         values: list[str | int | float | bool],
         description: str,
         datatype: DataType,
-        llm: BaseLanguageModel = None,
+        llm: BaseLanguageModel,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         self.values = values
@@ -342,6 +343,7 @@ class FilterRefinementCase(BasePreqlPromptCase):
             "description": self.description,
             "datatype": self.datatype.value,
         }
+
 
 class FilterRefinementErrorCase(BasePreqlPromptCase):
     template = templates.get_template("prompt_refine_filter_error.jinja2")
@@ -358,13 +360,15 @@ class FilterRefinementErrorCase(BasePreqlPromptCase):
         values: list[str | int | float | bool],
         error: str,
         datatype: DataType,
-        llm: BaseLanguageModel = None,
+        llm: BaseLanguageModel,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):
         self.values = values
-        self.error=error
+        self.error = error
         self.datatype = datatype
-        super().__init__(evaluators=evaluators, category="filter_refinement_error", llm=llm)
+        super().__init__(
+            evaluators=evaluators, category="filter_refinement_error", llm=llm
+        )
 
     def get_extra_template_context(self):
         return {
@@ -413,7 +417,8 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> ConceptSelectionResponse: ...
+) -> ConceptSelectionResponse:
+    ...
 
 
 @overload
@@ -422,7 +427,8 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> InitialParseResponse: ...
+) -> InitialParseResponse:
+    ...
 
 
 @overload
@@ -431,7 +437,8 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> SemanticTokenResponse: ...
+) -> SemanticTokenResponse:
+    ...
 
 
 @overload
@@ -440,7 +447,8 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> FilterRefinementResponse: ...
+) -> FilterRefinementResponse:
+    ...
 
 
 def run_prompt(

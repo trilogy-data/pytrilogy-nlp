@@ -65,9 +65,10 @@ def gen_validate_initial_parse_result(**kwargs):
     return outputs
 
 
-def test_extraction_prompt(test_logger):
+def test_extraction_prompt(test_logger, engine):
     case1 = generate_test_case(
         SemanticExtractionPromptCase,
+        llm=engine,
         question="How many questions are asked per year? Order results by year desc",
         tests=gen_validate_initial_parse_result(
             selection=["question", "year", "count"],
@@ -78,6 +79,7 @@ def test_extraction_prompt(test_logger):
     case2 = generate_test_case(
         SemanticExtractionPromptCase,
         question="How many questions were asked in the year 2020?",
+        llm=engine,
         tests=gen_validate_initial_parse_result(
             selection=["question"],
             filtering=[
@@ -91,6 +93,7 @@ def test_extraction_prompt(test_logger):
     case3 = generate_test_case(
         SemanticExtractionPromptCase,
         question="50 most common names by count in the state of VT in the year 2010?",
+        llm=engine,
         tests=gen_validate_initial_parse_result(
             selection=[
                 "name",
@@ -108,6 +111,7 @@ def test_extraction_prompt(test_logger):
     case4 = generate_test_case(
         SemanticExtractionPromptCase,
         question="What were the 50 most common names by count in Vermont in the year 2010?",
+        llm=engine,
         tests=gen_validate_initial_parse_result(
             selection=["name", "count", "state", "year"],
             limit=50,
@@ -124,7 +128,7 @@ def test_extraction_prompt(test_logger):
     evaluate_cases([case1, case2, case3, case4])
 
 
-def test_like_predicates():
+def test_like_predicates(engine):
     case1 = generate_test_case(
         SemanticExtractionPromptCase,
         question="SO answers where the body contains the word jaguar?",
@@ -147,6 +151,7 @@ def test_like_predicates():
                 )
             ],
         ),
+        llm=engine,
     )
     evaluate_cases([case1])
 
@@ -158,15 +163,21 @@ class MultiModeFilterMatch(BaseModel):
         return any([x == v for v in self.valid])
 
 
-def test_abstract_terms():
+def test_abstract_terms(engine):
     case1 = generate_test_case(
         SemanticExtractionPromptCase,
         question="Shoe sales on christmas day?",
+        llm=engine,
         tests=gen_validate_initial_parse_result(
             selection=["product", "sale"],
             filtering=[
                 MultiModeFilterMatch(
                     valid=[
+                        FilterResult(
+                            concept="product",
+                            values=["Shoe"],
+                            operator=ComparisonOperator.EQ,
+                        ),
                         FilterResult(
                             concept="day",
                             values=["Christmas"],

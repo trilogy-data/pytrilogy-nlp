@@ -18,7 +18,7 @@ def gen_semantic_tests(match_dict):
     return output
 
 
-def test_structured_input():
+def test_structured_input(engine):
     first_phrase = "number of questions per year"
     test1 = generate_test_case(
         SemanticToTokensPromptCase,
@@ -26,6 +26,7 @@ def test_structured_input():
         phrases=[first_phrase],
         tokens=["question", "year", "count", "albatross", "answer", "month", "quarter"],
         purpose="calculated metrics",
+        llm=engine,
     )
 
     evaluate_cases([test1])

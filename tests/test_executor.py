@@ -3,11 +3,12 @@ from pydantic import ValidationError
 import pytest
 
 
-def test_retry():
+def test_retry(engine):
     test = SemanticToTokensPromptCase(
         tokens=["alphabet", "soup", "apple", "fruit", "shape", "orange"],
         phrases=["round fruits"],
         purpose="Dimension",
+        llm=engine,
     )
 
     test.execute_prompt = (

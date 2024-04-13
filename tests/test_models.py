@@ -12,7 +12,7 @@ def test_phrase_token():
    }
 ]"""
 
-    x = SemanticTokenResponse.parse_raw(test)
+    x = SemanticTokenResponse.model_validate_json(test)
 
     assert x[0].tokens == ["question", "year"]
 
@@ -26,5 +26,5 @@ def test_initial_parse_result():
 "filtering": [{"concept":"year", "values":["2020"], "operator":"="}]
 }"""
 
-    x = InitialParseResponse.parse_raw(response)
+    x = InitialParseResponse.model_validate_json(response)
     assert x.limit == -1

@@ -3,7 +3,7 @@ from preql.core.models import Environment, Concept
 from preql.core.enums import Purpose, DataType
 
 
-def test_e2e_basic(test_logger):
+def test_e2e_basic(engine):
     # grab the model we want to parse
     environment = Environment()
     id = Concept(
@@ -31,10 +31,9 @@ def test_e2e_basic(test_logger):
     location = environment.concepts["user.location"]
 
     processed_query = parse_query(
-        "Which users are in germany?",
-        environment,
+        input_text="Which users are in germany?",
+        input_environment=environment,
         debug=True,
+        llm=engine,
     )
     assert location in [x for x in processed_query.output_components]
-    # assert processed_query.fil
-    # print(render_query(processed_query))

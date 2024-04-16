@@ -25,12 +25,27 @@ from os.path import dirname
 from langchain_core.messages import HumanMessage
 from preql_nlp.helpers import retry_with_exponential_backoff
 from langchain_core.language_models import BaseLanguageModel
+import sys
+from pathlib import Path
 
 PROMPT_STOPWORD = "<EOM>"
 
 MAX_REFINEMENT_TRIES = 4
 
-loader = FileSystemLoader(searchpath=dirname(__file__))
+
+def resource_path() -> str:
+    if not getattr(sys, "frozen", False):
+        return dirname(__file__)
+    # If the application is run as a bundle, the PyInstaller bootloader
+    # extends the sys module by a flag frozen=True and sets the app
+    # path into variable _MEIPASS'.
+    application_path = Path(sys._MEIPASS)  # type: ignore
+    search_path = application_path / "preql_nlp" / "prompts"
+
+    return str(Path(search_path))
+
+
+loader = FileSystemLoader(searchpath=resource_path())
 templates = Environment(loader=loader)
 
 
@@ -65,7 +80,6 @@ class BasePreqlPromptCase(TemplatedPromptCase):
         llm: BaseLanguageModel,
         fail_on_parse_error: bool = True,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
- 
     ):
         # this isn't actually the right way to pass through a stopword to the complete prompt
         # so we're splitting in the response

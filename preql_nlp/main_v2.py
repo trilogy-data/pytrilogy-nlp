@@ -164,7 +164,9 @@ def get_model_description(query: str, environment: Environment):
     """
     Get the description of the dataset.
     """
-    datasources = ", ".join(set([x.identifier for x in environment.datasources.values()]))
+    datasources = ", ".join(
+        set([x.identifier for x in environment.datasources.values()])
+    )
     return json.dumps(
         {
             "description": f"database contains information about: {datasources}. No more specific information is available. Use the fields tool to get more specific information."
@@ -327,11 +329,11 @@ def parse_query(
             ("human", human),
         ]
     )
-    wiki = WikidataQueryRun(api_wrapper=WikidataAPIWrapper())
-    wiki.description = 'Look up information on a specific string from Wikipedia. Use to get context'
-    tools = sql_agent_tools(input_environment) + [ wiki
-        
-    ]
+    wiki = WikidataQueryRun(api_wrapper=WikidataAPIWrapper()) #type: ignore
+    wiki.description = (
+        "Look up information on a specific string from Wikipedia. Use to get context"
+    )
+    tools = sql_agent_tools(input_environment) + [wiki]
     chat_agent = create_structured_chat_agent(
         llm=llm,
         tools=tools,

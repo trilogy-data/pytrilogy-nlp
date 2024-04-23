@@ -1,11 +1,12 @@
 import uuid
 from typing import List, Union
-from preql.core.enums import BooleanOperator, Purpose, DataType
+from preql.core.enums import BooleanOperator, Purpose
 from preql.core.query_processor import process_query
 from preql.core.models import (
     Comparison,
     Concept,
     Conditional,
+    DataType,
     Environment,
     OrderBy,
     Ordering,

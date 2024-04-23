@@ -21,6 +21,7 @@ from pydantic import BaseModel, field_validator
 from preql.core.enums import ComparisonOperator, Ordering, Purpose, BooleanOperator
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.language_models import BaseLanguageModel
+from langchain_community.tools.wikidata.tool import WikidataAPIWrapper, WikidataQueryRun
 
 langchain_chat_kwargs = {
     "temperature": 0,
@@ -159,13 +160,16 @@ def validate_query(query: str, environment: Environment):
     return {"status": "valid"}
 
 
-def get_dataset_description(query: str):
+def get_model_description(query: str, environment: Environment):
     """
     Get the description of the dataset.
     """
+    datasources = ", ".join(
+        set([x.identifier for x in environment.datasources.values()])
+    )
     return json.dumps(
         {
-            "description": "This is a dataset contain the details of a subset of the passengers on board the Titanic (891 to be exact) and importantly, will reveal whether they survived or not, and some other information about them."
+            "description": f"database contains information about: {datasources}. No more specific information is available. Use the fields tool to get more specific information."
         }
     )
 
@@ -183,32 +187,38 @@ def concept_to_string(concept: Concept):
     return concept.address
 
 
-def get_concepts(environment: Environment, *args, **kwargs) -> str:
+def get_fields(environment: Environment, search: str, *args, **kwargs) -> str:
     return json.dumps(
-        {"concepts": [concept_to_string(x) for x in environment.concepts.values()]}
+        {
+            "fields": [
+                concept_to_string(x)
+                for x in environment.concepts.values()
+                if search.lower() in x.address.lower()
+            ]
+        }
     )
 
 
 def sql_agent_tools(environment):
     tools = [
         Tool.from_function(
-            func=get_dataset_description,
-            name="get_dataset_description",
+            func=lambda x: get_model_description(x, environment),
+            name="get_database_description",
             description="""
-            Get some context on the datasets you're working with, if the question is not clear""",
+           Describe the database and general groupings of fields available.""",
         ),
         Tool.from_function(
             func=lambda x: validate_query(x, environment),
             name="validate_response",
             description="""
-            Check that your response is formatted properly and accurate before sending it to the CEO.
+            Check that your response is formatted properly and accurate before your final answer.
             """,
         ),
         Tool.from_function(
-            func=lambda x: get_concepts(environment, x),
-            name="get_concepts",
+            func=lambda x: get_fields(environment, x),
+            name="get_fields",
             description="""
-            The list of fields that can be selected.
+            The list of fields that can be selected that contain the input string. When looking for an aggregate (count, etc) prefer concepts with that string in the name.
             """,
         ),
         Tool.from_function(
@@ -229,13 +239,16 @@ def parse_query(
     debug: bool = False,
     log_info: bool = True,
 ):
-    system = """Thought Process: You are a data analyst asstant Your job is to get questions from 
+    system = """Thought Process: You are a data analyst asstant. Your job is to get questions from 
     the analyst and tell them how to write a 
     SQL query to answer them in a step by step fashion. 
+
     You can get information on the columns available and cannot create any new ones;
     do not worry about tables, the analyst will join them.
-    If nothing seems like it will accurately answer the question, 
-    you should tell the CEO that his question can't be answered yet. 
+
+    If you need additional contextual information that would not be in the database, use the wikimedia tool to get it.
+
+    Do your best to get to the most complete answer possible using all tools. 
 
     Your goal will be to create a summary of steps in JSON format for your analyst.
     The final information should be a VALID JSON blob with the following keys and values followed by a stopword: <EOD>:
@@ -249,21 +262,20 @@ def parse_query(
     -- values: the value the column is filtered to
     -- operator: the comparison operator, one of "=", "in", "<", ">", "<=", "like", or ">=". A range, or between, should be expressed as two inequalities. 
 
-    You will pass this as the final output as
 
-    {{
-        "action": "Final Answer",
-        "action_input": <VALID_JSON_SPEC_DEFINED_ABOVE>
-    }}
-
-    You should always call the the validate_response tool with your final answer before sending it to the analyst to check your work.
+    You should always call the the validate_response tool on what you think is the final answer before returning the "Final Answer" action.
     You have access to the following tools:
 
     {tools}
 
-    Use a json blob to specify a tool by providing an action key (tool name) and an action_input key (tool input).
+    Use a json blob to specify a tool by providing an action key (tool name) and an action_input key (tool input). 
+    You will get valuable information from using tools before producing your final answer.
 
-    Valid "action" values: "Final Answer" or {tool_names}
+    Use as many tools as needed before producing the "Final Answer" action.
+
+    Valid "action" values: any of {tool_names} and, for your last result "Final Answer". 
+    Only return "Final Answer" when you are done with all work. Nnever set the action to 
+    "Final Answer" before you are done. 
 
     You should always call the the validate_response tool with your final answer before sending it to the CEO.
 
@@ -276,7 +288,7 @@ def parse_query(
     }}
     ```
 
-    Follow this format:
+    Follow this format in responses:
 
     Question: input question to answer
     Thought: consider previous and subsequent steps
@@ -290,11 +302,19 @@ def parse_query(
     Action:
     ```
     {{
-        "action": "Final Answer",
-        "action_input": "Final response to human"
+        "action": "get_database_description",
+        "action_input": "some_dataset"
     }}
 
-    Begin! Reminder to ALWAYS respond with a valid json blob of a single action. Use tools if necessary. Respond directly if appropriate. Format is Action:```$JSON_BLOB```then Observation"""
+    Once you have used any tools (listed below) as needed, you will produce your final result in this format. After producing your
+    final answer, you cannot take any more steps.
+
+    {{
+        "action": "Final Answer",
+        "action_input": <VALID_JSON_SPEC_DEFINED_ABOVE>
+    }}
+
+    Begin! Reminder to ALWAYS respond with a valid json blob of an action. Use tools if necessary. Respond directly if appropriate. Format is Action:```$JSON_BLOB```then Observation"""
 
     human = """{input}
 
@@ -309,7 +329,11 @@ def parse_query(
             ("human", human),
         ]
     )
-    tools = sql_agent_tools(input_environment)
+    wiki = WikidataQueryRun(api_wrapper=WikidataAPIWrapper()) #type: ignore
+    wiki.description = (
+        "Look up information on a specific string from Wikipedia. Use to get context"
+    )
+    tools = sql_agent_tools(input_environment) + [wiki]
     chat_agent = create_structured_chat_agent(
         llm=llm,
         tools=tools,

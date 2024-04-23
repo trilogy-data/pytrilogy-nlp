@@ -3,3 +3,6 @@ promptimize
 pandas
 openai
 langchain-openai
+langchain-community
+mediawikiapi
+wikibase-rest-api-client

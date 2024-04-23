@@ -9,7 +9,7 @@ path.insert(0, root_path)
 
 
 from trilogy_public_models import models
-from preql_nlp.main import parse_query
+from preql_nlp.main_v2 import parse_query
 from logging import StreamHandler, INFO
 from preql_nlp.constants import logger
 from preql.parsing.render import render_query
@@ -25,7 +25,7 @@ environment = models["bigquery.thelook_ecommerce"]
 open_ai = NLPEngine(provider=Provider.OPENAI, model="gpt-3.5-turbo")
 
 processed_query = parse_query(
-    input_text="How many orders were placed in 2023?",
+    input_text="How many orders were placed by customers living in Burlington, VT in 2023?",
     input_environment=environment,
     debug=True,
     llm=open_ai.llm,

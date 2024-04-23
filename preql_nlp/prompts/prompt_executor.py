@@ -12,9 +12,9 @@ from preql_nlp.models import (
     FilterRefinementResponse,
     FinalParseResponse,
 )
+from preql.core.models import DataType
 from preql_nlp.cache_providers.base import BaseCache
 from preql_nlp.cache_providers.local_sqlite import SqlliteCache
-from preql.core.enums import DataType
 from pydantic import BaseModel, ValidationError
 from typing import List, Optional, Callable, Union, Type, overload
 import uuid

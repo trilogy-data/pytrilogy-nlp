@@ -329,7 +329,7 @@ def parse_query(
             ("human", human),
         ]
     )
-    wiki = WikidataQueryRun(api_wrapper=WikidataAPIWrapper()) #type: ignore
+    wiki = WikidataQueryRun(api_wrapper=WikidataAPIWrapper())  # type: ignore
     wiki.description = (
         "Look up information on a specific string from Wikipedia. Use to get context"
     )

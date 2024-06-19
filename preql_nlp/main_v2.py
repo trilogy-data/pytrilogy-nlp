@@ -5,7 +5,7 @@ from preql.core.models import (
     Concept,
     Environment,
     ProcessedQuery,
-    Select,
+    SelectStatement,
     Comparison,
     Conditional,
     OrderBy,
@@ -369,7 +369,7 @@ def parse_query(
             print("Ordering")
             for o in intermediate_results.order:
                 print(o)
-    query = Select(
+    query = SelectStatement(
         selection=selection,
         limit=safe_limit(intermediate_results.limit),
         order_by=order,

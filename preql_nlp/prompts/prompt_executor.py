@@ -341,7 +341,7 @@ class FilterRefinementCase(BasePreqlPromptCase):
         self,
         values: list[str | int | float | bool],
         description: str,
-        datatype: DataType,
+        datatype: DataType | StructType | ListType | MapType,
         llm: BaseLanguageModel,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):

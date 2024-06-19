@@ -11,7 +11,7 @@ from preql.core.models import (
     OrderBy,
     Ordering,
     OrderItem,
-    Select,
+    SelectStatement,
     WhereClause,
     ProcessedQuery,
     unique,
@@ -386,7 +386,7 @@ def parse_query(
         print("Concepts found")
         for c in intermediate_results.select:
             print(c.address)
-    query = Select(
+    query = SelectStatement(
         selection=selection,
         limit=safe_limit(intermediate_results.limit),
         order_by=order,

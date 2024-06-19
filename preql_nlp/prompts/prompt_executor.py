@@ -12,7 +12,7 @@ from preql_nlp.models import (
     FilterRefinementResponse,
     FinalParseResponse,
 )
-from preql.core.models import DataType
+from preql.core.models import DataType, ListType, MapType, StructType
 from preql_nlp.cache_providers.base import BaseCache
 from preql_nlp.cache_providers.local_sqlite import SqlliteCache
 from pydantic import BaseModel, ValidationError
@@ -373,7 +373,7 @@ class FilterRefinementErrorCase(BasePreqlPromptCase):
         self,
         values: list[str | int | float | bool],
         error: str,
-        datatype: DataType,
+        datatype: DataType | StructType | ListType | MapType,
         llm: BaseLanguageModel,
         evaluators: Optional[Union[Callable, List[Callable]]] = None,
     ):

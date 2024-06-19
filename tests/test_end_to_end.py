@@ -1,6 +1,6 @@
 from preql_nlp.main import parse_query
-from preql.core.models import Environment, Concept
-from preql.core.enums import Purpose, DataType
+from preql.core.models import Environment, Concept, DataType
+from preql.core.enums import Purpose
 
 
 def test_e2e_basic(engine):

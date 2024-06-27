@@ -1,7 +1,7 @@
-from preql_nlp.prompts.prompt_executor import FilterRefinementCase
-from preql_nlp.models import FilterRefinementResponse
+from trilogy_nlp.prompts.prompt_executor import FilterRefinementCase
+from trilogy_nlp.models import FilterRefinementResponse
 from tests.utility import generate_test_case, evaluate_cases
-from preql.core.models import DataType
+from trilogy.core.models import DataType
 
 
 def gen_select_test(word: list[str]):

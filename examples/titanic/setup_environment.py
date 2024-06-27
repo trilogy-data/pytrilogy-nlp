@@ -1,19 +1,19 @@
 import pandas as pd
-from preql import Executor, Dialects
-from preql.core.models import Environment
+from trilogy import Executor, Dialects
+from trilogy.core.models import Environment
 from sqlalchemy import create_engine
-from preql.core.models import Datasource, Concept, ColumnAssignment, Grain, Function
-from preql.core.enums import DataType, Purpose, FunctionType
+from trilogy.core.models import Datasource, Concept, ColumnAssignment, Grain, Function
+from trilogy.core.enums import DataType, Purpose, FunctionType
 from os.path import dirname
 from pathlib import PurePath
 from typing import Optional
 
-from preql_nlp.main_v2 import build_query as build_query_v2
+from trilogy_nlp.main_v2 import build_query as build_query_v2
 from logging import StreamHandler, DEBUG
 
-from preql_nlp.constants import logger
-from preql_nlp.main import build_query
-from preql.core.functions import function_args_to_output_purpose, arg_to_datatype
+from trilogy_nlp.constants import logger
+from trilogy_nlp.main import build_query
+from trilogy.core.functions import function_args_to_output_purpose, arg_to_datatype
 
 
 def create_function_derived_concept(

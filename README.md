@@ -1,9 +1,10 @@
-## PreQL NLP
+## Trilogy NLP
 
-Natural language interface for generating PreQL query objects.
+Natural language interface for generating SQL queries via a Trilogy data model.
 
-PreQL is easier for a large language model to interact with as it requires only extract relevant concepts from a text,
-classifying them as metrics or dimensions, and mapping them to what is available in a model.
+Trilogy is easier for a large language model (LLM) to interact with as it requires only identifying which
+objects in the data model best match the question, rather than generating arbitrary SQL from scratch.
+The extra data encoded in the semantic model for query generation reduces common sources of LLM errors. 
 
 This makes it more testable and less prone to hallucination than generating SQL directly. 
 
@@ -20,8 +21,8 @@ Recommended to use "gpt-3.5-turbo" or higher as the model.
 
 ```python
 from trilogy_public_models import models
-from preql import Executor, Dialects
-from preql_nlp import build_query
+from trilogy import Executor, Dialects
+from trilogy_nlp import build_query
 
 # define the model we want to parse
 environment = models["bigquery.stack_overflow"]
@@ -74,4 +75,4 @@ LIMIT 100;
 Recommend that you work in a virtual environment with requirements from both requirements.txt and requirements-test.txt installed. The latter is necessary to run
 tests (surprise). 
 
-Pypreql-nlp is python 3.10+
+trilogy-nlp is python 3.10+

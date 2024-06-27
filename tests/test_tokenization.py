@@ -1,4 +1,4 @@
-from preql_nlp.tokenization import tokens_to_concept
+from trilogy_nlp.tokenization import tokens_to_concept
 
 
 def test_tokens_to_concept():

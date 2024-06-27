@@ -1,6 +1,6 @@
 from typing import Optional
 from langchain.agents import create_structured_chat_agent, AgentExecutor
-from preql_nlp.main import safe_limit
+from trilogy_nlp.main import safe_limit
 from preql.core.models import (
     Concept,
     Environment,

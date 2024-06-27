@@ -1,5 +1,5 @@
-from preql_nlp.prompts.prompt_executor import SelectionPromptCase
-from preql_nlp.models import FinalParseResponse
+from trilogy_nlp.prompts.prompt_executor import SelectionPromptCase
+from trilogy_nlp.models import FinalParseResponse
 from tests.utility import generate_test_case, evaluate_cases
 
 

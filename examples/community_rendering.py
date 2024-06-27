@@ -1,10 +1,10 @@
 from trilogy_public_models import models
-from preql_nlp.main import parse_query
+from trilogy_nlp.main import parse_query
 from logging import StreamHandler, DEBUG
-from preql_nlp.constants import logger
-from preql.parsing.render import render_query
-from preql import Dialects
-from preql.hooks.query_debugger import DebuggingHook
+from trilogy_nlp.constants import logger
+from trilogy.parsing.render import render_query
+from trilogy import Dialects
+from trilogy.hooks.query_debugger import DebuggingHook
 
 logger.setLevel(DEBUG)
 logger.addHandler(StreamHandler())

@@ -32,10 +32,10 @@ jobs:
           pip install -r requirements-test.txt
       - name: Lint with mypy
         run: |
-          mypy preql_nlp
+          mypy trilogy_nlp
       - name: Lint with ruff
         run: |
-          ruff check preql_nlp
+          ruff check trilogy_nlp
       - name: Test with pytest
         run: |
           pip install pytest

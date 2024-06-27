@@ -1,4 +1,4 @@
-from preql_nlp.models import SemanticTokenResponse, InitialParseResponse
+from trilogy_nlp.models import SemanticTokenResponse, InitialParseResponse
 
 
 def test_phrase_token():

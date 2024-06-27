@@ -1,4 +1,4 @@
-from preql_nlp.prompts.prompt_executor import SemanticToTokensPromptCase
+from trilogy_nlp.prompts.prompt_executor import SemanticToTokensPromptCase
 from pydantic import ValidationError
 import pytest
 

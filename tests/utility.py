@@ -1,6 +1,6 @@
 from promptimize.suite import Suite
 from promptimize.reports import Report
-from preql_nlp.prompts.prompt_executor import BasePreqlPromptCase
+from trilogy_nlp.prompts.prompt_executor import BasePreqlPromptCase
 from promptimize.utils import serialize_object
 from typing import List, Callable
 from pydantic import BaseModel

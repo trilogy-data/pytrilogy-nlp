@@ -1,7 +1,7 @@
-from preql_nlp.constants import logger
+from trilogy_nlp.constants import logger
 from pytest import fixture
 from logging import StreamHandler, DEBUG
-from preql_nlp import NLPEngine, Provider
+from trilogy_nlp import NLPEngine, Provider
 
 
 @fixture(scope="session", autouse=True)

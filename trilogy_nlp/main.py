@@ -1,8 +1,8 @@
 import uuid
 from typing import List, Union
-from preql.core.enums import BooleanOperator, Purpose
-from preql.core.query_processor import process_query
-from preql.core.models import (
+from trilogy.core.enums import BooleanOperator, Purpose
+from trilogy.core.query_processor import process_query
+from trilogy.core.models import (
     Comparison,
     Concept,
     Conditional,
@@ -17,8 +17,8 @@ from preql.core.models import (
     unique,
 )
 
-from preql_nlp.constants import DEFAULT_LIMIT, logger
-from preql_nlp.models import (
+from trilogy_nlp.constants import DEFAULT_LIMIT, logger
+from trilogy_nlp.models import (
     FilterResult,
     FinalFilterResult,
     FinalOrderResult,
@@ -29,7 +29,7 @@ from preql_nlp.models import (
     SemanticTokenResponse,
     FinalParseResponse,
 )
-from preql_nlp.prompts import (
+from trilogy_nlp.prompts import (
     FilterRefinementCase,
     FilterRefinementErrorCase,
     SelectionPromptCase,
@@ -37,7 +37,7 @@ from preql_nlp.prompts import (
     SemanticToTokensPromptCase,
     run_prompt,
 )
-from preql_nlp.tokenization import build_token_list_by_purpose, tokens_to_concept
+from trilogy_nlp.tokenization import build_token_list_by_purpose, tokens_to_concept
 from langchain_core.language_models import BaseLanguageModel
 from uuid import UUID
 
@@ -380,7 +380,7 @@ def parse_query(
     order = parse_order(selection, intermediate_results.order)
 
     filtering = parse_filtering(intermediate_results.filtering)
-    # from preql.core.models import unique
+    # from trilogy.core.models import unique
     # concepts = unique(concepts, 'address')
     if debug:
         print("Concepts found")

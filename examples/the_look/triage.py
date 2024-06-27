@@ -9,12 +9,12 @@ path.insert(0, root_path)
 
 
 from trilogy_public_models import models
-from preql_nlp.main_v2 import parse_query
+from trilogy_nlp.main_v2 import parse_query
 from logging import StreamHandler, INFO
-from preql_nlp.constants import logger
-from preql.parsing.render import render_query
-from preql_nlp.core import NLPEngine
-from preql_nlp import Provider
+from trilogy_nlp.constants import logger
+from trilogy.parsing.render import render_query
+from trilogy_nlp.core import NLPEngine
+from trilogy_nlp import Provider
 
 logger.setLevel(INFO)
 logger.addHandler(StreamHandler())

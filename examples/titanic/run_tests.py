@@ -10,15 +10,15 @@ path.insert(0, root_path)
 
 from examples.titanic.setup_environment import setup_engine, setup_titanic
 
-from preql_nlp.enums import Provider
-from preql.core.models import Environment
+from trilogy_nlp.enums import Provider
+from trilogy.core.models import Environment
 
-from preql_nlp.main_v2 import build_query as build_query_v2
+from trilogy_nlp.main_v2 import build_query as build_query_v2
 from logging import StreamHandler, DEBUG
 
-from preql_nlp.constants import logger
-from preql_nlp.main import build_query
-from preql_nlp.core import NLPEngine
+from trilogy_nlp.constants import logger
+from trilogy_nlp.main import build_query
+from trilogy_nlp.core import NLPEngine
 
 
 if __name__ == "__main__":

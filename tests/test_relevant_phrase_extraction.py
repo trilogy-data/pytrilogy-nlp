@@ -1,7 +1,7 @@
-from preql_nlp.prompts.prompt_executor import SemanticExtractionPromptCase
-from preql_nlp.models import InitialParseResponse, FilterResult, OrderResult
+from trilogy_nlp.prompts.prompt_executor import SemanticExtractionPromptCase
+from trilogy_nlp.models import InitialParseResponse, FilterResult, OrderResult
 from tests.utility import generate_test_case, evaluate_cases
-from preql.core.enums import Ordering, ComparisonOperator
+from trilogy.core.enums import Ordering, ComparisonOperator
 from pydantic import BaseModel
 
 from typing import List

@@ -1,6 +1,6 @@
 from typing import Iterable, Dict, List
-from preql.core.models import Concept
-from preql.core.enums import Purpose
+from trilogy.core.models import Concept
+from trilogy.core.enums import Purpose
 import re
 from collections import defaultdict
 

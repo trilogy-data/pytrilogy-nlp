@@ -4,17 +4,17 @@ from promptimize.prompt_cases import TemplatedPromptCase
 # Bringing some useful eval function that help evaluating and scoring responses
 # eval functions have a handle on the prompt object and are expected
 # to return a score between 0 and 1
-from preql_nlp.constants import logger
-from preql_nlp.models import (
+from trilogy_nlp.constants import logger
+from trilogy_nlp.models import (
     InitialParseResponse,
     ConceptSelectionResponse,
     SemanticTokenResponse,
     FilterRefinementResponse,
     FinalParseResponse,
 )
-from preql.core.models import DataType, ListType, MapType, StructType
-from preql_nlp.cache_providers.base import BaseCache
-from preql_nlp.cache_providers.local_sqlite import SqlliteCache
+from trilogy.core.models import DataType, ListType, MapType, StructType
+from trilogy_nlp.cache_providers.base import BaseCache
+from trilogy_nlp.cache_providers.local_sqlite import SqlliteCache
 from pydantic import BaseModel, ValidationError
 from typing import List, Optional, Callable, Union, Type, overload
 import uuid
@@ -23,7 +23,7 @@ import os
 from jinja2 import FileSystemLoader, Environment, Template
 from os.path import dirname
 from langchain_core.messages import HumanMessage
-from preql_nlp.helpers import retry_with_exponential_backoff
+from trilogy_nlp.helpers import retry_with_exponential_backoff
 from langchain_core.language_models import BaseLanguageModel
 import sys
 from pathlib import Path

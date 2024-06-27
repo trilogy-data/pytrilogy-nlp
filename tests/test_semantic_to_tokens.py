@@ -1,5 +1,5 @@
-from preql_nlp.prompts import SemanticToTokensPromptCase
-from preql_nlp.models import SemanticTokenMatch
+from trilogy_nlp.prompts import SemanticToTokensPromptCase
+from trilogy_nlp.models import SemanticTokenMatch
 from tests.utility import generate_test_case, evaluate_cases
 
 

@@ -5,7 +5,7 @@ import re
 import setuptools
 
 _version_re = re.compile(r"__version__\s+=\s+(.*)")
-with open("preql_nlp/__init__.py", "rb") as f:
+with open("trilogy_nlp/__init__.py", "rb") as f:
     _match = _version_re.search(f.read().decode("utf-8"))
     if _match is None:
         print("No version found")
@@ -17,12 +17,12 @@ with open("requirements.txt", "r") as f:
     install_requires = [line.strip().replace("==", ">=") for line in f.readlines()]
 
 setuptools.setup(
-    name="pypreql-nlp",
+    name="trilogy-nlp",
     version=version,
     url="",
     author="",
     author_email="pypreql-community@gmail.com",
-    description="NLP interface for pypreql.",
+    description="NLP interface for Trilogy",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     packages=setuptools.find_packages(

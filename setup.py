@@ -17,7 +17,7 @@ with open("requirements.txt", "r") as f:
     install_requires = [line.strip().replace("==", ">=") for line in f.readlines()]
 
 setuptools.setup(
-    name="trilogy-nlp",
+    name="pytrilogy-nlp",
     version=version,
     url="",
     author="",

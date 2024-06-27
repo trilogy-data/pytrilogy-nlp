@@ -1,8 +1,8 @@
 import uuid
 from typing import List, Union
-from preql.core.enums import BooleanOperator, Purpose
-from preql.core.query_processor import process_query
-from preql.core.models import (
+from trilogy.core.enums import BooleanOperator, Purpose
+from trilogy.core.query_processor import process_query
+from trilogy.core.models import (
     Comparison,
     Concept,
     Conditional,
@@ -380,7 +380,7 @@ def parse_query(
     order = parse_order(selection, intermediate_results.order)
 
     filtering = parse_filtering(intermediate_results.filtering)
-    # from preql.core.models import unique
+    # from trilogy.core.models import unique
     # concepts = unique(concepts, 'address')
     if debug:
         print("Concepts found")

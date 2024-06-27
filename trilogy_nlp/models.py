@@ -1,6 +1,6 @@
 from pydantic import BaseModel, RootModel
-from preql.core.enums import ComparisonOperator, Ordering
-from preql.core.models import Concept
+from trilogy.core.enums import ComparisonOperator, Ordering
+from trilogy.core.models import Concept
 from typing import Union
 
 ### Intermediate Models

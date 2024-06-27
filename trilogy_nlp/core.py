@@ -1,4 +1,4 @@
-from preql import Environment
+from trilogy import Environment
 from trilogy_nlp.enums import Provider
 from trilogy_nlp.main import build_query
 from trilogy_nlp.main_v2 import build_query as build_query_v2

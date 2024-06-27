@@ -4,7 +4,7 @@ import time
 import re
 
 import openai
-from preql.constants import logger
+from trilogy.constants import logger
 
 extract = re.compile("Please try again in ([0-9]+)s")
 

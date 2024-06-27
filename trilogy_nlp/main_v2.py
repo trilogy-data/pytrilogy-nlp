@@ -1,7 +1,7 @@
 from typing import Optional
 from langchain.agents import create_structured_chat_agent, AgentExecutor
 from trilogy_nlp.main import safe_limit
-from preql.core.models import (
+from trilogy.core.models import (
     Concept,
     Environment,
     ProcessedQuery,
@@ -13,12 +13,12 @@ from preql.core.models import (
     WhereClause,
 )
 from typing import List
-from preql.core.query_processor import process_query
+from trilogy.core.query_processor import process_query
 from langchain.tools import Tool
 from datetime import datetime
 import json
 from pydantic import BaseModel, field_validator
-from preql.core.enums import ComparisonOperator, Ordering, Purpose, BooleanOperator
+from trilogy.core.enums import ComparisonOperator, Ordering, Purpose, BooleanOperator
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.language_models import BaseLanguageModel
 from langchain_community.tools.wikidata.tool import WikidataAPIWrapper, WikidataQueryRun
@@ -359,7 +359,7 @@ def parse_query(
         if intermediate_results.filtering
         else None
     )
-    # from preql.core.models import unique
+    # from trilogy.core.models import unique
     # concepts = unique(concepts, 'address')
     if debug:
         print("Concepts found")

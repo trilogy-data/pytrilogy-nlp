@@ -12,7 +12,7 @@ from trilogy_nlp.models import (
     FilterRefinementResponse,
     FinalParseResponse,
 )
-from preql.core.models import DataType, ListType, MapType, StructType
+from trilogy.core.models import DataType, ListType, MapType, StructType
 from trilogy_nlp.cache_providers.base import BaseCache
 from trilogy_nlp.cache_providers.local_sqlite import SqlliteCache
 from pydantic import BaseModel, ValidationError

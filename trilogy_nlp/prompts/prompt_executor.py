@@ -40,7 +40,7 @@ def resource_path() -> str:
     # extends the sys module by a flag frozen=True and sets the app
     # path into variable _MEIPASS'.
     application_path = Path(sys._MEIPASS)  # type: ignore
-    search_path = application_path / "preql_nlp" / "prompts"
+    search_path = application_path / "trilogy_nlp" / "prompts"
 
     return str(Path(search_path))
 

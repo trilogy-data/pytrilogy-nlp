@@ -2,8 +2,8 @@ import pandas as pd
 from trilogy import Executor, Dialects
 from trilogy.core.models import Environment
 from sqlalchemy import create_engine
-from trilogy.core.models import Datasource, Concept, ColumnAssignment, Grain, Function
-from trilogy.core.enums import DataType, Purpose, FunctionType
+from trilogy.core.models import Datasource, Concept, ColumnAssignment, Grain, Function, DataType
+from trilogy.core.enums import Purpose, FunctionType
 from os.path import dirname
 from pathlib import PurePath
 from typing import Optional

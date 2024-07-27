@@ -106,7 +106,10 @@ def parse_order(
 def parse_filter(
     input_concepts: List[Concept], input: FilterResultV2
 ) -> Comparison | None:
-    concept = [x for x in input_concepts if x.address == input.column][0]
+    try:
+        concept = [x for x in input_concepts if x.address == input.column or x.name == input.column][0]
+    except IndexError:
+        raise ValueError(f"Invalid filtering response {input}, could not be matched to concepts.")
     return Comparison(
         left=concept,
         right=input.values[0] if len(input.values) == 1 else input.values,

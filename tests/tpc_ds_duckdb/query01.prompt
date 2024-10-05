@@ -1,0 +1,3 @@
+#store_returns
+
+Output the customer text id for customers and how much they returned in the state of Tennessee in 2000. Return at most 100 rows.

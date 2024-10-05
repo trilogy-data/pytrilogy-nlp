@@ -1,0 +1,54 @@
+query_id = 1
+parse_time = 13.735455
+exec_time = 0.108734
+comp_time = 1.38526
+gen_length = 1633
+generated_sql = """
+
+WITH 
+pintail as (
+SELECT
+    store_returns.\"SR_RETURN_AMT\" as \"returns_return_amount\",
+    store.\"S_STATE\" as \"returns_store_state\",
+    cast(\"D_YEAR\" as int) as \"returns_return_date_year\",
+    store.\"S_STORE_SK\" as \"returns_store_id\",
+    customers.\"C_CUSTOMER_ID\" as \"returns_customer_text_id\",
+    store_returns.\"SR_TICKET_NUMBER\" as \"returns_store_sales_ticket_number\",
+    store_returns.\"SR_ITEM_SK\" as \"returns_item_id\"
+FROM
+    memory.store_returns as store_returns
+    INNER JOIN memory.store as store on store_returns.\"SR_STORE_SK\" = store.\"S_STORE_SK\"
+    INNER JOIN memory.date_dim as date on store_returns.\"SR_RETURNED_DATE_SK\" = date.\"D_DATE_SK\"
+    INNER JOIN memory.customer as customers on store_returns.\"SR_CUSTOMER_SK\" = customers.\"C_CUSTOMER_SK\"
+WHERE
+    store.\"S_STATE\" = 'TN' and cast(\"D_YEAR\" as int) = 2000
+),
+avocet as (
+SELECT
+    sum(pintail.\"returns_return_amount\") as \"total_returns\",
+    pintail.\"returns_store_id\" as \"returns_store_id\",
+    pintail.\"returns_customer_text_id\" as \"returns_customer_text_id\"
+FROM
+    pintail
+GROUP BY 
+    pintail.\"returns_customer_text_id\",
+    pintail.\"returns_store_id\"),
+leopard as (
+SELECT
+    avg(avocet.\"total_returns\") as \"avg_store_returns\",
+    avocet.\"returns_store_id\" as \"returns_store_id\"
+FROM
+    avocet
+GROUP BY 
+    avocet.\"returns_store_id\")
+SELECT
+    avocet.\"returns_customer_text_id\" as \"returns_customer_text_id\"
+FROM
+    avocet
+    INNER JOIN leopard on avocet.\"returns_store_id\" = leopard.\"returns_store_id\"
+WHERE
+    avocet.\"total_returns\" > ( 1.2 * leopard.\"avg_store_returns\" )
+
+ORDER BY 
+    avocet.\"returns_customer_text_id\" asc
+LIMIT (100)"""

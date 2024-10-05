@@ -14,7 +14,7 @@ from trilogy.core.models import (
 )
 from typing import List
 from trilogy.core.query_processor import process_query
-from langchain.tools import Tool
+from langchain.tools import Tool, StructuredTool
 from datetime import datetime
 import json
 from pydantic import BaseModel, field_validator
@@ -22,6 +22,12 @@ from trilogy.core.enums import ComparisonOperator, Ordering, Purpose, BooleanOpe
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.language_models import BaseLanguageModel
 from langchain_community.tools.wikidata.tool import WikidataAPIWrapper, WikidataQueryRun
+from trilogy.parsing.common import arbitrary_to_concept
+from trilogy.core.models import Function
+from trilogy.core.enums import FunctionType, Purpose
+from pydantic import BaseModel
+from typing import List, Optional, Dict
+
 
 langchain_chat_kwargs = {
     "temperature": 0,
@@ -57,10 +63,35 @@ class OrderResultV2(BaseModel):
     order: Ordering
 
 
+class Column(BaseModel):
+    name: str
+    function: Optional[str] = None
+
+    def __hash__(self):
+        return hash(self.name + str(self.function))
+
+
+def create_column(c: Column, environment: Environment):
+    if not c.function:
+        return environment.concepts[c.name]
+
+    root = environment.concepts[c.name]
+    return arbitrary_to_concept(
+        Function(
+            operator=FunctionType(c.function),
+            output_datatype=root.datatype,
+            output_purpose=Purpose.METRIC,
+            arguments=[environment.concepts[c.name]],
+        ),
+        namespace="local",
+        name=f"{c.name}_{c.function}",
+    )
+
+
 class InitialParseResponseV2(BaseModel):
     """The result of the initial parse"""
 
-    columns: list[str]
+    columns: list[Column]
     limit: Optional[int] = 100
     order: Optional[list[OrderResultV2]] = None
     filtering: Optional[list[FilterResultV2]] = None
@@ -107,9 +138,15 @@ def parse_filter(
     input_concepts: List[Concept], input: FilterResultV2
 ) -> Comparison | None:
     try:
-        concept = [x for x in input_concepts if x.address == input.column or x.name == input.column][0]
+        concept = [
+            x
+            for x in input_concepts
+            if x.address == input.column or x.name == input.column
+        ][0]
     except IndexError:
-        raise ValueError(f"Invalid filtering response {input}, could not be matched to concepts.")
+        raise ValueError(
+            f"Invalid filtering response {input}, could not be matched to concepts."
+        )
     return Comparison(
         left=concept,
         right=input.values[0] if len(input.values) == 1 else input.values,
@@ -141,24 +178,26 @@ def run_query_save_results(executor, query: str):
     executor.execute_query(query)
 
 
-def validate_query(query: str, environment: Environment):
-    parsed = InitialParseResponseV2.model_validate_json(query)
+def validate_query(query: dict, environment: Environment):
+    parsed = InitialParseResponseV2.model_validate(query)
     for x in parsed.columns:
-        if x not in environment.concepts:
-            return {"status": "invalid", "error": f"{x} in fields not in concepts"}
+        if x.name not in environment.concepts:
+            return {"status": "invalid", "error": f"{x.name} in fields not in concepts; check that you are using a fully qualified path"}
+        if x.function and x.function.lower() not in FunctionType.__members__:
+            return {"status": "invalid", "error": f"{x.function} in function not in FunctionType; check that you are using a valid option from {FunctionType.__members__}"}
     if parsed.order:
         for y in parsed.order:
             if y.column not in environment.concepts:
                 return {
                     "status": "invalid",
-                    "error": f"{y.column} in order not in concepts",
+                    "error": f"{y.column} in order not in concepts; check that you are using a fully qualified path",
                 }
     if parsed.filtering:
         for z in parsed.filtering:
             if z.column not in environment.concepts:
                 return {
                     "status": "invalid",
-                    "error": f"{z.column} in filtering not in concepts",
+                    "error": f"{z.column} in filtering not in concepts; check that you are using a fully qualified path",
                 }
     return {"status": "valid"}
 
@@ -193,16 +232,59 @@ def concept_to_string(concept: Concept):
 def get_fields(environment: Environment, search: str, *args, **kwargs) -> str:
     return json.dumps(
         {
-            "fields": [
-                concept_to_string(x)
+            "fields": {
+                concept_to_string(x): x.metadata.description
                 for x in environment.concepts.values()
                 if search.lower() in x.address.lower()
-            ]
+                and "__preql_internal" not in x.address
+            }
         }
     )
 
 
+class Filter(BaseModel):
+    column: str
+    values: List
+    operator: str
+
+
+class ValidateResponseInput(BaseModel):
+    columns: List[Column]
+    filtering: Optional[list[FilterResultV2]] = None
+    order: Optional[list[OrderResultV2]] = None
+    limit: Optional[int] = None
+
+
+
+def validate_response(
+    environment: Environment,
+    columns: List[Column],
+    filtering: List[Filter] = None,
+    order: Optional[list[OrderResultV2]] = None,
+    limit: int = None,
+):
+    # Your validation logic here, e.g., checking if all values are valid
+    # This is a dummy implementation for illustration
+    base = {"columns": columns}
+    if filtering:
+        base["filtering"] = filtering
+    if order:
+        base["order"] = order
+    if limit:
+        base["limit"] = limit
+    return validate_query(
+        base,
+        environment=environment,
+    )
+
+
 def sql_agent_tools(environment):
+    def validate_response_wrapper(**kwargs):
+        return validate_response(
+            environment=environment,
+            **kwargs,
+        )
+
     tools = [
         Tool.from_function(
             func=lambda x: get_model_description(x, environment),
@@ -210,18 +292,26 @@ def sql_agent_tools(environment):
             description="""
            Describe the database and general groupings of fields available.""",
         ),
-        Tool.from_function(
-            func=lambda x: validate_query(x, environment),
+        StructuredTool(
             name="validate_response",
             description="""
-            Check that your response is formatted properly and accurate before your final answer.
+            Check that a response is formatted properly and accurate before your final answer. Always call this!
             """,
+            func=validate_response_wrapper,
+            args_schema=ValidateResponseInput,
         ),
+        # Tool.from_function(
+        #     func=lambda x: validate_query(x, environment),
+        #     name="validate_response",
+        #     description="""
+        #     Check that a pure json string response is formatted properly and accurate before your final answer. Always call this!
+        #     """,
+        # ),
         Tool.from_function(
             func=lambda x: get_fields(environment, x),
             name="get_fields",
             description="""
-            The list of fields that can be selected that contain the input string. When looking for an aggregate (count, etc) prefer concepts with that string in the name.
+            The list of fields that can be selected. When looking for an aggregate (count, etc) prefer concepts with that string in the name. You must use the full name, including all namespaces.
             """,
         ),
         Tool.from_function(
@@ -242,7 +332,7 @@ def parse_query(
     debug: bool = False,
     log_info: bool = True,
 ):
-    system = """Thought Process: You are a data analyst asstant. Your job is to get questions from 
+    system = """Thought Process: You are a data analyst assistant. Your job is to get questions from 
     the analyst and tell them how to write a 
     SQL query to answer them in a step by step fashion. 
 
@@ -256,6 +346,8 @@ def parse_query(
     Your goal will be to create a summary of steps in JSON format for your analyst.
     The final information should be a VALID JSON blob with the following keys and values followed by a stopword: <EOD>:
     - columns: a list of columns
+    -- name: the name of the column to return or to pass into a function
+    -- function (optional): the function to apply to the column, one of [SUM, AVG, COUNT, MAX, MIN]. DO not include the function in the name. 
     - limit: a number of records to limit the results to, -1 if none specified
     - order: a list of columns to order the results by, with the option to specify ascending or descending
     -- column: a column name to order by
@@ -264,6 +356,7 @@ def parse_query(
     -- column: a column to filter on
     -- values: the value the column is filtered to
     -- operator: the comparison operator, one of "=", "in", "<", ">", "<=", "like", or ">=". A range, or between, should be expressed as two inequalities. 
+    
 
 
     You should always call the the validate_response tool on what you think is the final answer before returning the "Final Answer" action.
@@ -301,23 +394,56 @@ def parse_query(
     ```
     Observation: action result
     ... (repeat Thought/Action/Observation N times)
-    Thought: I know what to respond
+
+
+    An example series:
+
+    Question: Get orders by date and revenue for zip code 10245 in 2000
+    Thought: I should get the description of of the orders dataset
     Action:
     ```
     {{
         "action": "get_database_description",
-        "action_input": "some_dataset"
+        "action_input": "orders"
+    }}
+
+    Observation: <some description>
+    Thought: I should check my answer
+    Action:
+    ```
+    {{
+        "action": "validate_response",
+        "action_input": "{{
+        "columns": [
+            {{"name": "store.order.id"}},
+            {{"name": "store.order.revenue", "function": "SUM"}}
+        ],
+        "filtering": [
+            {{
+                "column": "store.order.customer.zip_code",
+                "values": [10245],
+                "operator": "="
+            }},
+            {{
+                "column": "store.order.date.year",
+                "values": [2000],
+                "operator": "="
+            }}
+        ],
+        "limit": 100
+    }}"
     }}
 
     Once you have used any tools (listed below) as needed, you will produce your final result in this format. After producing your
     final answer, you cannot take any more steps.
 
+    A final answer would look like this:
     {{
         "action": "Final Answer",
         "action_input": <VALID_JSON_SPEC_DEFINED_ABOVE>
     }}
 
-    Begin! Reminder to ALWAYS respond with a valid json blob of an action. Use tools if necessary. Respond directly if appropriate. Format is Action:```$JSON_BLOB```then Observation"""
+    Begin! Reminder to ALWAYS respond with a valid json blob of an action. Always use tools. Respond directly if appropriate. Format is Action:```$JSON_BLOB```then Observation"""
 
     human = """{input}
 
@@ -354,16 +480,42 @@ def parse_query(
         intermediate_results = InitialParseResponseV2.model_validate(output)
     else:
         raise ValueError("Unable to parse LLM response")
-    selection = [input_environment.concepts[x] for x in intermediate_results.selection]
+
+    def create_column(c: Column, environment: Environment):
+        if not c.function:
+            return environment.concepts[c.name]
+
+        from trilogy.parsing.common import arbitrary_to_concept
+        from trilogy.core.models import Function
+        from trilogy.core.enums import FunctionType, Purpose
+
+        root = environment.concepts[c.name]
+        new = arbitrary_to_concept(
+            Function(
+                operator=FunctionType(c.function.lower()),
+                output_datatype=root.datatype,
+                output_purpose=Purpose.METRIC,
+                arguments=[environment.concepts[c.name]],
+            ),
+            namespace="local",
+            name=f"{c.name}_{c.function}".lower(),
+        )
+        environment.add_concept(new)
+        return new
+
+    selection = [
+        create_column(x, input_environment) for x in intermediate_results.columns
+    ]
     order = parse_order(selection, intermediate_results.order or [])
 
     filtering = (
-        parse_filtering(selection, intermediate_results.filtering)
+        parse_filtering(
+            list(input_environment.concepts.values()), intermediate_results.filtering
+        )
         if intermediate_results.filtering
         else None
     )
-    # from trilogy.core.models import unique
-    # concepts = unique(concepts, 'address')
+
     if debug:
         print("Concepts found")
         for c in intermediate_results.columns:

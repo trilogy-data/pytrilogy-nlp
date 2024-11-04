@@ -431,8 +431,7 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> ConceptSelectionResponse:
-    ...
+) -> ConceptSelectionResponse: ...
 
 
 @overload
@@ -441,8 +440,7 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> InitialParseResponse:
-    ...
+) -> InitialParseResponse: ...
 
 
 @overload
@@ -451,8 +449,7 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> SemanticTokenResponse:
-    ...
+) -> SemanticTokenResponse: ...
 
 
 @overload
@@ -461,8 +458,7 @@ def run_prompt(  # type: ignore
     debug: bool = False,
     log_info: bool = True,
     session_uuid: uuid.UUID | None = None,
-) -> FilterRefinementResponse:
-    ...
+) -> FilterRefinementResponse: ...
 
 
 def run_prompt(

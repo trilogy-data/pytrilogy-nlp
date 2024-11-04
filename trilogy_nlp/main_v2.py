@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 from langchain.agents import create_structured_chat_agent, AgentExecutor
 from trilogy_nlp.main import safe_limit
 from trilogy.core.models import (
@@ -11,81 +11,170 @@ from trilogy.core.models import (
     OrderBy,
     OrderItem,
     WhereClause,
+    AggregateWrapper,
+    Function,
 )
 from typing import List
 from trilogy.core.query_processor import process_query
 from langchain.tools import Tool, StructuredTool
 from datetime import datetime
 import json
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, ValidationError
 from trilogy.core.enums import ComparisonOperator, Ordering, Purpose, BooleanOperator
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.language_models import BaseLanguageModel
-from langchain_community.tools.wikidata.tool import WikidataAPIWrapper, WikidataQueryRun
+from trilogy_nlp.tools import get_wiki_tool
 from trilogy.parsing.common import arbitrary_to_concept
-from trilogy.core.models import Function
-from trilogy.core.enums import FunctionType, Purpose
-from pydantic import BaseModel
+from trilogy.core.models import Function, DataType
+
+# from trilogy.core.constants import
+from trilogy.core.enums import (
+    FunctionType,
+    Purpose,
+    FunctionClass,
+    InfiniteFunctionArgs,
+)
 from typing import List, Optional, Dict
+from trilogy.parsing.common import arg_to_datatype
+from enum import Enum
 
 
-langchain_chat_kwargs = {
-    "temperature": 0,
-    "max_tokens": 4000,
-    "verbose": True,
-}
-chat_openai_model_kwargs = {
-    "top_p": 1.0,
-    "frequency_penalty": 0.0,
-    "presence_penalty": -1,
-}
+class NLPComparisonOperator(Enum):
+    BETWEEN = "between"
 
-
-class FilterResultV2(BaseModel):
-    """The result of the filter prompt"""
-
-    column: str
-    values: list[str | int | float | bool]
-    operator: ComparisonOperator
-
-    @field_validator("values", mode="plain")
     @classmethod
-    def values_validation(cls, v):
-        if isinstance(v, list):
-            return v
-        return [v]
+    def _missing_(cls, value):
+        if not isinstance(value, list) and " " in str(value):
+            value = str(value).split()
+        if isinstance(value, list):
+            processed = [str(v).lower() for v in value]
+            if processed == ["not", "in"]:
+                return ComparisonOperator.NOT_IN
+            if processed == ["is", "not"]:
+                return ComparisonOperator.IS_NOT
+            if value == ["in"]:
+                return ComparisonOperator.IN
+        return super()._missing_(str(value).lower())
+
+
+# hacky, but merge two enums
+NLPComparisonOperator._member_map_.update(ComparisonOperator._member_map_)
 
 
 class OrderResultV2(BaseModel):
     """The result of the order prompt"""
 
-    column: str
+    column_name: str
     order: Ordering
+
+
+class Literal(BaseModel):
+    value: str
+    type: str
+
+
+class Calculation(BaseModel):
+    arguments: list[Union["Column", Literal]]
+    operator: str
+    over: list["Column"] | None = None
 
 
 class Column(BaseModel):
     name: str
-    function: Optional[str] = None
+    calculation: Optional[Calculation] = None
 
     def __hash__(self):
-        return hash(self.name + str(self.function))
+        return hash(self.name + str(self.calculation))
+
+
+Calculation.model_rebuild()
+
+
+# class FilterResultV2(BaseModel):
+#     """The result of the filter prompt"""
+
+#     column: Column
+#     values: list[Literal | Column]
+#     operator: NLPComparisonOperator
+
+class NLPConditions(BaseModel):
+    left: Column | Literal
+    right: Column | Literal
+    operator: ComparisonOperator
+
+class NLPComparison(BaseModel):
+    left: NLPConditions
+    right: NLPConditions | "NLPComparison"
+    boolean: BooleanOperator
+
+class FilterResultV2(BaseModel):
+    """The result of the filter prompt"""
+    root: NLPComparison | NLPConditions
+
+NLPComparison.model_rebuild()
+
+def parse_object(ob, environment: Environment):
+    if isinstance(ob, Column):
+        return create_column(ob, environment)
+    return create_literal(ob)
+
+
+def parse_datatype(dtype: str):
+    mapping = {item.value.lower(): item for item in DataType}
+    mapping["integer"] = DataType.INTEGER
+    if dtype.lower() in mapping:
+        return mapping[dtype]
+    return DataType.STRING
+
+
+def create_literal(l: Literal) -> str | float | int | bool:
+    dtype = parse_datatype(l.type)
+
+    if dtype == DataType.STRING:
+        return l.value
+    if dtype == DataType.INTEGER:
+        return int(l.value)
+    if dtype == DataType.FLOAT:
+        return float(l.value)
+    if dtype == DataType.BOOL:
+        return bool(l.value)
+    return l.value
 
 
 def create_column(c: Column, environment: Environment):
-    if not c.function:
+    if not c.calculation:
         return environment.concepts[c.name]
 
-    root = environment.concepts[c.name]
-    return arbitrary_to_concept(
-        Function(
-            operator=FunctionType(c.function),
-            output_datatype=root.datatype,
-            output_purpose=Purpose.METRIC,
-            arguments=[environment.concepts[c.name]],
-        ),
-        namespace="local",
-        name=f"{c.name}_{c.function}",
+    operator = FunctionType(c.calculation.operator.lower())
+    if operator in FunctionClass.AGGREGATE_FUNCTIONS.value:
+        purpose = Purpose.METRIC
+    else:
+        purpose = Purpose.PROPERTY
+
+    args = [parse_object(c, environment) for c in c.calculation.arguments]
+    # TODO: use better helpers here
+    derivation = Function(
+        operator=FunctionType(c.calculation.operator.lower()),
+        output_datatype=arg_to_datatype(args[0]),
+        output_purpose=purpose,
+        arguments=[parse_object(c, environment) for c in c.calculation.arguments],
+        arg_count=InfiniteFunctionArgs,
     )
+    if c.calculation.over:
+        if purpose != Purpose.METRIC:
+            raise ValueError("Can only use over with aggregate functions.")
+        derivation = AggregateWrapper(
+            function=derivation,
+            by=[parse_object(c, environment) for c in c.calculation.over],
+        )
+
+    new = arbitrary_to_concept(
+        derivation,
+        namespace="local",
+        name=f"{c.name}".lower(),
+    )
+    environment.add_concept(new)
+    return new
 
 
 class InitialParseResponseV2(BaseModel):
@@ -94,7 +183,7 @@ class InitialParseResponseV2(BaseModel):
     columns: list[Column]
     limit: Optional[int] = 100
     order: Optional[list[OrderResultV2]] = None
-    filtering: Optional[list[FilterResultV2]] = None
+    filtering: Optional[FilterResultV2] = None
 
     @property
     def selection(self) -> list[str]:
@@ -106,12 +195,14 @@ class InitialParseResponseV2(BaseModel):
     @classmethod
     def filtering_validation(cls, v):
         if isinstance(v, dict):
-            return [FilterResultV2.model_validate(v)]
-        return [FilterResultV2.model_validate(x) for x in v]
+            return FilterResultV2.model_validate(v)
+        return FilterResultV2.model_validate(v)
 
     @field_validator("order", mode="plain")
     @classmethod
     def order_validation(cls, v):
+        if v is None:
+            return None
         if isinstance(v, dict):
             return [OrderResultV2.model_validate(v)]
         return [OrderResultV2.model_validate(x) for x in v]
@@ -129,37 +220,51 @@ def parse_order(
         return OrderBy(items=default_order)
     final = []
     for order in ordering:
-        concept = [x for x in input_concepts if x.address == order.column][0]
-        final.append(OrderItem(expr=concept, order=order.order))
-    return OrderBy(items=final)
-
-
-def parse_filter(
-    input_concepts: List[Concept], input: FilterResultV2
-) -> Comparison | None:
-    try:
-        concept = [
+        possible_matches = [
             x
             for x in input_concepts
-            if x.address == input.column or x.name == input.column
-        ][0]
-    except IndexError:
-        raise ValueError(
-            f"Invalid filtering response {input}, could not be matched to concepts."
-        )
-    return Comparison(
-        left=concept,
-        right=input.values[0] if len(input.values) == 1 else input.values,
-        operator=input.operator,
-    )
+            if x.address == order.column_name or x.name == order.column_name
+        ]
+        if not possible_matches:
+            has_lineage = [x for x in input_concepts if x.lineage]
+            possible_matches = [
+                x
+                for x in has_lineage
+                if any(
+                    [
+                        y.address == order.column_name
+                        for y in x.lineage.concept_arguments
+                    ]
+                )
+            ]
+        if possible_matches:
+            final.append(OrderItem(expr=possible_matches[0], order=order.order))
+    return OrderBy(items=final)
+
+def parse_filter_obj(inp: NLPComparison | NLPConditions | Column | Literal, environment:Environment):
+    if isinstance(inp, NLPComparison):
+        return Comparison(left=parse_filter_obj(inp.left, environment),
+                          right=parse_filter_obj(inp.right, environment),
+                          operator = inp.boolean)
+    elif isinstance(inp, NLPConditions):
+        return ComparisonOperator(left=parse_filter_obj(inp.left, environment),
+                          right=parse_filter_obj(inp.right, environment),
+                          operator = inp.operator)
+    elif isinstance(inp, (Column, Literal)):
+        return parse_object(inp, environment)
+
+def parse_filter(
+    input: FilterResultV2, environment: Environment
+) -> Comparison | Conditional | None:
+    return parse_filter_obj(input.root, environment)
 
 
 def parse_filtering(
-    input_concepts: List[Concept], filtering: List[FilterResultV2]
+    filtering: List[FilterResultV2], environment: Environment
 ) -> WhereClause | None:
     base = []
     for item in filtering:
-        parsed = parse_filter(input_concepts, item)
+        parsed = parse_filter(item, environment=environment)
         if parsed:
             base.append(parsed)
     if not base:
@@ -174,31 +279,75 @@ def parse_filtering(
     return WhereClause(conditional=left)
 
 
-def run_query_save_results(executor, query: str):
-    executor.execute_query(query)
+COLUMN_DESCRIPTION = """    A Column Object is json with two fields:
+    -- name: the field being referenced or a new derived name. If there is a calculation, this should always be a new derived name you came up with. 
+    -- calculation: An optional calculation object.
+"""
+
+
+def is_valid_function(name: str):
+    return name.lower() in [item.value for item in FunctionType]
+
+
+def invalid_operator_message(operator: str) -> str | None:
+    try:
+        operator = ComparisonOperator(operator)
+    except Exception as e:
+        return str(e)
+    return None
 
 
 def validate_query(query: dict, environment: Environment):
-    parsed = InitialParseResponseV2.model_validate(query)
+    try:
+        parsed = InitialParseResponseV2.model_validate(query)
+    except ValidationError:
+        return {"status": "invalid", "error": str(errors)}
+    errors = []
+
+    def validate_column(col: Column, context: str):
+        if col.name not in environment.concepts and not col.calculation:
+            errors.append(
+                f"{col.name} in {context} is not a valid field in the database; check that you are using the full exact column name (including an prefixes). If you want to apply a function, use a calculation - do not include it in the field name. Format reminder: {COLUMN_DESCRIPTION}",
+            )
+        if col.calculation and not is_valid_function(col.calculation.operator):
+            errors.append(
+                f"{col.calculation} does not use a valid operator; check that you are using a valid option from {FunctionType.__members__}",
+            )
+        if col.calculation:
+            for arg in col.calculation.arguments:
+                if isinstance(arg, Column):
+                    validate_column(arg, context)
+
     for x in parsed.columns:
-        if x.name not in environment.concepts:
-            return {"status": "invalid", "error": f"{x.name} in fields not in concepts; check that you are using a fully qualified path"}
-        if x.function and x.function.lower() not in FunctionType.__members__:
-            return {"status": "invalid", "error": f"{x.function} in function not in FunctionType; check that you are using a valid option from {FunctionType.__members__}"}
+        validate_column(x, "column selection")
+    select = {col.name for col in parsed.columns}
     if parsed.order:
         for y in parsed.order:
-            if y.column not in environment.concepts:
-                return {
-                    "status": "invalid",
-                    "error": f"{y.column} in order not in concepts; check that you are using a fully qualified path",
-                }
+            if y.column_name not in select:
+                errors.append(
+                    f"{y.column_name} in order not in select; check that you are using only values in the top level of the select.",
+                )
     if parsed.filtering:
-        for z in parsed.filtering:
-            if z.column not in environment.concepts:
-                return {
-                    "status": "invalid",
-                    "error": f"{z.column} in filtering not in concepts; check that you are using a fully qualified path",
-                }
+        root = parsed.filtering.root
+        for val in [root.left, root.right]:
+
+            if isinstance(val, Column):
+                validate_column(val, 'filtering')
+        # elif isinstance(root.right, )
+        # for z in parsed.filtering:
+        #     validate_column(z.column, "filtering")
+        #     if not z.values:
+        #         errors.append("A filtering argument must always have values")
+        #     for y in z.values:
+        #         if isinstance(y, Column):
+        #             validate_column(y, "filtering values")
+        #     operator_check = invalid_operator_message(z.operator)
+        #     if operator_check:
+        #         errors.append(
+        #             f"{z} operator is invalid: {operator_check}; make sure it is a valid option from {ComparisonOperator.__members__}",
+        #         )
+    if errors:
+        return {"status": "invalid", "error": str(errors)}
     return {"status": "valid"}
 
 
@@ -206,12 +355,10 @@ def get_model_description(query: str, environment: Environment):
     """
     Get the description of the dataset.
     """
-    datasources = ", ".join(
-        set([x.identifier for x in environment.datasources.values()])
-    )
+    datasources = [{"name": x.identifier} for x in environment.datasources.values()]
     return json.dumps(
         {
-            "description": f"database contains information about: {datasources}. No more specific information is available. Use the fields tool to get more specific information."
+            "description": f"Contains the following datasources: {datasources}. Use the get_fields tool with a name to get more specific information about any given one."
         }
     )
 
@@ -225,21 +372,51 @@ def get_today_date(query: str) -> str:
     return today_date_string
 
 
-def concept_to_string(concept: Concept):
+def concept_to_string(concept: Concept) -> str:
     return concept.address
 
 
 def get_fields(environment: Environment, search: str, *args, **kwargs) -> str:
     return json.dumps(
         {
-            "fields": {
-                concept_to_string(x): x.metadata.description
+            "fields": [
+                (
+                    {
+                        "name": concept_to_string(x),
+                        "description": x.metadata.description,
+                    }
+                    if x.metadata.description
+                    else {
+                        "name": concept_to_string(x),
+                    }
+                )
                 for x in environment.concepts.values()
-                if search.lower() in x.address.lower()
-                and "__preql_internal" not in x.address
-            }
+                if "__preql_internal" not in x.address
+                and not x.address.endswith(".count")
+            ]
         }
     )
+    if search in environment.datasources:
+        return json.dumps(
+            {
+                "fields": [
+                    (
+                        {
+                            "name": concept_to_string(x),
+                            "description": x.metadata.description,
+                        }
+                        if x.metadata.description
+                        else {
+                            "name": concept_to_string(x),
+                        }
+                    )
+                    for x in environment.datasources[search].output_concepts
+                    if "__preql_internal" not in x.address
+                    and not x.address.endswith(".count")
+                ]
+            }
+        )
+    return f"Invalid search; valid options {environment.datasources.keys()}"
 
 
 class Filter(BaseModel):
@@ -248,23 +425,15 @@ class Filter(BaseModel):
     operator: str
 
 
-class ValidateResponseInput(BaseModel):
-    columns: List[Column]
-    filtering: Optional[list[FilterResultV2]] = None
-    order: Optional[list[OrderResultV2]] = None
-    limit: Optional[int] = None
-
 
 
 def validate_response(
     environment: Environment,
     columns: List[Column],
-    filtering: List[Filter] = None,
+    filtering: Optional[FilterResultV2] = None,
     order: Optional[list[OrderResultV2]] = None,
     limit: int = None,
 ):
-    # Your validation logic here, e.g., checking if all values are valid
-    # This is a dummy implementation for illustration
     base = {"columns": columns}
     if filtering:
         base["filtering"] = filtering
@@ -286,19 +455,21 @@ def sql_agent_tools(environment):
         )
 
     tools = [
-        Tool.from_function(
-            func=lambda x: get_model_description(x, environment),
-            name="get_database_description",
-            description="""
-           Describe the database and general groupings of fields available.""",
-        ),
+        # Tool.from_function(
+        #     func=lambda x: get_model_description(x, environment),
+        #     name="get_database_description",
+        #     description="""
+        #    Share a directory of folders to look in for exact fields. Takes no arguments. These groupings are never referenced directly.""",
+        #    handle_tool_error='Call with empty string "", not {{}}.'
+        # ),
         StructuredTool(
             name="validate_response",
             description="""
-            Check that a response is formatted properly and accurate before your final answer. Always call this!
+            Check that a response is formatted properly and accurate before your final answer. Always call this with the complete final response before reporting a Final Answer!
             """,
             func=validate_response_wrapper,
-            args_schema=ValidateResponseInput,
+            args_schema=InitialParseResponseV2,
+            handle_tool_error=True,
         ),
         # Tool.from_function(
         #     func=lambda x: validate_query(x, environment),
@@ -311,7 +482,7 @@ def sql_agent_tools(environment):
             func=lambda x: get_fields(environment, x),
             name="get_fields",
             description="""
-            The list of fields that can be selected. When looking for an aggregate (count, etc) prefer concepts with that string in the name. You must use the full name, including all namespaces.
+            Array of json objects containing the names of actual fields that can be referenced, with a description if it exists. Fields always need to be referenced by exact name. Queries operate on fields only, by exact name.
             """,
         ),
         Tool.from_function(
@@ -325,55 +496,89 @@ def sql_agent_tools(environment):
     return tools
 
 
-def parse_query(
-    input_text: str,
-    input_environment: Environment,
-    llm: BaseLanguageModel,
-    debug: bool = False,
-    log_info: bool = True,
-):
+def llm_loop(
+    input_text: str, input_environment: Environment, llm, retries: int = 2
+) -> InitialParseResponseV2:
+    attempts = 0
+    exceptions = []
+    while attempts < retries:
+        try:
+            return _llm_loop(input_text, input_environment=input_environment, llm=llm)
+        except Exception as e:
+            # logger.info("Failed attempted llm loop")
+            exceptions.append(e)
+            raise e
+        attempts += 1
+    raise ValueError(
+        f"Was unable to process query, exceptions {[str(x) for x in exceptions]}"
+    )
+
+
+def _llm_loop(
+    input_text: str, input_environment: Environment, llm: BaseLanguageModel
+) -> InitialParseResponseV2:
     system = """Thought Process: You are a data analyst assistant. Your job is to get questions from 
     the analyst and tell them how to write a 
     SQL query to answer them in a step by step fashion. 
 
-    You can get information on the columns available and cannot create any new ones;
+    You can get information on the fields available and can use functions to derive new ones.
     do not worry about tables, the analyst will join them.
 
-    If you need additional contextual information that would not be in the database, use the wikimedia tool to get it.
+    Your goal will be to create a final output in JSON format for your analyst. Do your best to get to the most complete answer possible using all tools. 
 
-    Do your best to get to the most complete answer possible using all tools. 
+    A key structure used in your responses will be a Column, a recursive json structure containing a name and an optional calculation sub-structure.
+    If the Column does not have a calculation, the name must reference a name provided in the database already. 
 
-    Your goal will be to create a summary of steps in JSON format for your analyst.
+    A Column Object is json with two fields:
+    -- name: the field being referenced or a new derived name. If there is a calculation, this should always be a new derived name you came up with. 
+    -- calculation: An optional calculation object.
+
+    A Literal Object is json with these fields:
+    -- value: the literal value ('1', 'abc', etc), expressed as a string
+    -- type: the type of the value ('float', 'string', 'int', 'bool'), expressed as a string
+
+    A Calculation Object is json with three fields:
+    -- arguments: a list of Column or Literal objects
+    -- operator: a function to call with those arguments. [SUM, AVG, COUNT, MAX, MIN, etc], expressed as a string. A calculation object MUST have an operator. This cannot be a comparison operator.
+    -- over: an optional list of Column objects used when a calculation needs to happen over other columns (sum of revenue by state, for example)
+
+    A Comparison object is JSON with three fields:
+    -- left: A Column or Literal object
+    -- right: A Column or Literal object
+    -- operator: the comparison operator, one of "=", "in", "<", ">", "<=", "like", or ">=". Use two comparisons to represent a between
+
+    A Condition object is JSON with three fields. You can nest conditions to create complex filtering conditions.
+    -- left: Comparison Object or a Condition Object
+    -- right: Comparison Object or a Condition Object
+    -- boolean: 'and' or 'or' (lowercase, no quotes)
+
     The final information should be a VALID JSON blob with the following keys and values followed by a stopword: <EOD>:
-    - columns: a list of columns
-    -- name: the name of the column to return or to pass into a function
-    -- function (optional): the function to apply to the column, one of [SUM, AVG, COUNT, MAX, MIN]. DO not include the function in the name. 
+    - columns: a list of columns as Column objects
     - limit: a number of records to limit the results to, -1 if none specified
     - order: a list of columns to order the results by, with the option to specify ascending or descending
-    -- column: a column name to order by
-    -- order: the direction of ordering, "asc" or "desc"
-    - filtering: a list of all objects to filter the results on, where each object has the following keys:
-    -- column: a column to filter on
-    -- values: the value the column is filtered to
-    -- operator: the comparison operator, one of "=", "in", "<", ">", "<=", "like", or ">=". A range, or between, should be expressed as two inequalities. 
+        -- column_name: a column name to order by; must reference value in columns
+        -- order: the direction of ordering, "asc" or "desc"
+    - filtering: an object with a single argument
+        -- root: a Comparison object or a Condition object
+
     
-
-
     You should always call the the validate_response tool on what you think is the final answer before returning the "Final Answer" action.
     You have access to the following tools:
 
     {tools}
 
     Use a json blob to specify a tool by providing an action key (tool name) and an action_input key (tool input). 
+    
+
     You will get valuable information from using tools before producing your final answer.
 
-    Use as many tools as needed before producing the "Final Answer" action.
+    Use as many tools as needed, and always validate, before producing the "Final Answer" action.
 
     Valid "action" values: any of {tool_names} and, for your last result "Final Answer". 
-    Only return "Final Answer" when you are done with all work. Nnever set the action to 
-    "Final Answer" before you are done. 
+    Only return "Final Answer" when you are done with all work. Never set the action to 
+    "Final Answer" before you are done, and never set the action to final answer without some columns returned.
 
-    You should always call the the validate_response tool with your final answer before sending it to the CEO.
+    You should always call the the validate_response tool with your candidate answer before declaring it the final answer. Getting this right is crucial to the analyst keeping their job.
 
     Provide only ONE action per $JSON_BLOB, as shown:
 
@@ -383,6 +588,8 @@ def parse_query(
         "action_input": $INPUT
     }}
     ```
+
+    Action input is in JSON format, not as a JSON string blob (No escaping!)
 
     Follow this format in responses:
 
@@ -395,16 +602,15 @@ def parse_query(
     Observation: action result
     ... (repeat Thought/Action/Observation N times)
 
-
     An example series:
 
-    Question: Get orders by date and revenue for zip code 10245 in 2000
+    Question: Get the total revenue by order and customer id for stores in the zip code 1025 in the year 2000 where the total sales price of the items in the order was more than 100 dollars
     Thought: I should get the description of of the orders dataset
     Action:
     ```
     {{
         "action": "get_database_description",
-        "action_input": "orders"
+        "action_input": ""
     }}
 
     Observation: <some description>
@@ -413,25 +619,46 @@ def parse_query(
     ```
     {{
         "action": "validate_response",
-        "action_input": "{{
+        "action_input": {{
         "columns": [
             {{"name": "store.order.id"}},
-            {{"name": "store.order.revenue", "function": "SUM"}}
+            {{"name": "store.order.customer.id"}},
+            {{"name": "revenue_sum", 
+                "calculation": {{"operator":"SUM", "arguments": [{{ "name": "store.order.revenue"}}]
+            }} }}
         ],
-        "filtering": [
-            {{
-                "column": "store.order.customer.zip_code",
-                "values": [10245],
-                "operator": "="
-            }},
-            {{
-                "column": "store.order.date.year",
-                "values": [2000],
-                "operator": "="
-            }}
+        "filtering": {{
+            "root": {{
+                "left": {{
+                    "left": {{"name": "store.zip_code"}},
+                    "right": {{"value":"10245", "type":"integer"}},
+                    "operator": "="
+                }},
+                "boolean": "and",
+                "right": {{ 
+                    "left": {{
+                        "left": {{"name": "store.order.date.year" }},
+                        "right": {{"value":"2000", "type":"integer"}},
+                        "operator": "="
+                    }},
+                    boolean: "and",
+                    "right": {{
+                        "left": {{"name": "total_sales_price", 
+                        "calculation": {{"operator":"SUM", 
+                            "arguments": [{{ "name": "item.sales_price"}}],
+                            "over": [{{ "name": "store.order.id"}}]
+                            }},
+                        "right": {{"value":"100.0", "type":"float"}},
+                        "operator": ">"
+                            }}
+                        }}
+                }}
+        }},
+        "order": [
+            {{"column_name": "revenue_sum", "order": "desc"}},
         ],
         "limit": 100
-    }}"
+        }}
     }}
 
     Once you have used any tools (listed below) as needed, you will produce your final result in this format. After producing your
@@ -443,7 +670,9 @@ def parse_query(
         "action_input": <VALID_JSON_SPEC_DEFINED_ABOVE>
     }}
 
-    Begin! Reminder to ALWAYS respond with a valid json blob of an action. Always use tools. Respond directly if appropriate. Format is Action:```$JSON_BLOB```then Observation"""
+    You will only see the last few steps.
+
+    Begin! Reminder to ALWAYS respond with a valid json blob for an action. Always use tools. Format is Action:```$JSON_BLOB```then Observation"""
 
     human = """{input}
 
@@ -458,50 +687,41 @@ def parse_query(
             ("human", human),
         ]
     )
-    wiki = WikidataQueryRun(api_wrapper=WikidataAPIWrapper())  # type: ignore
-    wiki.description = (
-        "Look up information on a specific string from Wikipedia. Use to get context"
-    )
-    tools = sql_agent_tools(input_environment) + [wiki]
+
+    tools = sql_agent_tools(input_environment) + [get_wiki_tool()]
     chat_agent = create_structured_chat_agent(
         llm=llm,
         tools=tools,
         prompt=prompt,
     )
     agent_executor = AgentExecutor(
-        agent=chat_agent, tools=tools, verbose=True, handle_parsing_errors=True  # type: ignore
+        agent=chat_agent,
+        tools=tools,
+        verbose=True,
+        handle_parsing_errors=True,  # type: ignore,
+        trim_intermediate_steps=3,
     )
 
     result = agent_executor.invoke({"input": input_text})
     output = result["output"]
+    print("OUTPUT WAS")
+    print(output)
     if isinstance(output, str):
-        intermediate_results = InitialParseResponseV2.model_validate_json(output)
+        return InitialParseResponseV2.model_validate_json(output)
     elif isinstance(output, dict):
-        intermediate_results = InitialParseResponseV2.model_validate(output)
+        return InitialParseResponseV2.model_validate(output)
     else:
         raise ValueError("Unable to parse LLM response")
 
-    def create_column(c: Column, environment: Environment):
-        if not c.function:
-            return environment.concepts[c.name]
 
-        from trilogy.parsing.common import arbitrary_to_concept
-        from trilogy.core.models import Function
-        from trilogy.core.enums import FunctionType, Purpose
-
-        root = environment.concepts[c.name]
-        new = arbitrary_to_concept(
-            Function(
-                operator=FunctionType(c.function.lower()),
-                output_datatype=root.datatype,
-                output_purpose=Purpose.METRIC,
-                arguments=[environment.concepts[c.name]],
-            ),
-            namespace="local",
-            name=f"{c.name}_{c.function}".lower(),
-        )
-        environment.add_concept(new)
-        return new
+def parse_query(
+    input_text: str,
+    input_environment: Environment,
+    llm: BaseLanguageModel,
+    debug: bool = False,
+    log_info: bool = True,
+):
+    intermediate_results = llm_loop(input_text, input_environment, llm=llm)
 
     selection = [
         create_column(x, input_environment) for x in intermediate_results.columns
@@ -509,9 +729,7 @@ def parse_query(
     order = parse_order(selection, intermediate_results.order or [])
 
     filtering = (
-        parse_filtering(
-            list(input_environment.concepts.values()), intermediate_results.filtering
-        )
+        parse_filtering(intermediate_results.filtering, input_environment)
         if intermediate_results.filtering
         else None
     )

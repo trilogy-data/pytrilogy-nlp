@@ -1,8 +1,7 @@
 pytrilogy>=0.0.1.96
 promptimize
-pandas
 openai
 langchain-openai
-langchain-community
 mediawikiapi
 wikibase-rest-api-client
+tomli-w

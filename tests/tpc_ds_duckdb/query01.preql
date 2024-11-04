@@ -1,5 +1,3 @@
-import customer as customer;
-import store as store;
 import store_returns as returns;
 
 

@@ -13,9 +13,9 @@ logger.addHandler(StreamHandler())
 # grab the model we want to parse
 environment = models["bigquery.usa_names"]
 
-environment.concepts[
-    "state"
-].metadata.description = "The common two character abbreviation for a state, such as MA for Massachusetts or CT for Connecticut."
+environment.concepts["state"].metadata.description = (
+    "The common two character abbreviation for a state, such as MA for Massachusetts or CT for Connecticut."
+)
 
 
 processed_query = parse_query(

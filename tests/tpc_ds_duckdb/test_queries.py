@@ -8,6 +8,7 @@ from trilogy_nlp.main import parse_query
 from trilogy.core.models import Environment, Concept, DataType
 from trilogy.core.enums import Purpose
 from trilogy_nlp.main_v2 import build_query as build_query_v2
+from trilogy_nlp.environment import build_env_and_imports
 
 working_path = Path(__file__).parent
 
@@ -23,7 +24,8 @@ def helper(text: str, llm):
     # environment.add_file_import(
     #     path=str(working_path / "store_returns"), alias="returns"
     # )
-    environment.parse("""import store_returns as store_returns;""")
+    # environment.parse("""import store_sales as store_sales;""")
+    environment = build_env_and_imports(text, working_path=working_path, llm=llm)
     processed_query = build_query_v2(
         input_text=text,
         input_environment=environment,
@@ -61,8 +63,9 @@ def run_query(engine: Executor, idx: int, llm):
         assert False, f"Row count mismatch: {len(base_results)} != {len(comp_results)}"
     for qidx, row in enumerate(base_results):
         for cell in row:
-            assert cell in comp_results[qidx],  f"Could not find value {cell} in row {qidx} (expected row v test): {row} != {comp_results[qidx]}"
-
+            assert (
+                cell in comp_results[qidx]
+            ), f"Could not find value {cell} in row {qidx} (expected row v test): {row} != {comp_results[qidx]}"
 
     with open(working_path / f"zquery{idx:02d}.log", "w") as f:
         f.write(
@@ -91,8 +94,8 @@ def test_two(engine):
     run_query(engine, 2)
 
 
-def test_three(engine):
-    run_query(engine, 3)
+def test_three(engine, llm):
+    run_query(engine, 3, llm)
 
 
 @pytest.mark.skip(reason="Is duckdb correct??")
@@ -104,65 +107,65 @@ def test_four(engine):
 def test_five(engine):
     run_query(engine, 5)
 
-
-def test_six(engine):
-    query = run_query(engine, 6)
+@pytest.mark.cli
+def test_six(engine, llm):
+    query = run_query(engine, 6, llm)
     assert len(query) < 7100, query
 
 
-def test_seven(engine):
-    run_query(engine, 7)
+def test_seven(engine, llm):
+    run_query(engine, 7, llm)
 
 
-def test_eight(engine):
-    run_query(engine, 8)
+def test_eight(engine, llm):
+    run_query(engine, 8, llm)
 
 
-def test_ten(engine):
-    query = run_query(engine, 10)
+def test_ten(engine, llm):
+    query = run_query(engine, 10, llm)
     assert len(query) < 7000, query
 
 
-def test_twelve(engine):
-    run_query(engine, 12)
+def test_twelve(engine, llm):
+    run_query(engine, 12, llm)
 
 
-def test_fifteen(engine):
-    run_query(engine, 15)
+def test_fifteen(engine, llm):
+    run_query(engine, 15, llm)
 
 
-def test_sixteen(engine):
-    query = run_query(engine, 16)
+def test_sixteen(engine, llm):
+    query = run_query(engine, 16, llm)
     # size gating
     assert len(query) < 16000, query
 
 
-def test_twenty(engine):
-    _ = run_query(engine, 20)
+def test_twenty(engine, llm):
+    _ = run_query(engine, 20, llm)
     # size gating
     # assert len(query) < 6000, query
 
 
-def test_twenty_one(engine):
-    _ = run_query(engine, 21)
+def test_twenty_one(engine, llm):
+    _ = run_query(engine, 21, llm)
     # size gating
     # assert len(query) < 6000, query
 
 
-def test_twenty_four(engine):
-    _ = run_query(engine, 24)
+def test_twenty_four(engine, llm):
+    _ = run_query(engine, 24, llm)
     # size gating
     # assert len(query) < 6000, query
 
 
-def test_twenty_five(engine):
-    query = run_query(engine, 25)
+def test_twenty_five(engine, llm):
+    query = run_query(engine, 25, llm)
     # size gating
     assert len(query) < 10000, query
 
 
-def test_twenty_six(engine):
-    _ = run_query(engine, 26)
+def test_twenty_six(engine, llm):
+    _ = run_query(engine, 26, llm)
     # size gating
     # assert len(query) < 6000, query
 

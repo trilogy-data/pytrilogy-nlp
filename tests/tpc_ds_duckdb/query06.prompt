@@ -1,0 +1,9 @@
+
+Using store_sales information and item information, list all the states and the customer count
+for customers who bought items with a sales price at least 1.2 times the average sales price of all other items in the same category
+in january of 2001.
+
+Note that the average price filter should be based on taking the average list price across a category for all items from the item dataset and include
+all items, not just those sold in stores.
+
+Order results by the customer count asc, then the state ascending

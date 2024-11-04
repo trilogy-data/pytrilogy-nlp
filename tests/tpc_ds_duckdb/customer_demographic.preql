@@ -1,8 +1,8 @@
 
 key id int;
-property id.gender string;
-property id.marital_status string;
-property id.education_status string;
+property id.gender string; # Capital string. M for Male, F for femail.
+property id.marital_status string; # Single string value. M for married, S for single.
+property id.education_status string; # String with enum list; College;
 property id.purchase_estimate string;
 property id.credit_rating string;
 property id.dependent_count int;

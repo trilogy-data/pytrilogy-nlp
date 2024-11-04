@@ -2,17 +2,19 @@
 
 Natural language interface for generating SQL queries via a Trilogy data model.
 
-Trilogy is easier for a large language model (LLM) to interact with as it requires only identifying which
-objects in the data model best match the question, rather than generating arbitrary SQL from scratch.
-The extra data encoded in the semantic model for query generation reduces common sources of LLM errors. 
+Most of the value in a SQL statement comes from the column selection, transformation, and filtering.
+
+Joins, table selection, group bys are all opportunitites to introduce errors. 
+
+Trilogy is easier SQL for humans because it separates out those parts in the language into a reusable metadata
+layer; the exact same benefits apply to an LLM.
+
+The extra data encoded in the semantic model, and the significantly reduced target space for generation reduce common sources of LLM errors. 
 
 This makes it more testable and less prone to hallucination than generating SQL directly. 
 
-Requires setting the following environment variables
-- OPENAI_API_KEY
-- OPENAI_MODEL
+Trilogy-NLP is built on the common NLP backend (langchain, etc) and supports configurable backends.
 
-Recommended to use "gpt-3.5-turbo" or higher as the model.
 
 ## Examples
 
@@ -49,7 +51,7 @@ for row in results:
 
 ## Don't Expecct Perfection
 
-Results are non-determistic and may not always be accurate.
+Results are non-determistic; review the generated trilogy to make sure it maches your expectations. 
 
 ```sql
 # generated from prompt: What is Taylor Swift's birthday? How many questions were asked on that day in 2020?
@@ -62,13 +64,9 @@ WHERE
     question.creation_date.year = 1989
 ORDER BY
     question.count desc,
-
     question.count desc
-
 LIMIT 100;
 ```
-
-
 
 ## Setting Up Your Environment
 
@@ -76,3 +74,12 @@ Recommend that you work in a virtual environment with requirements from both req
 tests (surprise). 
 
 trilogy-nlp is python 3.10+
+
+## Open AI Config
+Requires setting the following environment variables
+- OPENAI_API_KEY
+- OPENAI_MODEL
+
+Recommended to use "gpt-3.5-turbo" or higher as the model.
+
+## LlamaFile Config

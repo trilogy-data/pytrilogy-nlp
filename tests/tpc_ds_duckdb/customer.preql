@@ -12,7 +12,7 @@ key address_id int;
 property address_id.address_id_string string;
 property address_id.street string;
 property address_id.city string;
-property address_id.state string?;
+property address_id.state string?; # Two character US state code as string, ex VT, TX, ME, AK.
 property address_id.zip string;
 property address_id.county string;
 property address_id.country string;

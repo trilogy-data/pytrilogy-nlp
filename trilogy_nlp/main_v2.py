@@ -118,7 +118,6 @@ def parse_object(ob, environment: Environment):
         return create_column(ob, environment)
     return create_literal(ob)
 
-
 def parse_datatype(dtype: str):
     mapping = {item.value.lower(): item for item in DataType}
     mapping["integer"] = DataType.INTEGER

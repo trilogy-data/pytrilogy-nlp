@@ -1,4 +1,4 @@
-import date as date;
+import date as closure_date;
 
 key id int;
 property id.text_id string;
@@ -20,7 +20,7 @@ property id.market int;
 datasource store (
     S_STORE_SK: id,
     S_STORE_ID: text_id,
-    S_CLOSED_DATE: date.id,
+    S_CLOSED_DATE_SK: closure_date.id,
     S_STORE_NAME: name,
     S_EMPLOYEES: employees,
     S_FLOOR_SPACE: floor_space,

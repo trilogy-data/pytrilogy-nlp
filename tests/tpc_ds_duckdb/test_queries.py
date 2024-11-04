@@ -1,30 +1,16 @@
 from pathlib import Path
-
-from trilogy import Executor
 import pytest
 from datetime import datetime
 import tomli_w
-from trilogy_nlp.main import parse_query
-from trilogy.core.models import Environment, Concept, DataType
-from trilogy.core.enums import Purpose
+from trilogy import Executor
 from trilogy_nlp.main_v2 import build_query as build_query_v2
 from trilogy_nlp.environment import build_env_and_imports
+from trilogy_nlp.constants import logger
 
 working_path = Path(__file__).parent
 
 
 def helper(text: str, llm):
-    # grab the model we want to parse
-    environment = Environment(working_path=working_path)
-    # import customer as customer;
-    # import store as store;
-    # import store_returns as returns;
-    # environment.add_file_import(path=str(working_path / "customer"), alias="customer")
-    # environment.add_file_import(path=str(working_path / "store"), alias="store")
-    # environment.add_file_import(
-    #     path=str(working_path / "store_returns"), alias="returns"
-    # )
-    # environment.parse("""import store_sales as store_sales;""")
     environment = build_env_and_imports(text, working_path=working_path, llm=llm)
     processed_query = build_query_v2(
         input_text=text,
@@ -45,6 +31,8 @@ def run_query(engine: Executor, idx: int, llm):
     parse_start = datetime.now()
     engine.environment = env
     query = engine.generate_sql(processed_query)[-1]
+    logger.info(query)
+    print(query)
     parse_time = datetime.now() - parse_start
     exec_start = datetime.now()
     results = engine.execute_raw_sql(query)
@@ -107,63 +95,75 @@ def test_four(engine):
 def test_five(engine):
     run_query(engine, 5)
 
+
 @pytest.mark.cli
 def test_six(engine, llm):
     query = run_query(engine, 6, llm)
     assert len(query) < 7100, query
 
 
+@pytest.mark.skip(reason="No prompt yet")
 def test_seven(engine, llm):
     run_query(engine, 7, llm)
 
 
+@pytest.mark.skip(reason="No prompt yet")
 def test_eight(engine, llm):
     run_query(engine, 8, llm)
 
 
+@pytest.mark.skip(reason="No prompt yet")
 def test_ten(engine, llm):
     query = run_query(engine, 10, llm)
     assert len(query) < 7000, query
 
 
+@pytest.mark.skip(reason="No prompt yet")
 def test_twelve(engine, llm):
     run_query(engine, 12, llm)
 
 
+@pytest.mark.skip(reason="No prompt yet")
 def test_fifteen(engine, llm):
     run_query(engine, 15, llm)
 
 
+@pytest.mark.skip(reason="No prompt yet")
 def test_sixteen(engine, llm):
     query = run_query(engine, 16, llm)
     # size gating
     assert len(query) < 16000, query
 
 
+@pytest.mark.skip(reason="No prompt yet")
 def test_twenty(engine, llm):
     _ = run_query(engine, 20, llm)
     # size gating
     # assert len(query) < 6000, query
 
 
+@pytest.mark.skip(reason="No prompt yet")
 def test_twenty_one(engine, llm):
     _ = run_query(engine, 21, llm)
     # size gating
     # assert len(query) < 6000, query
 
 
+@pytest.mark.skip(reason="No prompt yet")
 def test_twenty_four(engine, llm):
     _ = run_query(engine, 24, llm)
     # size gating
     # assert len(query) < 6000, query
 
 
+@pytest.mark.skip(reason="No prompt yet")
 def test_twenty_five(engine, llm):
     query = run_query(engine, 25, llm)
     # size gating
     assert len(query) < 10000, query
 
 
+@pytest.mark.skip(reason="No prompt yet")
 def test_twenty_six(engine, llm):
     _ = run_query(engine, 26, llm)
     # size gating

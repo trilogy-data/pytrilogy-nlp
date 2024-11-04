@@ -25,16 +25,15 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.language_models import BaseLanguageModel
 from trilogy_nlp.tools import get_wiki_tool
 from trilogy.parsing.common import arbitrary_to_concept
-from trilogy.core.models import Function, DataType
+from trilogy.core.models import DataType
+from langchain_core.tools import ToolException
 
 # from trilogy.core.constants import
 from trilogy.core.enums import (
     FunctionType,
-    Purpose,
     FunctionClass,
     InfiniteFunctionArgs,
 )
-from typing import List, Optional, Dict
 from trilogy.parsing.common import arg_to_datatype
 from enum import Enum
 
@@ -97,26 +96,32 @@ Calculation.model_rebuild()
 #     values: list[Literal | Column]
 #     operator: NLPComparisonOperator
 
+
 class NLPConditions(BaseModel):
     left: Column | Literal
     right: Column | Literal
     operator: ComparisonOperator
 
-class NLPComparison(BaseModel):
-    left: NLPConditions
-    right: NLPConditions | "NLPComparison"
+
+class NLPComparisonGroup(BaseModel):
+    values: list[Union[NLPConditions, "NLPComparisonGroup"]]
     boolean: BooleanOperator
+
 
 class FilterResultV2(BaseModel):
     """The result of the filter prompt"""
-    root: NLPComparison | NLPConditions
 
-NLPComparison.model_rebuild()
+    root: NLPComparisonGroup
+
+
+NLPComparisonGroup.model_rebuild()
+
 
 def parse_object(ob, environment: Environment):
     if isinstance(ob, Column):
         return create_column(ob, environment)
     return create_literal(ob)
+
 
 def parse_datatype(dtype: str):
     mapping = {item.value.lower(): item for item in DataType}
@@ -184,12 +189,6 @@ class InitialParseResponseV2(BaseModel):
     order: Optional[list[OrderResultV2]] = None
     filtering: Optional[FilterResultV2] = None
 
-    @property
-    def selection(self) -> list[str]:
-        filtering = [f.column for f in self.filtering] if self.filtering else []
-        order = [x.column for x in self.order] if self.order else []
-        return list(set(self.columns + filtering + order))
-
     @field_validator("filtering", mode="plain")
     @classmethod
     def filtering_validation(cls, v):
@@ -197,14 +196,14 @@ class InitialParseResponseV2(BaseModel):
             return FilterResultV2.model_validate(v)
         return FilterResultV2.model_validate(v)
 
-    @field_validator("order", mode="plain")
-    @classmethod
-    def order_validation(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return [OrderResultV2.model_validate(v)]
-        return [OrderResultV2.model_validate(x) for x in v]
+    # @field_validator("order", mode="plain")
+    # @classmethod
+    # def order_validation(cls, v):
+    #     if v is None:
+    #         return None
+    #     if isinstance(v, dict):
+    #         return [OrderResultV2.model_validate(v)]
+    #     return [OrderResultV2.model_validate(x) for x in v]
 
 
 def parse_order(
@@ -240,17 +239,30 @@ def parse_order(
             final.append(OrderItem(expr=possible_matches[0], order=order.order))
     return OrderBy(items=final)
 
-def parse_filter_obj(inp: NLPComparison | NLPConditions | Column | Literal, environment:Environment):
-    if isinstance(inp, NLPComparison):
-        return Comparison(left=parse_filter_obj(inp.left, environment),
-                          right=parse_filter_obj(inp.right, environment),
-                          operator = inp.boolean)
+
+def parse_filter_obj(
+    inp: NLPComparisonGroup | NLPConditions | Column | Literal, environment: Environment
+):
+    if isinstance(inp, NLPComparisonGroup):
+        children = [parse_filter_obj(x, environment) for x in inp.values]
+
+        def generate_conditional(list: list, operator):
+            if not list:
+                return True
+            left = list.pop(0)
+            right = generate_conditional(list, operator)
+            return Conditional(left=left, right=right, operator=operator)
+
+        return generate_conditional(children, operator=inp.boolean)
     elif isinstance(inp, NLPConditions):
-        return ComparisonOperator(left=parse_filter_obj(inp.left, environment),
-                          right=parse_filter_obj(inp.right, environment),
-                          operator = inp.operator)
+        return Comparison(
+            left=parse_filter_obj(inp.left, environment),
+            right=parse_filter_obj(inp.right, environment),
+            operator=inp.operator,
+        )
     elif isinstance(inp, (Column, Literal)):
         return parse_object(inp, environment)
+
 
 def parse_filter(
     input: FilterResultV2, environment: Environment
@@ -259,13 +271,12 @@ def parse_filter(
 
 
 def parse_filtering(
-    filtering: List[FilterResultV2], environment: Environment
+    filtering: FilterResultV2, environment: Environment
 ) -> WhereClause | None:
     base = []
-    for item in filtering:
-        parsed = parse_filter(item, environment=environment)
-        if parsed:
-            base.append(parsed)
+    parsed = parse_filter(filtering, environment=environment)
+    if parsed:
+        base.append(parsed)
     if not base:
         return None
     if len(base) == 1:
@@ -296,21 +307,32 @@ def invalid_operator_message(operator: str) -> str | None:
     return None
 
 
+class QueryContext(Enum):
+    SELECT = "SELECT"
+    FILTER = "FILTER"
+    ORDER = "ORDER"
+
+
 def validate_query(query: dict, environment: Environment):
     try:
         parsed = InitialParseResponseV2.model_validate(query)
-    except ValidationError:
-        return {"status": "invalid", "error": str(errors)}
+    except ValidationError as e:
+        return {"status": "invalid", "error": str(e)}
     errors = []
+    select = {col.name for col in parsed.columns}
 
-    def validate_column(col: Column, context: str):
-        if col.name not in environment.concepts and not col.calculation:
+    def validate_column(col: Column, context: QueryContext):
+        if (
+            col.name not in environment.concepts
+            and not col.calculation
+            and (context == QueryContext.SELECT or col.name not in select)
+        ):
             errors.append(
                 f"{col.name} in {context} is not a valid field in the database; check that you are using the full exact column name (including an prefixes). If you want to apply a function, use a calculation - do not include it in the field name. Format reminder: {COLUMN_DESCRIPTION}",
             )
         if col.calculation and not is_valid_function(col.calculation.operator):
             errors.append(
-                f"{col.calculation} does not use a valid operator; check that you are using a valid option from {FunctionType.__members__}",
+                f"{col.calculation} does not use a valid operator; check that you are using a valid option from {[x for x in FunctionType.__members__.keys() if x not in ['ALIAS', "CUSTOM"]] }. If the column requires no transformation, drop the calculation field.",
             )
         if col.calculation:
             for arg in col.calculation.arguments:
@@ -318,8 +340,8 @@ def validate_query(query: dict, environment: Environment):
                     validate_column(arg, context)
 
     for x in parsed.columns:
-        validate_column(x, "column selection")
-    select = {col.name for col in parsed.columns}
+        validate_column(x, QueryContext.SELECT)
+
     if parsed.order:
         for y in parsed.order:
             if y.column_name not in select:
@@ -328,10 +350,14 @@ def validate_query(query: dict, environment: Environment):
                 )
     if parsed.filtering:
         root = parsed.filtering.root
-        for val in [root.left, root.right]:
-
+        for val in root.values:
             if isinstance(val, Column):
-                validate_column(val, 'filtering')
+                validate_column(val, QueryContext.FILTER)
+            elif isinstance(val, NLPConditions):
+                for subval in [val.left, val.right]:
+                    if isinstance(subval, Column):
+                        validate_column(subval, QueryContext.FILTER)
+
         # elif isinstance(root.right, )
         # for z in parsed.filtering:
         #     validate_column(z.column, "filtering")
@@ -424,8 +450,6 @@ class Filter(BaseModel):
     operator: str
 
 
-
-
 def validate_response(
     environment: Environment,
     columns: List[Column],
@@ -433,7 +457,12 @@ def validate_response(
     order: Optional[list[OrderResultV2]] = None,
     limit: int = None,
 ):
+
     base = {"columns": columns}
+    if not columns:
+        raise ToolException(
+            "A answer to validate should include at least one column. Call this tool with your entire predicted final answer."
+        )
     if filtering:
         base["filtering"] = filtering
     if order:
@@ -444,6 +473,15 @@ def validate_response(
         base,
         environment=environment,
     )
+
+
+class ValidateResponseInterface(BaseModel):
+    # deliberately permissive interface
+    # so that we can handle the error inside the tool
+    columns: List[dict]
+    filtering: Optional[dict] = (None,)
+    order: Optional[list[dict]] = (None,)
+    limit: int = None
 
 
 def sql_agent_tools(environment):
@@ -467,7 +505,7 @@ def sql_agent_tools(environment):
             Check that a response is formatted properly and accurate before your final answer. Always call this with the complete final response before reporting a Final Answer!
             """,
             func=validate_response_wrapper,
-            args_schema=InitialParseResponseV2,
+            args_schema=ValidateResponseInterface,
             handle_tool_error=True,
         ),
         # Tool.from_function(
@@ -516,7 +554,7 @@ def llm_loop(
 def _llm_loop(
     input_text: str, input_environment: Environment, llm: BaseLanguageModel
 ) -> InitialParseResponseV2:
-    system = """Thought Process: You are a data analyst assistant. Your job is to get questions from 
+    system = """You are a data analyst assistant. Your job is to get questions from 
     the analyst and tell them how to write a 
     SQL query to answer them in a step by step fashion. 
 
@@ -529,8 +567,8 @@ def _llm_loop(
     If the Column does not have a calculation, the name must reference a name provided in the database already. 
 
     A Column Object is json with two fields:
-    -- name: the field being referenced or a new derived name. If there is a calculation, this should always be a new derived name you came up with. 
-    -- calculation: An optional calculation object.
+    -- name: the field being referenced or a new derived name. If there is a calculation, this should always be a new derived name you came up with. That name must be unique; a calculation cannot reference an input with the same name as the output concept.
+    -- calculation: An optional calculation object. Only include a calculation if you need to create a new column because there is not a good match from the existing field list. 
 
     A Literal Object is json with these fields:
     -- value: the literal value ('1', 'abc', etc), expressed as a string
@@ -546,9 +584,8 @@ def _llm_loop(
     -- right: A Column or Literal object
     -- operator: the comparison operator, one of "=", "in", "<", ">", "<=", "like", or ">=". Use two comparisons to represent a between
 
-    A Condition object is JSON with three fields. You can nest conditions to create complex filtering conditions.
-    -- left: Comparison Object or a Condition Object
-    -- right: Comparison Object or a Condition Object
+    A ConditionGroup object is JSON with two fields used to create boolean filtering constructs. You can nest ConditionGroups to create complex filtering conditions.
+    -- values: a list if Comparison Objects or ConditionGroups
     -- boolean: 'and' or 'or' (lowercase, no quotes)
 
     The final information should be a VALID JSON blob with the following keys and values followed by a stopword: <EOD>:
@@ -558,7 +595,7 @@ def _llm_loop(
         -- column_name: a column name to order by; must reference value in columns
         -- order: the direction of ordering, "asc" or "desc"
     - filtering: an object with a single argument
-        -- root: a Comparison object or a Condition object
+        -- root: a ConditionGroup object
 
     
     You should always call the the validate_response tool on what you think is the final answer before returning the "Final Answer" action.
@@ -628,30 +665,28 @@ def _llm_loop(
         ],
         "filtering": {{
             "root": {{
-                "left": {{
+                "values": [{{
                     "left": {{"name": "store.zip_code"}},
                     "right": {{"value":"10245", "type":"integer"}},
                     "operator": "="
                 }},
-                "boolean": "and",
-                "right": {{ 
-                    "left": {{
-                        "left": {{"name": "store.order.date.year" }},
-                        "right": {{"value":"2000", "type":"integer"}},
-                        "operator": "="
-                    }},
-                    boolean: "and",
-                    "right": {{
-                        "left": {{"name": "total_sales_price", 
-                        "calculation": {{"operator":"SUM", 
-                            "arguments": [{{ "name": "item.sales_price"}}],
-                            "over": [{{ "name": "store.order.id"}}]
-                            }},
-                        "right": {{"value":"100.0", "type":"float"}},
-                        "operator": ">"
-                            }}
+                {{
+                    "left": {{"name": "store.order.date.year" }},
+                    "right": {{"value":"2000", "type":"integer"}},
+                    "operator": "="
+                }},
+                {{
+                    "left": {{"name": "total_sales_price", 
+                    "calculation": {{"operator":"SUM", 
+                        "arguments": [{{ "name": "item.sales_price"}}],
+                        "over": [{{ "name": "store.order.id"}}]
+                        }},
+                    "right": {{"value":"100.0", "type":"float"}},
+                    "operator": ">"
                         }}
                 }}
+                ],
+                "boolean": "and"
         }},
         "order": [
             {{"column_name": "revenue_sum", "order": "desc"}},
@@ -660,6 +695,48 @@ def _llm_loop(
         }}
     }}
 
+    Nested Column objects with calculations can create complex derivations. This can be useful for filtering.
+
+    For example, to create a filter condition for "countries with an average monthly rainfall of 2x the average on their continent", the filtering clause might look like.
+
+    You don't need to use an over clause for a top level calculation if it's over the other columns you've selected.
+
+    Ex: for customer, total_revenue, just sum revenue. 
+
+    {{
+            "root": {{
+                "values": [
+                    {{
+                    "left": {{
+                        "name": "avg_monthly_rainfall",
+                        "calculation: {{
+                            "operator": "AVG",
+                            "arguments: [{{"name": "country.monthly_rainfall"}}],
+                            "over": [{{"name": "country.name"}}]
+                                }}
+                            }},
+                    "right":  {{
+                        "name": "continent_2x",
+                        "calculation: {{
+                            "operator": "MULTIPLY",
+                            "arguments: [
+                                    {{"value":"2", "type":"integer"}}, 
+                                    {{"name": "continent_avg_monthly"
+                                        "calculation" : {{
+                                            "operator": "AVG",
+                                            "arguments": ["country.monthly_rainfall"],
+                                            "over": [{{"name": "country.continent"}}]
+                                        }}
+                                    }}],
+
+                                }}
+                            }},
+                    "operator": ">"
+                }},
+                ],
+                "boolean": "and"
+        }}
+    To filter over a calculation with a scalar, multiple that in 
     Once you have used any tools (listed below) as needed, you will produce your final result in this format. After producing your
     final answer, you cannot take any more steps.
 
@@ -700,17 +777,24 @@ def _llm_loop(
         handle_parsing_errors=True,  # type: ignore,
         trim_intermediate_steps=3,
     )
-
-    result = agent_executor.invoke({"input": input_text})
-    output = result["output"]
-    print("OUTPUT WAS")
-    print(output)
-    if isinstance(output, str):
-        return InitialParseResponseV2.model_validate_json(output)
-    elif isinstance(output, dict):
-        return InitialParseResponseV2.model_validate(output)
-    else:
-        raise ValueError("Unable to parse LLM response")
+    attempts = 0
+    while attempts < 3:
+        result = agent_executor.invoke({"input": input_text})
+        output = result["output"]
+        print("OUTPUT WAS")
+        print(output)
+        try:
+            if isinstance(output, str):
+                return InitialParseResponseV2.model_validate_json(output)
+            elif isinstance(output, dict):
+                return InitialParseResponseV2.model_validate(output)
+            else:
+                raise ValueError("Unable to parse LLM response")
+        except Exception as e:
+            # inject in new context on failed answer
+            input_text += f"Error on your final answer: {str(e)}. Try Again!"
+        attempts += 1
+    raise ValueError(f"Unable to get parseable response after {attempts} attempts")
 
 
 def parse_query(

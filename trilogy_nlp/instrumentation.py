@@ -1,5 +1,2 @@
-
-
-
-class EventTracker():
+class EventTracker:
     pass

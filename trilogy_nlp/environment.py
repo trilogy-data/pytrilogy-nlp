@@ -2,35 +2,15 @@ from pathlib import Path
 from langchain_core.language_models import BaseLanguageModel
 from trilogy import Environment
 from pydantic import BaseModel
-from typing import Optional
 from langchain.agents import create_structured_chat_agent, AgentExecutor
-from trilogy_nlp.main import safe_limit
 from trilogy.core.models import (
-    Concept,
     Environment,
-    ProcessedQuery,
-    SelectStatement,
-    Comparison,
-    Conditional,
-    OrderBy,
-    OrderItem,
-    WhereClause,
 )
-from typing import List
-from trilogy.core.query_processor import process_query
 from langchain.tools import Tool, StructuredTool
-from datetime import datetime
-import json
-from pydantic import BaseModel, field_validator
-from trilogy.core.enums import ComparisonOperator, Ordering, Purpose, BooleanOperator
+from trilogy.core.enums import Purpose
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.language_models import BaseLanguageModel
 from trilogy_nlp.tools import get_wiki_tool
-from trilogy.parsing.common import arbitrary_to_concept
-from trilogy.core.models import Function
-from trilogy.core.enums import FunctionType, Purpose, Modifier
-from pydantic import BaseModel
-from typing import List, Optional, Dict
+from trilogy.core.enums import Modifier
 
 # from trilogy.core.exceptions import Import
 
@@ -262,7 +242,7 @@ def build_env_and_imports(
         if not concept.purpose == Purpose.KEY:
             continue
         pre_namespace_root = k.split(".", 1)[1]
-        if not "." in pre_namespace_root:
+        if "." not in pre_namespace_root:
             continue
         if pre_namespace_root in base.concepts:
             base.merge_concept(

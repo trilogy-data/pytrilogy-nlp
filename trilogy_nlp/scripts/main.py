@@ -1,18 +1,21 @@
-from click import Path, argument, option, group, pass_context, UNPROCESSED
+from click import Path, argument, group, UNPROCESSED
 from trilogy.dialect.enums import Dialects
 from pathlib import Path as PathlibPath
 import os
 from sys import path as sys_path
 from trilogy.parsing.render import Renderer
 import datetime
+
 # handles development cases
 nb_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 sys_path.insert(0, nb_path)
 
 renderer = Renderer()
 
+
 def generate_executor(dialect):
     pass
+
 
 def run_query(engine: Executor, idx: int, llm):
 
@@ -62,6 +65,7 @@ def run_query(engine: Executor, idx: int, llm):
         )
     return query
 
+
 @group()
 def main():
     """Parent CLI"""
@@ -80,7 +84,6 @@ def main():
 def dbt(preql: str | Path, output_path: Path, dialect: str, conn_args):
     edialect = Dialects(dialect)
     preqlt: PathlibPath = PathlibPath(str(preql))
-    
 
 
 if __name__ == "__main__":

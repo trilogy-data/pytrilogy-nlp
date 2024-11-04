@@ -16,8 +16,8 @@ class NLPEngine(object):
         provider: Provider,
         model: str | None = None,
         api_key: str | None = None,
-        cache:CacheType | None = None,
-        cache_kwargs:dict| None = None
+        cache: CacheType | None = None,
+        cache_kwargs: dict | None = None,
     ):
         self.provider = provider
         self.debug = False
@@ -26,12 +26,14 @@ class NLPEngine(object):
         self.llm = self.create_llm()
         self.cache = self.create_cache(cache, cache_kwargs or {})
 
-    def create_cache(self, cache:CacheType, cache_kwargs:dict):
+    def create_cache(self, cache: CacheType, cache_kwargs: dict):
         if cache == CacheType.SQLLITE:
             from langchain.cache import SQLiteCache
+
             cache = SQLiteCache(**cache_kwargs)
         elif cache == CacheType.MEMORY:
             from langchain.cache import InMemoryCache
+
             cache = InMemoryCache()
         else:
             return None

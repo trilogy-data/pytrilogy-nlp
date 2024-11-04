@@ -27,6 +27,7 @@ from trilogy_nlp.tools import get_wiki_tool
 from trilogy.parsing.common import arbitrary_to_concept
 from trilogy.core.models import DataType
 from langchain_core.tools import ToolException
+from trilogy.core.exceptions import UndefinedConceptException
 
 # from trilogy.core.constants import
 from trilogy.core.enums import (
@@ -37,6 +38,9 @@ from trilogy.core.enums import (
 from trilogy.parsing.common import arg_to_datatype
 from enum import Enum
 
+
+# llm will not know how to use these; better not to include
+COMPLICATED_FUNCTIONS = ['ALIAS', "CUSTOM", "GROUP"]
 
 class NLPComparisonOperator(Enum):
     BETWEEN = "between"
@@ -120,7 +124,7 @@ NLPComparisonGroup.model_rebuild()
 def parse_object(ob, environment: Environment):
     if isinstance(ob, Column):
         return create_column(ob, environment)
-    return create_literal(ob)
+    return create_literal(ob, environment)
 
 
 def parse_datatype(dtype: str):
@@ -131,7 +135,12 @@ def parse_datatype(dtype: str):
     return DataType.STRING
 
 
-def create_literal(l: Literal) -> str | float | int | bool:
+def create_literal(l: Literal, environment:Environment) -> str | float | int | bool:
+    # LLMs might get formats mixed up; if they gave us a column, hydrate it here.
+    # and carry on
+    if l.value in environment.concepts:
+        return create_column(Column(name=l.value), environment)
+
     dtype = parse_datatype(l.type)
 
     if dtype == DataType.STRING:
@@ -161,7 +170,7 @@ def create_column(c: Column, environment: Environment):
         operator=FunctionType(c.calculation.operator.lower()),
         output_datatype=arg_to_datatype(args[0]),
         output_purpose=purpose,
-        arguments=[parse_object(c, environment) for c in c.calculation.arguments],
+        arguments=args,
         arg_count=InfiniteFunctionArgs,
     )
     if c.calculation.over:
@@ -244,13 +253,16 @@ def parse_filter_obj(
     inp: NLPComparisonGroup | NLPConditions | Column | Literal, environment: Environment
 ):
     if isinstance(inp, NLPComparisonGroup):
+        print('handlign comparison group')
         children = [parse_filter_obj(x, environment) for x in inp.values]
-
-        def generate_conditional(list: list, operator):
+        print(children)
+        def generate_conditional(list: list, operator:BooleanOperator):
             if not list:
                 return True
             left = list.pop(0)
+            print(left)
             right = generate_conditional(list, operator)
+            print(right)
             return Conditional(left=left, right=right, operator=operator)
 
         return generate_conditional(children, operator=inp.boolean)
@@ -262,6 +274,8 @@ def parse_filter_obj(
         )
     elif isinstance(inp, (Column, Literal)):
         return parse_object(inp, environment)
+    else:
+        raise SyntaxError(inp)
 
 
 def parse_filter(
@@ -275,10 +289,18 @@ def parse_filtering(
 ) -> WhereClause | None:
     base = []
     parsed = parse_filter(filtering, environment=environment)
+    print('parsed debug')
+    print(parsed)
+    return WhereClause(conditional=parsed)
+    if filtering.root and not parsed:
+        raise SyntaxError
     if parsed:
+        print(parsed)
         base.append(parsed)
     if not base:
         return None
+    print('filtering debug')
+    print(base)
     if len(base) == 1:
         return WhereClause(conditional=base[0])
     left: Conditional | Comparison = base.pop()
@@ -317,7 +339,7 @@ def validate_query(query: dict, environment: Environment):
     try:
         parsed = InitialParseResponseV2.model_validate(query)
     except ValidationError as e:
-        return {"status": "invalid", "error": str(e)}
+        return {"status": "invalid", "error": validation_error_to_string(e)}
     errors = []
     select = {col.name for col in parsed.columns}
 
@@ -327,12 +349,23 @@ def validate_query(query: dict, environment: Environment):
             and not col.calculation
             and (context == QueryContext.SELECT or col.name not in select)
         ):
-            errors.append(
-                f"{col.name} in {context} is not a valid field in the database; check that you are using the full exact column name (including an prefixes). If you want to apply a function, use a calculation - do not include it in the field name. Format reminder: {COLUMN_DESCRIPTION}",
-            )
+            try:
+                environment.concepts[col.name]
+            except UndefinedConceptException as e:
+                recommendations = e.suggestions
+            
+            if recommendations:
+                errors.append(
+                f"{col.name} in {context} is not a valid field in the database; check that you are using the full exact column name (including an prefixes). Did you mean one of {recommendations}?",
+              
+                )
+            else:
+                errors.append(
+                    f"{col.name} in {context} is not a valid field in the database; check that you are using the full exact column name (including an prefixes). If you want to apply a function, use a calculation - do not include it in the field name. Format reminder: {COLUMN_DESCRIPTION}. You may need to list fields again if you are not sure of the correct value.",
+                )
         if col.calculation and not is_valid_function(col.calculation.operator):
             errors.append(
-                f"{col.calculation} does not use a valid operator; check that you are using a valid option from {[x for x in FunctionType.__members__.keys() if x not in ['ALIAS', "CUSTOM"]] }. If the column requires no transformation, drop the calculation field.",
+                f"{col.calculation} does not use a valid operator; check that you are using a valid option from {[x for x in FunctionType.__members__.keys() if x not in COMPLICATED_FUNCTIONS] }. If the column requires no transformation, drop the calculation field.",
             )
         if col.calculation:
             for arg in col.calculation.arguments:
@@ -449,7 +482,16 @@ class Filter(BaseModel):
     values: List
     operator: str
 
-
+def validation_error_to_string(e:ValidationError):
+        # Here, `validation_error.errors()` will have the full info
+    for x in e.errors():
+        print(x)
+    # inject in new context on failed answer
+    raw_error = str(e)
+    #TODO: better pydantic error parsing
+    if 'filtering.root.' in raw_error:
+        raw_error = 'Syntax error in your filtering clause. Confirm it matches the required format and is valid JSON with brackets in right locations. Comparisons need a left, right, operator, etc, and Columns and Literal formats are very specific'
+    return raw_error
 def validate_response(
     environment: Environment,
     columns: List[Column],
@@ -778,7 +820,7 @@ def _llm_loop(
         trim_intermediate_steps=3,
     )
     attempts = 0
-    while attempts < 3:
+    while attempts < 2:
         result = agent_executor.invoke({"input": input_text})
         output = result["output"]
         print("OUTPUT WAS")
@@ -790,9 +832,16 @@ def _llm_loop(
                 return InitialParseResponseV2.model_validate(output)
             else:
                 raise ValueError("Unable to parse LLM response")
-        except Exception as e:
+        except ValidationError as e:
+            # Here, `validation_error.errors()` will have the full info
+            for x in e.errors():
+                print(x)
             # inject in new context on failed answer
-            input_text += f"Error on your final answer: {str(e)}. Try Again!"
+            raw_error = str(e)
+            #TODO: better pydantic error parsing
+            if 'filtering.root.' in raw_error:
+                raw_error = 'Syntax error in your filtering clause. Confirm it matches the required format. Comparisons need a left and right, etc, and Columns and Literal formats are very specific'
+            input_text += f"Error on your final answer: {raw_error}. Try Again!"
         attempts += 1
     raise ValueError(f"Unable to get parseable response after {attempts} attempts")
 
@@ -817,10 +866,14 @@ def parse_query(
         else None
     )
 
+
     if debug:
         print("Concepts found")
         for c in intermediate_results.columns:
             print(c)
+        if intermediate_results.filtering:
+            print('filtering')
+            print(str(intermediate_results.filtering))
         if intermediate_results.order:
             print("Ordering")
             for o in intermediate_results.order:

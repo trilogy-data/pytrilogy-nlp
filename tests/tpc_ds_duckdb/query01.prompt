@@ -2,7 +2,7 @@ Using store_returns info, output the customer text id for customers and how much
 
 Only show customer.text_ids where the total returns for that customer_id were more than 1.2 times the average return value per store ID. 
 
-(hint: get average returns by store ID)
+(hint: get average returns by store ID, then multiple that by 1.2 before comparing to the total returns)
 
 Sort results by the customer text_id, asc
 

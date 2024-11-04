@@ -165,7 +165,13 @@ def create_column(c: Column, environment: Environment):
         purpose = Purpose.PROPERTY
 
     args = [parse_object(c, environment) for c in c.calculation.arguments]
+    base_name = c.name
+    # LLMs tend to reference the same name for the output of a calculation
+    # if that's so, force the outer concept a new name
+    if any(isinstance(z, Concept) and z.name == base_name for z in args ):
+        base_name = f'{c.name}_deriv'
     # TODO: use better helpers here
+    # this duplicates a bit of pytrilogy logic
     derivation = Function(
         operator=FunctionType(c.calculation.operator.lower()),
         output_datatype=arg_to_datatype(args[0]),
@@ -180,7 +186,7 @@ def create_column(c: Column, environment: Environment):
             function=derivation,
             by=[parse_object(c, environment) for c in c.calculation.over],
         )
-
+    
     new = arbitrary_to_concept(
         derivation,
         namespace="local",
@@ -365,7 +371,7 @@ def validate_query(query: dict, environment: Environment):
                 )
         if col.calculation and not is_valid_function(col.calculation.operator):
             errors.append(
-                f"{col.calculation} does not use a valid operator; check that you are using a valid option from {[x for x in FunctionType.__members__.keys() if x not in COMPLICATED_FUNCTIONS] }. If the column requires no transformation, drop the calculation field.",
+                f"{col.name} Column definition does not use a valid operator; check that you are using ONLY a valid option from this list: {[x for x in FunctionType.__members__.keys() if x not in COMPLICATED_FUNCTIONS] }. If the column requires no transformation, drop the calculation field.",
             )
         if col.calculation:
             for arg in col.calculation.arguments:

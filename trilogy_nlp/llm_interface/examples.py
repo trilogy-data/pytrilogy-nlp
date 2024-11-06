@@ -1,8 +1,3 @@
-
-
-
-
-
 FILTERING_EXAMPLE = {
     "root": {
         "values": [

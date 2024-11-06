@@ -5,7 +5,6 @@ import os
 from sys import path as sys_path
 from trilogy.parsing.render import Renderer
 import datetime
-import tomli_w
 from trilogy.dialect.enums import Dialects  # noqa
 from trilogy.executor import Executor
 from trilogy_nlp.environment import helper

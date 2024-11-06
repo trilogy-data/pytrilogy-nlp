@@ -1,5 +1,4 @@
 from trilogy_nlp.main_v2 import (
-    InitialParseResponseV2,
     validate_response,
     Column,
     FilterResultV2,

@@ -1,11 +1,6 @@
-from typing import Optional, Union
-from langchain.agents import create_structured_chat_agent, AgentExecutor
-from trilogy_nlp.main import safe_limit
 from trilogy.core.models import (
     Concept,
     Environment,
-    ProcessedQuery,
-    SelectStatement,
     Comparison,
     Conditional,
     OrderBy,
@@ -14,48 +9,26 @@ from trilogy.core.models import (
     AggregateWrapper,
     Function,
     Metadata,
-    SelectItem,
-    HavingClause,
 )
 from typing import List
-from trilogy.core.query_processor import process_query
-from langchain.tools import Tool, StructuredTool
-import json
-from pydantic import BaseModel, field_validator, ValidationError
-from trilogy.core.enums import ComparisonOperator, Ordering, Purpose, BooleanOperator
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.language_models import BaseLanguageModel
-from trilogy_nlp.tools import get_wiki_tool, get_today_date
+from trilogy.core.enums import Ordering, Purpose, BooleanOperator
 from trilogy.parsing.common import arbitrary_to_concept
 from trilogy.core.models import DataType
-from langchain_core.tools import ToolException
-from trilogy.core.exceptions import UndefinedConceptException
-from trilogy.core.processing.utility import (
-    is_scalar_condition,
-    decompose_condition,
-    sort_select_output,
-)
 
 from trilogy_nlp.llm_interface.parsing import (
     parse_filtering,
     parse_order,
-    parse_col,
     create_column,
 )
 from trilogy_nlp.llm_interface.models import (
-    InitialParseResponseV2,
     Column,
-    NLPComparisonOperator,
     NLPConditions,
     NLPComparisonGroup,
     FilterResultV2,
     OrderResultV2,
     Literal,
 )
-from trilogy_nlp.llm_interface.tools import sql_agent_tools
-from trilogy_nlp.llm_interface.examples import FILTERING_EXAMPLE
 from trilogy_nlp.llm_interface.constants import (
-    COMPLICATED_FUNCTIONS,
     MAGIC_GENAI_DESCRIPTION,
 )
 
@@ -66,12 +39,6 @@ from trilogy.core.enums import (
     InfiniteFunctionArgs,
 )
 from trilogy.parsing.common import arg_to_datatype
-from enum import Enum
-from trilogy_nlp.llm_interface.examples import COLUMN_DESCRIPTION
-from trilogy_nlp.llm_interface.validation import (
-    validate_response,
-    ValidateResponseInterface,
-)
 
 
 def parse_object(ob, environment: Environment):

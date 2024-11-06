@@ -68,9 +68,10 @@ def llm_loop(
     -- over: an optional list of Column objects used when a calculation needs to happen over other columns (sum of revenue by state, for example)
 
     A Comparison object is JSON with three fields:
+    -- operator: the comparison operator, one of "=", "in", "<", ">", "<=", "like", or ">=". Use two comparisons to represent a between
     -- left: A Column or Literal object
     -- right: A Column or Literal object
-    -- operator: the comparison operator, one of "=", "in", "<", ">", "<=", "like", or ">=". Use two comparisons to represent a between
+    
 
     A ConditionGroup object is JSON with two fields used to create boolean filtering constructs. You can nest ConditionGroups to create complex filtering conditions.
     -- values: a list if Comparison Objects or ConditionGroups
@@ -152,24 +153,27 @@ def llm_loop(
         "filtering": {{
             "root": {{
                 "values": [{{
+                    "operator": "="
                     "left": {{"name": "store.zip_code"}},
                     "right": {{"value":"10245", "type":"integer"}},
-                    "operator": "="
+                    
                 }},
                 {{
+                    "operator": "="
                     "left": {{"name": "store.order.date.year" }},
                     "right": {{"value":"2000", "type":"integer"}},
-                    "operator": "="
+                    
                 }},
-                {{
-                    "left": {{"name": "sales_price_sum_by_store", 
-                    "calculation": {{"operator":"SUM", 
-                        "arguments": [{{ "name": "item.sales_price"}}],
-                        "over": [{{ "name": "store.order.id"}}]
-                        }}
-                    }},
-                    "right": {{"value":"100.0", "type":"float"}},
+                {{  
                     "operator": ">"
+                    "left": {{"name": "sales_price_sum_by_store", 
+                        "calculation": {{"operator":"SUM", 
+                            "arguments": [{{ "name": "item.sales_price"}}],
+                            "over": [{{ "name": "store.order.id"}}]
+                            }}
+                        }},
+                    "right": {{"value":"100.0", "type":"float"}},
+                    
                     
                 }}
                 ],
@@ -198,6 +202,7 @@ def llm_loop(
             "root": {{
                 "values": [
                     {{
+                    "operator": ">",
                     "left": {{
                         "name": "avg_monthly_rainfall",
                         "calculation": {{
@@ -221,9 +226,8 @@ def llm_loop(
                                     }}],
 
                                 }}
-                            }},
-                    "operator": ">"
-                }},
+                        }}
+                }}
                 ],
                 "boolean": "and"
         }}
@@ -273,7 +277,7 @@ def llm_loop(
     attempts = 0
     if additional_context:
         input_text += additional_context
-    e = None
+    error = None
     while attempts < 2:
         result = agent_executor.invoke({"input": input_text})
         output = result["output"]
@@ -300,14 +304,17 @@ def llm_loop(
                     + raw_error
                 )
             input_text += f"IMPORTANT: this is your second attempt - your last attempt errored parsing your final answer: {raw_error}. Remember to use the validation tool to check your work!"
+        except NotImplementedError as e:
+            raise e
 
         except Exception as e:
+            error = e
             print("Failed to parse LLM response")
             print(e)
             input_text += f"IMPORTANT: this is your second attempt - your last attempt errored parsing your final answer: {str(e)}. Remember to use the validation tool to check your work!"
         attempts += 1
-    if e:
-        raise e
+    if error:
+        raise error
     raise ValueError(f"Unable to get parseable response after {attempts} attempts")
 
 def ir_to_query(intermediate_results:InitialParseResponseV2, input_environment:Environment, debug:bool = True):
@@ -362,10 +369,14 @@ def ir_to_query(intermediate_results:InitialParseResponseV2, input_environment:E
         where_clause=WhereClause(conditional=where) if where else None,
         having_clause=HavingClause(conditional=having) if having else None,
     )
-    replacements = {}
     if having:
-        for x in having.concept_arguments:
-            if not any(x.address == item.content.address for item in query.selection):
+        for x in filtering.concept_arguments:
+            def get_address(z):
+                if isinstance(z, Concept):
+                    return z.address
+                elif isinstance(z, ConceptTransform):
+                    return z.output.address
+            if not any(x.address ==  get_address(item.content) for item in query.selection):
                 if is_local_derived(x):
                     content = ConceptTransform(function=x.lineage, output=x)
                 else:
@@ -389,20 +400,16 @@ def ir_to_query(intermediate_results:InitialParseResponseV2, input_environment:E
             item.content = input_environment.concepts[
                 item.content.address
             ].with_grain(item.content.grain)
-    # remap selection
-    selection = [SelectItem(content=replacements.get(x.address, x)) for x in selection]
-    query.selection = selection
     print('select debug')
     for x in query.selection:
         print(type(x.content))
 
-    
 
     from trilogy.parsing.render import Renderer
 
     print("RENDERED QUERY")
     print(Renderer().to_string(query))
-    raise ValueError
+    raise NotImplementedError
     return query
 
 def parse_query(

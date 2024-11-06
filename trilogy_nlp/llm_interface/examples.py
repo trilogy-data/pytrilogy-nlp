@@ -2,6 +2,7 @@ FILTERING_EXAMPLE = {
     "root": {
         "values": [
             {
+                "operator": ">",
                 "left": {
                     "name": "avg_monthly_rainfall",
                     "calculation": {
@@ -26,9 +27,8 @@ FILTERING_EXAMPLE = {
                             },
                         ],
                     },
-                },
-                "operator": ">",
-            },
+                }   
+            }
         ],
         "boolean": "and",
     }

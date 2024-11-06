@@ -1,8 +1,10 @@
 Using store_returns info, output the customer text id for customers and how much they returned to stores the state of Tennessee in 2000. Return at most 100 rows.
 
-Only show customer.text_ids where the total returns for that customer_id were more than 1.2 times the average return value per store ID. 
+Only show customer.text_ids where the total returns for that customer_id were more than 1.2 times the average return value per store ID. Don't forget the state and year restriction!
 
-(hint: get average returns by store ID, then multiple that by 1.2 before comparing to the total returns)
+(hint: get average returns by store ID, then multiple that by 1.2 before comparing to the total returns.)
+
+Make sure to filter to 2000 by the date of the return.
 
 Sort results by the customer text_id, asc
 

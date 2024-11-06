@@ -1,40 +1,39 @@
 query_id = 3
-parse_time = 0.003678
-exec_time = 0.18886
-comp_time = 0.159504
-gen_length = 1593
+parse_time = 0.014353
+exec_time = 0.095523
+comp_time = 1.992675
+gen_length = 1498
 generated_sql = """
 
 WITH 
-cheerful as (
+wakeful as (
 SELECT
-    store_sales_store_sales.\"SS_EXT_SALES_PRICE\" as \"store_sales_ext_sales_price\",
-    store_sales_item_items.\"I_BRAND_ID\" as \"store_sales_item_brand_id\",
     store_sales_item_items.\"I_BRAND\" as \"store_sales_item_brand_name\",
+    store_sales_item_items.\"I_BRAND_ID\" as \"store_sales_item_brand_id\",
+    store_sales_item_items.\"I_ITEM_SK\" as \"store_sales_item_id\",
+    store_sales_store_sales.\"SS_EXT_SALES_PRICE\" as \"store_sales_ext_sales_price\",
     store_sales_store_sales.\"SS_TICKET_NUMBER\" as \"store_sales_ticket_number\",
-    item_items.\"I_ITEM_SK\" as \"item_id\",
     year(cast(\"D_DATE\" as date)) as \"store_sales_date_date_year\"
 FROM
-    memory.item as item_items
-    LEFT OUTER JOIN memory.store_sales as store_sales_store_sales on item_items.\"I_ITEM_SK\" = store_sales_store_sales.\"SS_ITEM_SK\"
-    LEFT OUTER JOIN memory.item as store_sales_item_items on item_items.\"I_ITEM_SK\" = store_sales_item_items.\"I_ITEM_SK\"
-    LEFT OUTER JOIN memory.date_dim as store_sales_date_date on store_sales_store_sales.\"SS_SOLD_DATE_SK\" = store_sales_date_date.\"D_DATE_SK\"
+    memory.store_sales as store_sales_store_sales
+    INNER JOIN memory.item as store_sales_item_items on store_sales_store_sales.\"SS_ITEM_SK\" = store_sales_item_items.\"I_ITEM_SK\"
+    INNER JOIN memory.date_dim as store_sales_date_date on store_sales_store_sales.\"SS_SOLD_DATE_SK\" = store_sales_date_date.\"D_DATE_SK\"
 WHERE
-    store_sales_item_items.\"I_MANUFACT_ID\" = 128 and month(cast(\"D_DATE\" as date)) = 11 and True
+    month(cast(\"D_DATE\" as date)) = 11 and store_sales_item_items.\"I_MANUFACT_ID\" = 128 and True
 )
 SELECT
-    cheerful.\"store_sales_item_brand_id\" as \"store_sales_item_brand_id\",
-    cheerful.\"store_sales_item_brand_name\" as \"store_sales_item_brand_name\",
-    cheerful.\"store_sales_date_date_year\" as \"store_sales_date_date_year\",
-    sum(cheerful.\"store_sales_ext_sales_price\") as \"total_sales\"
+    wakeful.\"store_sales_item_brand_id\" as \"store_sales_item_brand_id\",
+    wakeful.\"store_sales_item_brand_name\" as \"store_sales_item_brand_name\",
+    wakeful.\"store_sales_date_date_year\" as \"store_sales_date_date_year\",
+    sum(wakeful.\"store_sales_ext_sales_price\") as \"total_sales\"
 FROM
-    cheerful
+    wakeful
 GROUP BY 
-    cheerful.\"store_sales_item_brand_id\",
-    cheerful.\"store_sales_item_brand_name\",
-    cheerful.\"store_sales_date_date_year\"
+    wakeful.\"store_sales_date_date_year\",
+    wakeful.\"store_sales_item_brand_id\",
+    wakeful.\"store_sales_item_brand_name\"
 ORDER BY 
-    cheerful.\"store_sales_date_date_year\" asc,
-    sum(cheerful.\"store_sales_ext_sales_price\") desc,
-    cheerful.\"store_sales_item_brand_id\" asc
+    wakeful.\"store_sales_date_date_year\" asc,
+    sum(wakeful.\"store_sales_ext_sales_price\") desc,
+    wakeful.\"store_sales_item_brand_id\" asc
 LIMIT (100)"""

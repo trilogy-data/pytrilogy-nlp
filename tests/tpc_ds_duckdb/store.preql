@@ -12,10 +12,11 @@ property id.geography_class string;
 property id.market_manager string;
 property id.tax_percentage float;
 property id.county string;
-property id.state string; # two digit state code; eg MA/TN/CA
+property id.state string; # two digit state code; eg MA/TN/CA. 
 property id.city string;
 property id.zip string;
 property id.market int;
+
 
 datasource store (
     S_STORE_SK: id,

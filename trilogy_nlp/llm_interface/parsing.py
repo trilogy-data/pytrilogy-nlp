@@ -1,0 +1,280 @@
+from typing import Optional, Union
+from langchain.agents import create_structured_chat_agent, AgentExecutor
+from trilogy_nlp.main import safe_limit
+from trilogy.core.models import (
+    Concept,
+    Environment,
+    ProcessedQuery,
+    SelectStatement,
+    Comparison,
+    Conditional,
+    OrderBy,
+    OrderItem,
+    WhereClause,
+    AggregateWrapper,
+    Function,
+    Metadata,
+    SelectItem,
+    HavingClause,
+)
+from typing import List
+from trilogy.core.query_processor import process_query
+from langchain.tools import Tool, StructuredTool
+import json
+from pydantic import BaseModel, field_validator, ValidationError
+from trilogy.core.enums import ComparisonOperator, Ordering, Purpose, BooleanOperator
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.language_models import BaseLanguageModel
+from trilogy_nlp.tools import get_wiki_tool, get_today_date
+from trilogy.parsing.common import arbitrary_to_concept
+from trilogy.core.models import DataType
+from langchain_core.tools import ToolException
+from trilogy.core.exceptions import UndefinedConceptException
+from trilogy.core.processing.utility import (
+    is_scalar_condition,
+    decompose_condition,
+    sort_select_output,
+)
+
+from trilogy_nlp.llm_interface.parsing import (
+    parse_filtering,
+    parse_order,
+    parse_col,
+    create_column,
+)
+from trilogy_nlp.llm_interface.models import (
+    InitialParseResponseV2,
+    Column,
+    NLPComparisonOperator,
+    NLPConditions,
+    NLPComparisonGroup,
+    FilterResultV2,
+    OrderResultV2,
+    Literal,
+)
+from trilogy_nlp.llm_interface.tools import sql_agent_tools
+from trilogy_nlp.llm_interface.examples import FILTERING_EXAMPLE
+from trilogy_nlp.llm_interface.constants import (
+    COMPLICATED_FUNCTIONS,
+    MAGIC_GENAI_DESCRIPTION,
+)
+
+# from trilogy.core.constants import
+from trilogy.core.enums import (
+    FunctionType,
+    FunctionClass,
+    InfiniteFunctionArgs,
+)
+from trilogy.parsing.common import arg_to_datatype
+from enum import Enum
+from trilogy_nlp.llm_interface.examples import COLUMN_DESCRIPTION
+from trilogy_nlp.llm_interface.validation import (
+    validate_response,
+    ValidateResponseInterface,
+)
+
+
+def parse_object(ob, environment: Environment):
+    if isinstance(ob, Column):
+        return create_column(ob, environment)
+    return create_literal(ob, environment)
+
+
+def parse_datatype(dtype: str):
+    mapping = {item.value.lower(): item for item in DataType}
+    mapping["integer"] = DataType.INTEGER
+    if dtype.lower() in mapping:
+        return mapping[dtype]
+    return DataType.STRING
+
+
+def create_literal(l: Literal, environment: Environment) -> str | float | int | bool:
+    # LLMs might get formats mixed up; if they gave us a column, hydrate it here.
+    # and carry on
+    if l.value in environment.concepts:
+        return create_column(Column(name=l.value), environment)
+
+    dtype = parse_datatype(l.type)
+
+    if dtype == DataType.STRING:
+        return l.value
+    if dtype == DataType.INTEGER:
+        return int(l.value)
+    if dtype == DataType.FLOAT:
+        return float(l.value)
+    if dtype == DataType.BOOL:
+        return bool(l.value)
+    return l.value
+
+
+def create_column(c: Column, environment: Environment):
+    if not c.calculation:
+        return environment.concepts[c.name]
+
+    operator = FunctionType(c.calculation.operator.lower())
+    if operator in FunctionClass.AGGREGATE_FUNCTIONS.value:
+        purpose = Purpose.METRIC
+    else:
+        purpose = Purpose.PROPERTY
+
+    args = [parse_object(c, environment) for c in c.calculation.arguments]
+    base_name = c.name
+    # LLMs tend to reference the same name for the output of a calculation
+    # if that's so, force the outer concept a new name
+    if any(isinstance(z, Concept) and z.name == base_name for z in args):
+        base_name = f"{c.name}_deriv"
+    # TODO: use better helpers here
+    # this duplicates a bit of pytrilogy logic
+    derivation = Function(
+        operator=FunctionType(c.calculation.operator.lower()),
+        output_datatype=arg_to_datatype(args[0]),
+        output_purpose=purpose,
+        arguments=args,
+        arg_count=InfiniteFunctionArgs,
+    )
+    if c.calculation.over:
+        if purpose != Purpose.METRIC:
+            raise ValueError("Can only use over with aggregate functions.")
+        derivation = AggregateWrapper(
+            function=derivation,
+            by=[parse_object(c, environment) for c in c.calculation.over],
+        )
+
+    new = arbitrary_to_concept(
+        derivation,
+        namespace="local",
+        name=f"{base_name}".lower(),
+        metadata=Metadata(description=MAGIC_GENAI_DESCRIPTION),
+    )
+    environment.add_concept(new)
+    return new
+
+
+def parse_order(
+    input_concepts: List[Concept], ordering: List[OrderResultV2] | None
+) -> OrderBy:
+    default_order = [
+        OrderItem(expr=c, order=Ordering.DESCENDING)
+        for c in input_concepts
+        if c.purpose == Purpose.METRIC
+    ]
+    if not ordering:
+        return OrderBy(items=default_order)
+    final = []
+    for order in ordering:
+        possible_matches = [
+            x
+            for x in input_concepts
+            if x.address == order.column_name or x.name == order.column_name
+        ]
+        if not possible_matches:
+            has_lineage = [x for x in input_concepts if x.lineage]
+            possible_matches = [
+                x
+                for x in has_lineage
+                if any(
+                    [
+                        y.address == order.column_name
+                        for y in x.lineage.concept_arguments
+                    ]
+                )
+            ]
+        if possible_matches:
+            final.append(OrderItem(expr=possible_matches[0], order=order.order))
+    return OrderBy(items=final)
+
+
+def parse_filter_obj(
+    inp: NLPComparisonGroup | NLPConditions | Column | Literal, environment: Environment
+):
+    if isinstance(inp, NLPComparisonGroup):
+        children = [parse_filter_obj(x, environment) for x in inp.values]
+
+        def generate_conditional(list: list, operator: BooleanOperator):
+            if not list:
+                return True
+            left = list.pop(0)
+            right = generate_conditional(list, operator)
+            return Conditional(left=left, right=right, operator=operator)
+
+        return generate_conditional(children, operator=inp.boolean)
+    elif isinstance(inp, NLPConditions):
+        return Comparison(
+            left=parse_filter_obj(inp.left, environment),
+            right=parse_filter_obj(inp.right, environment),
+            operator=inp.operator,
+        )
+    elif isinstance(inp, (Column, Literal)):
+        return parse_object(inp, environment)
+    else:
+        raise SyntaxError(inp)
+
+
+def parse_filter_obj_flat(
+    inp: NLPComparisonGroup | NLPConditions | Column | Literal, environment: Environment
+):
+    if isinstance(inp, NLPComparisonGroup):
+        children = [parse_filter_obj(x, environment) for x in inp.values]
+
+        def generate_conditional(list: list, operator: BooleanOperator):
+            if not list:
+                return True
+            left = list.pop(0)
+            right = generate_conditional(list, operator)
+            flat = [
+                left,
+            ] + right
+            if operator == BooleanOperator.AND:
+                return flat
+            else:
+                return [flat]
+
+        return generate_conditional(children, operator=inp.boolean)
+    elif isinstance(inp, NLPConditions):
+        return Comparison(
+            left=parse_filter_obj(inp.left, environment),
+            right=parse_filter_obj(inp.right, environment),
+            operator=inp.operator,
+        )
+    elif isinstance(inp, (Column, Literal)):
+        return parse_object(inp, environment)
+    else:
+        raise SyntaxError(inp)
+
+
+def parse_filter(
+    input: FilterResultV2, environment: Environment
+) -> Comparison | Conditional | None:
+    return parse_filter_obj(input.root, environment)
+
+
+def parse_filter_flat(
+    input: FilterResultV2, environment: Environment
+) -> list[Conditional]:
+    return parse_filter_obj_flat(input.root, environment, flat=True)
+
+
+def parse_filtering(
+    filtering: FilterResultV2, environment: Environment
+) -> tuple[WhereClause, WhereClause]:
+    base = []
+    parsed = parse_filter(filtering, environment=environment)
+    # flat = parse_filter_flat(filtering, environment=environment)
+    return WhereClause(conditional=parsed), WhereClause(conditional=parsed)
+    if filtering.root and not parsed:
+        raise SyntaxError
+    if parsed:
+        print(parsed)
+        base.append(parsed)
+    if not base:
+        return None
+    print("filtering debug")
+    print(base)
+    if len(base) == 1:
+        return WhereClause(conditional=base[0])
+    left: Conditional | Comparison = base.pop()
+    while base:
+        right = base.pop()
+        new = Conditional(left=left, right=right, operator=BooleanOperator.AND)
+        left = new
+    return WhereClause(conditional=left)

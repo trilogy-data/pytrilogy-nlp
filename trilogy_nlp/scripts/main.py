@@ -9,6 +9,7 @@ import tomli_w
 from trilogy.dialect.enums import Dialects  # noqa
 from trilogy.executor import Executor
 from trilogy_nlp.environment import helper
+
 # handles development cases
 nb_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 sys_path.insert(0, nb_path)
@@ -20,7 +21,7 @@ def generate_executor(dialect):
     pass
 
 
-def run_query(text:str, dialect:Dialects, engine: Executor,llm):
+def run_query(text: str, dialect: Dialects, engine: Executor, llm):
     engine = generate_executor(dialect)
     env, processed_query = helper(text, llm)
     # fetch our results
@@ -31,9 +32,10 @@ def run_query(text:str, dialect:Dialects, engine: Executor,llm):
     exec_start = datetime.now()
     results = engine.execute_raw_sql(query)
     if not results:
-        print('Empty results')
+        print("Empty results")
     try:
         import tabulate
+
         print_tabulate(results, tabulate.tabulate)
     except ImportError:
         print("Install tabulate (pip install tabulate) for a prettier output")

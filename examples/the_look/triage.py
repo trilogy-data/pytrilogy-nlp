@@ -13,7 +13,7 @@ from trilogy_nlp.main_v2 import parse_query
 from logging import StreamHandler, INFO
 from trilogy_nlp.constants import logger
 from trilogy.parsing.render import render_query
-from trilogy_nlp.core import NLPEngine
+from trilogy_nlp.llm_interface import NLPEngine
 from trilogy_nlp import Provider
 
 logger.setLevel(INFO)

@@ -2,17 +2,6 @@ from typing import Optional, Union
 from pydantic import BaseModel, field_validator
 from trilogy.core.enums import ComparisonOperator, Ordering, BooleanOperator
 
-from trilogy_nlp.llm_interface.models import (
-    InitialParseResponseV2,
-    Column,
-    NLPComparisonOperator,
-    NLPConditions,
-    NLPComparisonGroup,
-    FilterResultV2,
-    OrderResultV2,
-    Literal,
-)
-
 # from trilogy.core.constants import
 from enum import Enum
 

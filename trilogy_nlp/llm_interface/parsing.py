@@ -9,17 +9,13 @@ from trilogy.core.models import (
     AggregateWrapper,
     Function,
     Metadata,
+    ConceptTransform,
 )
 from typing import List
 from trilogy.core.enums import Ordering, Purpose, BooleanOperator
 from trilogy.parsing.common import arbitrary_to_concept
 from trilogy.core.models import DataType
 
-from trilogy_nlp.llm_interface.parsing import (
-    parse_filtering,
-    parse_order,
-    create_column,
-)
 from trilogy_nlp.llm_interface.models import (
     Column,
     NLPConditions,
@@ -74,7 +70,7 @@ def create_literal(l: Literal, environment: Environment) -> str | float | int | 
     return l.value
 
 
-def create_column(c: Column, environment: Environment):
+def create_column(c: Column, environment: Environment)->Concept | ConceptTransform:
     if not c.calculation:
         return environment.concepts[c.name]
 
@@ -86,7 +82,8 @@ def create_column(c: Column, environment: Environment):
 
     args = [parse_object(c, environment) for c in c.calculation.arguments]
     base_name = c.name
-    # LLMs tend to reference the same name for the output of a calculation
+    # TAG: resiliency
+    # LLM may reference the same name for the output of a calculation
     # if that's so, force the outer concept a new name
     if any(isinstance(z, Concept) and z.name == base_name for z in args):
         base_name = f"{c.name}_deriv"
@@ -114,6 +111,8 @@ def create_column(c: Column, environment: Environment):
         metadata=Metadata(description=MAGIC_GENAI_DESCRIPTION),
     )
     environment.add_concept(new)
+    
+    
     return new
 
 

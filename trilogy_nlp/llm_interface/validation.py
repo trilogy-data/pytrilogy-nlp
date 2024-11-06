@@ -153,7 +153,7 @@ def validation_error_to_string(e: ValidationError):
             missing_path = ".".join([str(v) for v in e["loc"]])
             missing.append(missing_path)
         locations = " and ".join(missing)
-        raw_error = f"Syntax error in your filtering clause. Confirm it matches the required format and is valid JSON with brackets in right locations. Comparisons need a left, right, operator, etc, and Columns and Literal formats are very specific. Example '{FILTERING_EXAMPLE}' Missing locations: {locations}"
+        raw_error = f"Syntax error in your filtering clause. Confirm it matches the required format and is valid JSON with brackets in right locations! [really, double check brackets - boolean and operators need to be at the right level]. Comparisons need a left, right, operator, etc, and Columns and Literal formats are very specific. Example '{FILTERING_EXAMPLE}' HInt on where to look: {locations}"
     return raw_error
 
 

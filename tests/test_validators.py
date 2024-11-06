@@ -1,4 +1,4 @@
-from trilogy_nlp.main_v2 import (
+from trilogy_nlp.llm_interface.validation import (
     validate_response,
     Column,
     FilterResultV2,

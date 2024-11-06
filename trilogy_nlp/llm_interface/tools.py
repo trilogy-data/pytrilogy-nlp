@@ -6,9 +6,7 @@ from langchain.tools import Tool, StructuredTool
 import json
 from trilogy_nlp.tools import get_today_date
 
-from trilogy_nlp.llm_interface.tools import sql_agent_tools
 
-# from trilogy.core.constants import
 from trilogy_nlp.llm_interface.validation import (
     validate_response,
     ValidateResponseInterface,

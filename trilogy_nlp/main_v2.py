@@ -9,6 +9,8 @@ from trilogy.core.models import (
     WhereClause,
     SelectItem,
     HavingClause,
+    Concept,
+    ConceptTransform
 )
 from trilogy.core.query_processor import process_query
 from pydantic import ValidationError
@@ -27,34 +29,19 @@ from trilogy_nlp.llm_interface.parsing import (
 )
 from trilogy_nlp.llm_interface.models import InitialParseResponseV2
 from trilogy_nlp.llm_interface.tools import sql_agent_tools
+from trilogy_nlp.llm_interface.constants import MAGIC_GENAI_DESCRIPTION
 
-# from trilogy.core.constants import
+
+def is_local_derived(x:Concept)->bool:
+    return x.metadata.description == MAGIC_GENAI_DESCRIPTION
 
 
 def llm_loop(
-    input_text: str, input_environment: Environment, llm, retries: int = 2
-) -> InitialParseResponseV2:
-    attempts = 0
-    exceptions = []
-    while attempts < retries:
-        try:
-            return _llm_loop(input_text, input_environment=input_environment, llm=llm)
-        except Exception as e:
-            # logger.info("Failed attempted llm loop")
-            exceptions.append(e)
-            raise e
-        attempts += 1
-    raise ValueError(
-        f"Was unable to process query, exceptions {[str(x) for x in exceptions]}"
-    )
-
-
-def _llm_loop(
     input_text: str,
     input_environment: Environment,
     llm: BaseLanguageModel,
     additional_context: str | None = None,
-) -> InitialParseResponseV2:
+) -> SelectStatement:
     system = """You are a data analyst assistant. Your job is to get questions from 
     the analyst and tell them how to write a 
     SQL query to answer them in a step by step fashion. 
@@ -286,6 +273,7 @@ def _llm_loop(
     attempts = 0
     if additional_context:
         input_text += additional_context
+    e = None
     while attempts < 2:
         result = agent_executor.invoke({"input": input_text})
         output = result["output"]
@@ -293,11 +281,12 @@ def _llm_loop(
         print(output)
         try:
             if isinstance(output, str):
-                return InitialParseResponseV2.model_validate_json(output)
+                ir = InitialParseResponseV2.model_validate_json(output)
             elif isinstance(output, dict):
-                return InitialParseResponseV2.model_validate(output)
+                ir = InitialParseResponseV2.model_validate(output)
             else:
                 raise ValueError("Unable to parse LLM response")
+            return ir_to_query(ir, input_environment=input_environment, debug=True)
         except ValidationError as e:
             # Here, `validation_error.errors()` will have the full info
             for x in e.errors():
@@ -311,19 +300,18 @@ def _llm_loop(
                     + raw_error
                 )
             input_text += f"IMPORTANT: this is your second attempt - your last attempt errored parsing your final answer: {raw_error}. Remember to use the validation tool to check your work!"
+
+        except Exception as e:
+            print("Failed to parse LLM response")
+            print(e)
+            input_text += f"IMPORTANT: this is your second attempt - your last attempt errored parsing your final answer: {str(e)}. Remember to use the validation tool to check your work!"
         attempts += 1
+    if e:
+        raise e
     raise ValueError(f"Unable to get parseable response after {attempts} attempts")
 
-
-def parse_query(
-    input_text: str,
-    input_environment: Environment,
-    llm: BaseLanguageModel,
-    debug: bool = False,
-    log_info: bool = True,
-):
-    intermediate_results = llm_loop(input_text, input_environment, llm=llm)
-
+def ir_to_query(intermediate_results:InitialParseResponseV2, input_environment:Environment, debug:bool = True):
+    
     selection = [
         create_column(x, input_environment) for x in intermediate_results.columns
     ]
@@ -348,23 +336,27 @@ def parse_query(
                 print(o)
     where: Conditional | Comparison | None = None
     having: Conditional | Comparison | None = None
-    materialized = {x.output for x in selection}
     if filtering:
-        if is_scalar_condition(filtering.conditional, materialized=materialized):
+        if is_scalar_condition(filtering.conditional):
             where = filtering.conditional
         else:
             components = decompose_condition(filtering.conditional)
             for x in components:
-                if is_scalar_condition(x, materialized=materialized):
+                if is_scalar_condition(x):
                     where = where + x if where else x
                 else:
                     having = having + x if having else x
     print(is_scalar_condition(filtering.conditional))
     print(where)
     print(having)
+    print('selectDebug')
+    for x in selection:
+        print(x.address)
+        print(x.metadata.description)
+        print(is_local_derived(x))
 
     query = SelectStatement(
-        selection=[SelectItem(content=x) for x in selection],
+        selection=[ConceptTransform(function=x.lineage, output=x) if is_local_derived(x) else SelectItem(content=x) for x in selection],
         limit=safe_limit(intermediate_results.limit),
         order_by=order,
         where_clause=WhereClause(conditional=where) if where else None,
@@ -373,21 +365,55 @@ def parse_query(
     replacements = {}
     if having:
         for x in having.concept_arguments:
-            # rewrite these with our description
-            if x.metadata.description == MAGIC_GENAI_DESCRIPTION:
-                new = x.with_select_context(grain=query.grain)
-                input_environment.add_concept(new, force=True)
-                replacements[new.address] = new
-
+            if not any(x.address == item.content.address for item in query.selection):
+                if is_local_derived(x):
+                    content = ConceptTransform(function=x.lineage, output=x)
+                else:
+                    content = x
+                query.selection.append(SelectItem(content=content))
+    for item in query.selection:
+        # we don't know the grain of an aggregate at assignment time
+        # so rebuild at this point in the tree
+        # TODO: simplify
+        if isinstance(item.content, ConceptTransform):
+            new_concept = item.content.output.with_select_context(
+                query.grain,
+                conditional=None,
+                environment=input_environment,
+            )
+            input_environment.add_concept(new_concept)
+            item.content.output = new_concept
+        elif isinstance(item.content, Concept):
+            # Sometimes cached values here don't have the latest info
+            # but we can't just use environment, as it might not have the right grain.
+            item.content = input_environment.concepts[
+                item.content.address
+            ].with_grain(item.content.grain)
     # remap selection
     selection = [SelectItem(content=replacements.get(x.address, x)) for x in selection]
     query.selection = selection
+    print('select debug')
+    for x in query.selection:
+        print(type(x.content))
+
+    
 
     from trilogy.parsing.render import Renderer
 
     print("RENDERED QUERY")
     print(Renderer().to_string(query))
+    raise ValueError
     return query
+
+def parse_query(
+    input_text: str,
+    input_environment: Environment,
+    llm: BaseLanguageModel,
+    debug: bool = False,
+    log_info: bool = True,
+)->SelectStatement:
+    return llm_loop(input_text, input_environment, llm=llm)
+
 
 
 def build_query(

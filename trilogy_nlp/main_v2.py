@@ -17,15 +17,13 @@ from pydantic import ValidationError
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.language_models import BaseLanguageModel
 from trilogy_nlp.tools import get_wiki_tool
-from trilogy.core.processing.utility import (
-    is_scalar_condition,
-    decompose_condition,
-)
+
 
 from trilogy_nlp.llm_interface.parsing import (
     parse_filtering,
     parse_order,
     create_column,
+    generate_having_and_where
 )
 from trilogy_nlp.llm_interface.models import InitialParseResponseV2
 from trilogy_nlp.llm_interface.tools import sql_agent_tools
@@ -325,7 +323,7 @@ def ir_to_query(intermediate_results:InitialParseResponseV2, input_environment:E
     order = parse_order(selection, intermediate_results.order or [])
 
     filtering = (
-        parse_filtering(intermediate_results.filtering, input_environment)[0]
+        parse_filtering(intermediate_results.filtering, input_environment)
         if intermediate_results.filtering
         else None
     )
@@ -341,47 +339,32 @@ def ir_to_query(intermediate_results:InitialParseResponseV2, input_environment:E
             print("Ordering")
             for o in intermediate_results.order:
                 print(o)
-    where: Conditional | Comparison | None = None
-    having: Conditional | Comparison | None = None
-    if filtering:
-        if is_scalar_condition(filtering.conditional):
-            where = filtering.conditional
-        else:
-            components = decompose_condition(filtering.conditional)
-            for x in components:
-                if is_scalar_condition(x):
-                    where = where + x if where else x
-                else:
-                    having = having + x if having else x
-    print(is_scalar_condition(filtering.conditional))
-    print(where)
-    print(having)
-    print('selectDebug')
-    for x in selection:
-        print(x.address)
-        print(x.metadata.description)
-        print(is_local_derived(x))
 
+    where, having = generate_having_and_where(filtering)
     query = SelectStatement(
         selection=[ConceptTransform(function=x.lineage, output=x) if is_local_derived(x) else SelectItem(content=x) for x in selection],
         limit=safe_limit(intermediate_results.limit),
         order_by=order,
-        where_clause=WhereClause(conditional=where) if where else None,
-        having_clause=HavingClause(conditional=having) if having else None,
+        where_clause=where,
+        having_clause=having
     )
-    if having:
-        for x in filtering.concept_arguments:
+    if filtering:
+        def append_child_concepts(xes:list[Concept]):
+
             def get_address(z):
                 if isinstance(z, Concept):
                     return z.address
                 elif isinstance(z, ConceptTransform):
                     return z.output.address
-            if not any(x.address ==  get_address(item.content) for item in query.selection):
-                if is_local_derived(x):
-                    content = ConceptTransform(function=x.lineage, output=x)
-                else:
-                    content = x
-                query.selection.append(SelectItem(content=content))
+            for x in xes:
+                if not any(x.address ==  get_address(item.content) for item in query.selection):
+                    if is_local_derived(x):
+                        content = ConceptTransform(function=x.lineage, output=x)
+                        query.selection.append(SelectItem(content=content))
+                        append_child_concepts(x.lineage.concept_arguments)
+        append_child_concepts(filtering.concept_arguments)
+        
+                
     for item in query.selection:
         # we don't know the grain of an aggregate at assignment time
         # so rebuild at this point in the tree
@@ -409,7 +392,7 @@ def ir_to_query(intermediate_results:InitialParseResponseV2, input_environment:E
 
     print("RENDERED QUERY")
     print(Renderer().to_string(query))
-    raise NotImplementedError
+    # raise NotImplementedError
     return query
 
 def parse_query(

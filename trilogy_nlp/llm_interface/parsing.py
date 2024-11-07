@@ -9,6 +9,7 @@ from trilogy.core.models import (
     AggregateWrapper,
     Function,
     Metadata,
+    HavingClause,
     ConceptTransform,
 )
 from typing import List
@@ -26,6 +27,10 @@ from trilogy_nlp.llm_interface.models import (
 )
 from trilogy_nlp.llm_interface.constants import (
     MAGIC_GENAI_DESCRIPTION,
+)
+from trilogy.core.processing.utility import (
+    is_scalar_condition,
+    decompose_condition,
 )
 
 # from trilogy.core.constants import
@@ -70,7 +75,7 @@ def create_literal(l: Literal, environment: Environment) -> str | float | int | 
     return l.value
 
 
-def create_column(c: Column, environment: Environment)->Concept | ConceptTransform:
+def create_column(c: Column, environment: Environment) -> Concept | ConceptTransform:
     if not c.calculation:
         return environment.concepts[c.name]
 
@@ -111,8 +116,7 @@ def create_column(c: Column, environment: Environment)->Concept | ConceptTransfo
         metadata=Metadata(description=MAGIC_GENAI_DESCRIPTION),
     )
     environment.add_concept(new)
-    
-    
+
     return new
 
 
@@ -222,11 +226,11 @@ def parse_filter_flat(
 
 def parse_filtering(
     filtering: FilterResultV2, environment: Environment
-) -> tuple[WhereClause, WhereClause]:
+) -> WhereClause:
     base = []
     parsed = parse_filter(filtering, environment=environment)
     # flat = parse_filter_flat(filtering, environment=environment)
-    return WhereClause(conditional=parsed), WhereClause(conditional=parsed)
+    return WhereClause(conditional=parsed)
     if filtering.root and not parsed:
         raise SyntaxError
     if parsed:
@@ -244,3 +248,24 @@ def parse_filtering(
         new = Conditional(left=left, right=right, operator=BooleanOperator.AND)
         left = new
     return WhereClause(conditional=left)
+
+
+def generate_having_and_where(
+    filtering: WhereClause | None = None,
+) -> tuple[WhereClause | None, HavingClause | None]:
+    if not filtering:
+        return None, None
+    where: Conditional | Comparison | None = None
+    having: Conditional | Comparison | None = None
+    if is_scalar_condition(filtering.conditional):
+        where = filtering.conditional
+    else:
+        components = decompose_condition(filtering.conditional)
+        for x in components:
+            if is_scalar_condition(x):
+                where = where + x if where else x
+            else:
+                having = having + x if having else x
+    return WhereClause(conditional=where) if where else None, HavingClause(
+        conditional=having
+    ) if having else None

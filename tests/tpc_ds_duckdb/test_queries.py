@@ -170,7 +170,7 @@ def test_twenty_six(engine, llm):
     # assert len(query) < 6000, query
 
 
-def run_adhoc(number: int):
+def run_adhoc(number: int, text:str | None = None, comparison:str | None = None):
     from trilogy import Environment, Dialects
     from trilogy.hooks.query_debugger import DebuggingHook
     from logging import INFO
@@ -184,8 +184,60 @@ def run_adhoc(number: int):
 LOAD tpcds;
 SELECT * FROM dsdgen(sf=1);"""
     )
-    run_query(engine, number)
+    if text:
+        if comparison:
+            comp_text = comparison
+        else:
+            comp_text = f"PRAGMA tpcds({number});"
+        comp = engine.execute_raw_sql(comp_text)
+        comp_results = comp.fetchall()
+        results = engine.execute_text(text)
+        for idx, row in enumerate(results[0].fetchall()):
+            print(row)
+            print(comp_results[idx])
+    else:
+        run_query(engine, number)
 
 
 if __name__ == "__main__":
-    run_adhoc(24)
+    TEST = """
+import store_returns as store_returns;
+WHERE
+    store_returns.return_date.date.year = 2000 and (store_returns.store.state = 'TN' and True)
+SELECT
+    store_returns.customer.text_id,
+    store_returns.store.id, 
+    sum(store_returns.return_amount) -> total_return_amount,
+    avg(total_return_amount) by store_returns.store.id -> avg_return_per_store,
+    1.2 * avg_return_per_store -> twelve_times_avg_return_per_store,
+HAVING
+    total_return_amount > twelve_times_avg_return_per_store
+
+ORDER BY
+    store_returns.customer.text_id asc
+
+LIMIT 100;"""
+    run_adhoc(1, text = TEST, comparison = """WITH customer_total_return AS
+  (SELECT sr_customer_sk AS ctr_customer_sk,
+          sr_store_sk AS ctr_store_sk,
+          sum(sr_return_amt) AS ctr_total_return
+   FROM store_returns,
+        date_dim
+   WHERE sr_returned_date_sk = d_date_sk
+     AND d_year = 2000
+   GROUP BY sr_customer_sk,
+            sr_store_sk)
+SELECT 
+    c_customer_id
+FROM customer_total_return ctr1,
+     store,
+     customer
+WHERE ctr1.ctr_total_return >
+    (SELECT avg(ctr_total_return)*1.2
+     FROM customer_total_return ctr2
+     WHERE ctr1.ctr_store_sk = ctr2.ctr_store_sk)
+  AND s_store_sk = ctr1.ctr_store_sk
+  AND s_state = 'TN'
+  AND ctr1.ctr_customer_sk = c_customer_sk
+ORDER BY c_customer_id
+LIMIT 100;""")

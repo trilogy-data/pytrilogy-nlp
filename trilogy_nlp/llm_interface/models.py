@@ -1,6 +1,7 @@
 from typing import Optional, Union
 from pydantic import BaseModel, field_validator
 from trilogy.core.enums import ComparisonOperator, Ordering, BooleanOperator
+from pydantic import BaseModel, Field, AliasChoices, ConfigDict
 
 # from trilogy.core.constants import
 from enum import Enum
@@ -8,23 +9,26 @@ from enum import Enum
 
 class OrderResultV2(BaseModel):
     """The result of the order prompt"""
-
-    column_name: str
+    model_config = ConfigDict(extra="forbid")
+    column_name: str  = Field(validation_alias=AliasChoices('column_name', 'column', 'name'))
     order: Ordering
 
 
 class Literal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     value: str
     type: str
 
 
 class Calculation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     arguments: list[Union["Column", Literal]]
     operator: str
     over: list["Column"] | None = None
 
 
 class Column(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     name: str
     calculation: Optional[Calculation] = None
 

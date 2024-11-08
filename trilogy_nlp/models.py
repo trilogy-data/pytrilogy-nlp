@@ -3,6 +3,7 @@ from trilogy.core.enums import ComparisonOperator, Ordering
 from trilogy.core.models import Concept
 from typing import Union
 
+
 ### Intermediate Models
 
 

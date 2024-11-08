@@ -34,7 +34,7 @@ FILTERING_EXAMPLE = {
     }
 }
 
-COLUMN_DESCRIPTION = """    A Column Object is json with two fields:
+COLUMN_DESCRIPTION = """A Column Object is json with two fields:
     -- name: the field being referenced or a new derived name. If there is a calculation, this should always be a new derived name you came up with. 
     -- calculation: An optional calculation object.
 """

@@ -78,7 +78,10 @@ def create_literal(l: Literal, environment: Environment) -> str | float | int | 
 def create_column(c: Column, environment: Environment) -> Concept | ConceptTransform:
     if not c.calculation:
         return environment.concepts[c.name]
-
+    if c.calculation.operator.lower() not in FunctionType.__members__:
+        if c.calculation.operator == 'RENAME':
+            c.calculation.operator = 'ALIAS'
+            
     operator = FunctionType(c.calculation.operator.lower())
     if operator in FunctionClass.AGGREGATE_FUNCTIONS.value:
         purpose = Purpose.METRIC

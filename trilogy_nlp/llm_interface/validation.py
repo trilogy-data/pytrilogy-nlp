@@ -14,6 +14,7 @@ from trilogy_nlp.llm_interface.models import (
     NLPConditions,
     FilterResultV2,
     OrderResultV2,
+    Literal,
 )
 from trilogy_nlp.llm_interface.examples import FILTERING_EXAMPLE
 from trilogy_nlp.llm_interface.constants import COMPLICATED_FUNCTIONS
@@ -50,15 +51,16 @@ def validate_query(query: dict, environment: Environment, prompt: str):
     except ValidationError as e:
         return {"status": "invalid", "error": validation_error_to_string(e)}
     errors = []
-    select = {col.name for col in parsed.columns}
+    # assume to start that all our select calculations are valid
+    select = {col.name for col in parsed.columns if col.calculation}
     filtered_on = set()
 
     def validate_column(col: Column, context: QueryContext) -> bool:
         valid = False
         if (
-            col.name not in environment.concepts
+            col.name not in select
+            and col.name not in environment.concepts
             and not col.calculation
-            and (context == QueryContext.SELECT or col.name not in select)
         ):
             recommendations = None
             try:
@@ -68,19 +70,23 @@ def validate_query(query: dict, environment: Environment, prompt: str):
 
             if recommendations:
                 errors.append(
-                    f"{col.name} in {context} is not a valid field in the database; check that you are using the full exact column name (including any prefixes). Did you mean one of {recommendations}?",
+                    f"{col.name} in {context} is not a valid field or previously defined; check that you are using the full exact column name (including any prefixes). Did you mean one of {recommendations}?",
                 )
             else:
                 errors.append(
-                    f"{col.name} in {context} is not a valid field in the database; check that you are using the full exact column name (including an prefixes). If you want to apply a function, use a calculation - do not include it in the field name. Format reminder: '{COLUMN_DESCRIPTION}'. You may need to list fields again if you are not sure of the correct value.",
+                    f"{col.name} in {context} is not a valid field or previously defined; check that you are using the full exact column name (including any prefixes). If you want to apply a function, use a calculation - do not include it in the field name.",
                 )
         elif col.name in environment.concepts:
             valid = True
+            if col.calculation:
+                errors.append(
+                    f"{col.name} in {context} is a predefined field and should not have a calculation; check that you are using the field as is, without any additional transformations.",
+                )
         elif col.calculation:
 
             if not is_valid_function(col.calculation.operator):
                 errors.append(
-                    f"{col.name} Column definition in {context} does not use a valid function (is using {col.calculation.operator}); check that you are using ONLY a valid option from this list: {[x for x in FunctionType.__members__.keys() if x not in COMPLICATED_FUNCTIONS] }. If the column requires no transformation, drop the calculation field.",
+                    f"{col.name} Column definition in {context} does not use a valid function (is using {col.calculation.operator}); check that you are using ONLY a valid option from this list: {sorted([x for x in FunctionType.__members__.keys() if x not in COMPLICATED_FUNCTIONS]) }. If the column requires no transformation, drop the calculation field.",
                 )
             else:
                 valid = True
@@ -124,9 +130,9 @@ def validate_query(query: dict, environment: Environment, prompt: str):
                         )
 
     if errors:
-        return {"status": "invalid", "error": str(errors)}
+        return {"status": "invalid", "error": errors}
     tips = [
-        f'No validation errors - looking good! Just double check you have al lthe filters from the original prompt, validate any changes, and send it off! Prompt: "{prompt}"!'
+        f'No validation errors - looking good! Just double check you have all the filters from the original prompt, validate any changes, and send it off! Prompt: "{prompt}"!'
     ]
     for x in select.union(filtered_on):
         if x in environment.concepts:
@@ -138,6 +144,7 @@ def validate_query(query: dict, environment: Environment, prompt: str):
 
     return {"status": "valid", "tips": tips}
 
+from collections import defaultdict
 
 def validation_error_to_string(e: ValidationError):
     # Here, `validation_error.errors()` will have the full info
@@ -149,11 +156,21 @@ def validation_error_to_string(e: ValidationError):
     # TODO: better pydantic error parsing
     if "filtering.root." in raw_error:
         missing = []
+        path_freq = defaultdict(lambda : 0)
+        path_map = defaultdict(lambda : [])
         for e in errors:
-            missing_path = ".".join([str(v) for v in e["loc"]])
-            missing.append(missing_path)
-        locations = " and ".join(missing)
-        raw_error = f"Syntax error in your filtering clause. Confirm it matches the required format and is valid JSON with brackets in right locations! [really, double check brackets - boolean and operators need to be at the right level]. Comparisons need a left, right, operator, etc, and Columns and Literal formats are very specific. Example '{FILTERING_EXAMPLE}' HInt on where to look: {locations}"
+            if e['type'] == 'missing':
+                path = ''.join([str(x) for x in e['loc'][:-1]])
+                path_freq[path] += 1
+                message = f'Missing {e["loc"][-1]} in {e["input"]}'
+                path_map[path].append(message)
+                missing.append(message)
+            else:
+                missing_path = ".".join([str(v) for v in e["loc"] if str(v) not in ['NLPComparisonGroup', 'NLPConditions', 'Literal', 'Column']])
+                missing.append(missing_path)
+        min_path = min(path_freq, key=path_freq.get)
+        locations = path_map[min_path]
+        raw_error = f"Syntax error in your filtering clause. Comparisons need a left, right, operator, etc, and Columns and Literal formats are very specific. Hint on where to look: {locations}"
     return raw_error
 
 

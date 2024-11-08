@@ -92,7 +92,7 @@ def test_ir_parsing():
     
     where, having = generate_having_and_where(filtering)
 
-    assert str(having) == 'local.total_return_amount<local.total_return_amount> > local.1.2_times_avg_return_per_store<store_returns.store.id>', str(having)
+    assert str(having.conditional) == 'local.total_return_amount<local.total_return_amount> > local.1.2_times_avg_return_per_store<store_returns.store.id>', str(having)
 
     response:SelectStatement = ir_to_query(intermediate_results = parsed, input_environment = env, )
 

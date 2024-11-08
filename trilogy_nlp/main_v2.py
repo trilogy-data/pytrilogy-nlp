@@ -18,7 +18,6 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.language_models import BaseLanguageModel
 from trilogy_nlp.tools import get_wiki_tool
 
-
 from trilogy_nlp.llm_interface.parsing import (
     parse_filtering,
     parse_order,
@@ -50,20 +49,23 @@ def llm_loop(
     Your goal will be to create a final output in JSON format for your analyst. Do your best to get to the most complete answer possible using all tools. 
 
     A key structure used in your responses will be a Column, a recursive json structure containing a name and an optional calculation sub-structure.
-    If the Column does not have a calculation, the name must reference a name provided in the database already. 
+    If the Column does not have a calculation, the name must reference a name provided in the database already or previously defined by a Column object.
 
     A Column Object is json with two fields:
-    -- name: the field being referenced or a new derived name. If there is a calculation, this should always be a new derived name you came up with. That name must be unique; a calculation cannot reference an input with the same name as the output concept.
+    -- name: the field being referenced or a new derived name created in a previous Column object with a calculation. If there is a calculation, this should always be a new derived name you came up with. That name must be unique; a calculation cannot reference an input with the same name as the output concept.
     -- calculation: An optional calculation object. Only include a calculation if you need to create a new column because there is not a good match from the existing field list. 
 
+    If the user requests something that would require two levels of aggregation to express in SQL - like an "average" of a "sum" - use nested calculations or references to previously defined columns to express the concept. Ensure
+    each level of calculation uses the by clause to define the level to group to.
+
     A Literal Object is json with these fields:
-    -- value: the literal value ('1', 'abc', etc), expressed as a string
+    -- value: the literal value ('1', 'abc',  1.0, etc), expressed as a string
     -- type: the type of the value ('float', 'string', 'int', 'bool'), expressed as a string
 
     A Calculation Object is json with three fields:
-    -- arguments: a list of Column or Literal objects
     -- operator: a function to call with those arguments. [SUM, AVG, COUNT, MAX, MIN, etc], expressed as a string. A calculation object MUST have an operator. This cannot be a comparison operator.
-    -- over: an optional list of Column objects used when a calculation needs to happen over other columns (sum of revenue by state, for example)
+    -- arguments: a list of Column or Literal objects
+    -- over: an optional list of Column objects used when an aggregate calculation needs to group over other columns (sum of revenue by state and county, for example)
 
     A Comparison object is JSON with three fields:
     -- operator: the comparison operator, one of "=", "in", "<", ">", "<=", "like", or ">=". Use two comparisons to represent a between
@@ -91,7 +93,6 @@ def llm_loop(
     {tools}
 
     Use a json blob to specify a tool by providing an action key (tool name) and an action_input key (tool input). 
-    
 
     You will get valuable information from using tools before producing your final answer.
 
@@ -127,7 +128,7 @@ def llm_loop(
 
     An example series:
 
-    Question: Get the total revenue by order and customer id for stores in the zip code 1025 in the year 2000 where the total sales price of the items in the order was more than 100 dollars
+    Question: Get the total revenue dollars by order and customer id for stores in the zip code 1025 in the year 2000 where the total sales price of the items in the order was more than 100 dollars and the total revenue of the order was more than 10 dollars?
     Action:
     ```
     {{
@@ -145,8 +146,19 @@ def llm_loop(
             {{"name": "store.order.id"}},
             {{"name": "store.order.customer.id"}},
             {{"name": "revenue_sum", 
-                "calculation": {{"operator":"SUM", "arguments": [{{ "name": "store.order.revenue"}}]
-            }} }}
+                "calculation": {{"operator":"SUM", "arguments": [
+                    {{
+                    "name": "revenue_dollars",
+                    "calculation" : {{
+                        "operator": "MULTIPLY",
+                        "arguments": [
+                            {{ "name": "store.order.revenue_cents" }}
+                            ]
+                        }}
+                    }}
+                }}]
+            }} 
+            }}
         ],
         "filtering": {{
             "root": {{
@@ -162,12 +174,24 @@ def llm_loop(
                     "right": {{"value":"2000", "type":"integer"}},
                     
                 }},
+                {{
+                    "operator": ">"
+                    "left": {{"name": "revenue_sum }},
+                    "right": {{"value":"10", "type":"float"}},
+                    
+                }},
                 {{  
                     "operator": ">"
-                    "left": {{"name": "sales_price_sum_by_store", 
+                    "left": {{
+                        "name": "sales_price_sum_by_store", 
                         "calculation": {{"operator":"SUM", 
-                            "arguments": [{{ "name": "item.sales_price"}}],
-                            "over": [{{ "name": "store.order.id"}}]
+                            "arguments": [
+                                {{ "name": "item.sales_price"}}
+                                ],
+                            "over": [
+                                {{ "name": "store.order.id"}}, 
+                                {{ "name": "store.id"}}
+                            ]
                             }}
                         }},
                     "right": {{"value":"100.0", "type":"float"}},
@@ -182,19 +206,18 @@ def llm_loop(
         ],
         "limit": 100
         }}, 
-        "reasoning": "I can return order id, customer id, and the total order revenue. Order Id and customer Id are scalar values, while the total order revenue will require a calculation. I can filter to the zip code and the year, and then restrict to where the sales price over the order id is more than 100, which will require a calculation. Before submitting my answer, I need to validate my answer."
+        "reasoning": "I can return order id, customer id, and the total order revenue. Order Id and customer Id are scalar values, while the total order revenue will require a calculation. I can filter to the zip code and the year, and then restrict to where the sales price over the store and order id is more than 100, which will require a calculation. Before submitting my answer, I need to validate my answer."
     }}
     }}
 
     Nested Column objects with calculations can create complex derivations. This can be useful for filtering. 
 
-    Make sure to give the output concept a unique, descriptive name. 
+    Note: You don't need to use an over clause for an aggregate calculated columm you're outputting if it's over the other columns you've selected - that's implicit.
 
-    You don't need to use an over clause for a top level calculation if it's over the other columns you've selected.
+        Example: to get total revenue by customer - just select the customer id and sum(total_revenue). 
+        Example: to get the average revenue customer by store, return store idand avg(sum(total_revenue) by customer_id) (in appropriate JSON format)
 
-    Ex: for customer, total_revenue, just sum revenue. 
-
-    For example, to create a filter condition for "countries with an average monthly rainfall of 2x the average on their continent", the filtering clause might look like.
+    Filtering can also leverage calculations - for example, to create a filter condition for "countries with an average monthly rainfall of 2x the average on their continent", the filtering clause might look like.
 
     {{
             "root": {{
@@ -206,20 +229,26 @@ def llm_loop(
                         "calculation": {{
                             "operator": "AVG",
                             "arguments": [{{"name": "country.monthly_rainfall"}}],
-                            "over": [{{"name": "country.name"}}]
-                                }}
-                            }},
+                            "over": [
+                                {{"name": "country.name"}},
+                                {{"name": "date.rainfall"}}
+                                ]
+                            }}
+                        }},
                     "right":  {{
                         "name": "continent_avg_monthly_rainfall_2x",
                         "calculation": {{
                             "operator": "MULTIPLY",
                             "arguments": [
-                                    {{"value":"2", "type":"integer"}}, 
-                                    {{"name": "continent_avg_monthly_rainfall",
+                                    {{  "value":"2", "type":"integer"}}, 
+                                    {{  "name": "continent_avg_monthly_rainfall",
                                         "calculation" : {{
                                             "operator": "AVG",
                                             "arguments": ["country.monthly_rainfall"],
-                                            "over": [{{"name": "country.continent"}}]
+                                            "over": [
+                                                {{"name": "country.continent"}},
+                                                {{"name": "date.rainfall"}}
+                                            ]
                                         }}
                                     }}],
 
@@ -276,7 +305,7 @@ def llm_loop(
     if additional_context:
         input_text += additional_context
     error = None
-    while attempts < 2:
+    while attempts < 1:
         result = agent_executor.invoke({"input": input_text})
         output = result["output"]
         print("OUTPUT WAS")
@@ -290,6 +319,7 @@ def llm_loop(
                 raise ValueError("Unable to parse LLM response")
             return ir_to_query(ir, input_environment=input_environment, debug=True)
         except ValidationError as e:
+            error = e
             # Here, `validation_error.errors()` will have the full info
             for x in e.errors():
                 print(x)
@@ -303,6 +333,7 @@ def llm_loop(
                 )
             input_text += f"IMPORTANT: this is your second attempt - your last attempt errored parsing your final answer: {raw_error}. Remember to use the validation tool to check your work!"
         except NotImplementedError as e:
+            error = e
             raise e
 
         except Exception as e:
@@ -392,7 +423,6 @@ def ir_to_query(intermediate_results:InitialParseResponseV2, input_environment:E
 
     print("RENDERED QUERY")
     print(Renderer().to_string(query))
-    # raise NotImplementedError
     return query
 
 def parse_query(

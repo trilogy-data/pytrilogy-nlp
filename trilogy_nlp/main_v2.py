@@ -88,7 +88,8 @@ def llm_loop(
 
     
     You should always call the the validate_response tool on what you think is the final answer before returning the "Final Answer" action.
-    You have access to the following tools:
+    You have access to the following tools {tool_names}, 
+    described below:
 
     {tools}
 
@@ -119,16 +120,18 @@ def llm_loop(
     Follow this format in responses:
 
     Question: input question to answer
+    Thought: consider previous and subsequent steps
     Action:
     ```
     $JSON_BLOB
     ```
     <action result>
-    ... (repeat Thought/Action/Observation N times)
+    ... (repeat Thought/Action/Result N times)
 
     An example series:
 
     Question: Get the total revenue dollars by order and customer id for stores in the zip code 1025 in the year 2000 where the total sales price of the items in the order was more than 100 dollars and the total revenue of the order was more than 10 dollars?
+    Thought: I should start by using any available tools to inform my action.
     Action:
     ```
     {{
@@ -136,7 +139,7 @@ def llm_loop(
         "action_input": ""
         "reasoning": "I should get the available fields in the database."
     }}
-    <some result>
+    {{"fields": [<a list if fields in format {{"name": "field_name", <optional description>]}} }}
     Action:
     ```
     {{
@@ -146,23 +149,26 @@ def llm_loop(
             {{"name": "store.order.id"}},
             {{"name": "store.order.customer.id"}},
             {{"name": "revenue_sum", 
-                "calculation": {{"operator":"SUM", "arguments": [
-                    {{
-                    "name": "revenue_dollars",
-                    "calculation" : {{
-                        "operator": "MULTIPLY",
-                        "arguments": [
-                            {{ "name": "store.order.revenue_cents" }}
-                            ]
-                        }}
+                "calculation": {{
+                    "operator":"SUM", 
+                    "arguments": [
+                            {{
+                            "name": "revenue_dollars",
+                            "calculation" : {{
+                                "operator": "MULTIPLY",
+                                "arguments": [
+                                    {{ "name": "store.order.revenue_cents" }}
+                                    ]
+                                }}
+                            }}
+                        ]
                     }}
-                }}]
-            }} 
             }}
         ],
         "filtering": {{
             "root": {{
-                "values": [{{
+                "values": [
+                {{
                     "operator": "="
                     "left": {{"name": "store.zip_code"}},
                     "right": {{"value":"10245", "type":"integer"}},
@@ -176,7 +182,7 @@ def llm_loop(
                 }},
                 {{
                     "operator": ">"
-                    "left": {{"name": "revenue_sum }},
+                    "left": {{"name": "revenue_sum" }},
                     "right": {{"value":"10", "type":"float"}},
                     
                 }},
@@ -250,7 +256,8 @@ def llm_loop(
                                                 {{"name": "date.rainfall"}}
                                             ]
                                         }}
-                                    }}],
+                                    }}
+                                    ],
 
                                 }}
                         }}
@@ -259,20 +266,25 @@ def llm_loop(
                 "boolean": "and"
         }}
     }}
-    To filter over a calculation with a scalar, multiple that in 
-    Once you have used any tools (listed below) as needed, you will produce your final result in this format. After producing your
-    final answer, you cannot take any more steps.
 
-    A final answer would look like this:
+    Once you have used any tools (listed below) as needed, you will produce your final result in this format. If your final answer is wrong,
+    you'll receive the prompt again with a hint that you got it wrong. You can see the output of your last three actions only.
+
+    A final response could look like this:
+
+    Thought: I have my final, validated answer!
+    Action:
+    ```
     {{
         "action": "Final Answer",
-        "action_input": <VALID_JSON_SPEC_DEFINED_ABOVE>,
+        "action_input": <VALID_JSON_WITH_SPEC_DEFINED_ABOVE>,
         "reasoning": "<description of your logic>"
     }}
+    ```
+    
+    Begin! Reminder to ALWAYS respond with a valid json blob of a single action. Use tools if necessary. Respond directly if appropriate. Format is Action:```$JSON_BLOB```then Observation.
 
-    You will only see the last few steps.
-
-    Begin! Reminder to ALWAYS respond with a valid json blob for an action. Always use tools. The conversation consistes of messages of 'Action:```$JSON_BLOB```' and then a response to react to with another action."""
+    """
 
     human = """{input}
 

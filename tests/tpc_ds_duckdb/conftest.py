@@ -9,9 +9,11 @@ from pytest import fixture
 from logging import StreamHandler, DEBUG
 from trilogy_nlp import NLPEngine, Provider
 from trilogy_nlp.enums import CacheType
-
+import os
 
 working_path = Path(__file__).parent
+
+SF = .5
 
 
 @fixture(scope="session", autouse=True)
@@ -42,10 +44,14 @@ def engine():
         # hooks=[DebuggingHook(level=INFO, process_other=False, process_ctes=False)],
         conf=DuckDBConfig(),
     )
-    memory = working_path / "memory" / "schema.sql"
-    if Path(memory).exists():
+    string_sf = str(SF).replace(".", "_")
+    base_path =   working_path / f"sf_{string_sf}" / "memory" 
+    sentinal_file = base_path / "schema.sql"
+    if Path(sentinal_file).exists():
         # TODO: Detect if loaded
-        engine.execute_raw_sql(f"IMPORT DATABASE '{working_path / "memory"}';")
+        engine.execute_raw_sql(f"IMPORT DATABASE '{base_path}';")
+    else:
+        os.makedirs(base_path, exist_ok=True)
     results = engine.execute_raw_sql("SHOW TABLES;").fetchall()
     tables = [r[0] for r in results]
     if "store_sales" not in tables:
@@ -53,8 +59,8 @@ def engine():
             f"""
         INSTALL tpcds;
         LOAD tpcds;
-        SELECT * FROM dsdgen(sf=1);
-        EXPORT DATABASE '{working_path / "memory"}' (FORMAT PARQUET);"""
+        SELECT * FROM dsdgen(sf={SF});
+        EXPORT DATABASE '{base_path}' (FORMAT PARQUET);"""
         )
     yield engine
 

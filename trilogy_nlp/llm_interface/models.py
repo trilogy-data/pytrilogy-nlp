@@ -9,15 +9,19 @@ from enum import Enum
 
 class OrderResultV2(BaseModel):
     """The result of the order prompt"""
+
     model_config = ConfigDict(extra="forbid")
-    column_name: str  = Field(validation_alias=AliasChoices('column_name', 'column', 'name'))
+    column_name: str = Field(
+        validation_alias=AliasChoices("column_name", "column", "name")
+    )
     order: Ordering
 
 
 class Literal(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    value: str
+    value: Union[str, "Calculation"]
     type: str
+    calculation: Optional["Calculation"] = None
 
 
 class Calculation(BaseModel):
@@ -37,6 +41,7 @@ class Column(BaseModel):
 
 
 Calculation.model_rebuild()
+Literal.model_rebuild()
 
 
 class NLPComparisonOperator(Enum):

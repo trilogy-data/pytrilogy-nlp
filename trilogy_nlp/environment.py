@@ -9,6 +9,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from trilogy_nlp.tools import get_wiki_tool
 from trilogy.core.enums import Modifier
 from difflib import get_close_matches
+from trilogy.core.exceptions import InvalidSyntaxException
 
 # from trilogy.core.exceptions import Import
 
@@ -29,7 +30,9 @@ def get_environment_detailed_values(env: Environment, input: str):
     new = Environment(working_path=env.working_path)
     try:
         new.parse(f"import {input} as {input};")
-    except ImportError:
+
+        
+    except (ImportError, InvalidSyntaxException):
         suggestions = get_close_matches(input, get_environment_possible_imports(env))
         base = "This is an invalid database. Refer back to the list from the get_database_list tool. Names must match exactly."
         if suggestions:
@@ -246,6 +249,8 @@ def build_env_and_imports(
         # don't merge on date
         # TODO: be less hacky in terms of what default merges we should do
         if "date" in concept.namespace:
+            continue
+        if "__preql_internal" in k:
             continue
         pre_namespace_root = k.split(".", 1)[1]
         if "." not in pre_namespace_root:

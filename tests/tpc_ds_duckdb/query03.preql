@@ -16,3 +16,4 @@ ORDER BY
     sum_agg desc,
     store_sales.item.brand_id asc
 limit 100;
+

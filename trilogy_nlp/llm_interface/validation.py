@@ -7,6 +7,7 @@ from pydantic import BaseModel, ValidationError
 from trilogy.core.enums import ComparisonOperator
 from langchain_core.tools import ToolException
 from trilogy.core.exceptions import UndefinedConceptException
+from collections import defaultdict
 
 from trilogy_nlp.llm_interface.models import (
     InitialParseResponseV2,
@@ -56,6 +57,7 @@ def validate_query(query: dict, environment: Environment, prompt: str):
     filtered_on = set()
 
     def validate_column(col: Column, context: QueryContext) -> bool:
+        print(f'validating {col}')
         valid = False
         if (
             col.name not in select
@@ -92,16 +94,19 @@ def validate_query(query: dict, environment: Environment, prompt: str):
                 valid = True
             if col.calculation.over:
                 for x in col.calculation.over:
-                    valid = valid and validate_column(x, context)
+                    local = validate_column(x, context)
+                    valid = valid and local
 
             for arg in col.calculation.arguments:
                 if isinstance(arg, Column):
-                    valid = valid and validate_column(arg, context)
+                    local = validate_column(arg, context)
+                    valid = valid and local
         if valid:
             if context == QueryContext.SELECT:
                 select.add(col.name)
             elif context == QueryContext.FILTER:
                 filtered_on.add(col.name)
+        print('final valid', valid)
         return valid
 
     for x in parsed.columns:
@@ -144,7 +149,6 @@ def validate_query(query: dict, environment: Environment, prompt: str):
 
     return {"status": "valid", "tips": tips}
 
-from collections import defaultdict
 
 def validation_error_to_string(e: ValidationError):
     # Here, `validation_error.errors()` will have the full info
@@ -162,7 +166,13 @@ def validation_error_to_string(e: ValidationError):
             if e['type'] == 'missing':
                 path = ''.join([str(x) for x in e['loc'][:-1]])
                 path_freq[path] += 1
-                message = f'Missing {e["loc"][-1]} in {e["input"]}'
+                message = f'Missing {e["loc"][-1]} in {e["input"]}. You might have incorrect JSON formats or the key is actually missing. Double check Literal and Column formats.'
+                path_map[path].append(message)
+                missing.append(message)
+            elif e['type'] == 'extra_forbidden':
+                path = ''.join([str(x) for x in e['loc'][:-1]])
+                path_freq[path] += 1
+                message = f'Extra invalid key: {e["loc"][-1]} in {e["input"]}. You might have have incorrect JSON formats or have added an extra key accidentally. Double check Comparison, Literal, Column, formats etc.'
                 path_map[path].append(message)
                 missing.append(message)
             else:

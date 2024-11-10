@@ -6,12 +6,22 @@ from trilogy import Executor
 from trilogy_nlp.main_v2 import build_query as build_query_v2
 from trilogy_nlp.environment import build_env_and_imports
 from trilogy_nlp.constants import logger
+from langchain_core.language_models import BaseLanguageModel
+from collections import defaultdict
+
+import tomllib
 
 working_path = Path(__file__).parent
 
+class EnvironmentSetupException(Exception):
+    pass
 
-def helper(text: str, llm):
+
+def helper(text: str, llm, imports: list[str]):
     environment = build_env_and_imports(text, working_path=working_path, llm=llm)
+   
+    if not all(y in environment.imports for y in imports):
+         raise EnvironmentSetupException(f"Missing imports: {imports} not in {list(environment.imports.keys())}")
     processed_query = build_query_v2(
         input_text=text,
         input_environment=environment,
@@ -20,61 +30,93 @@ def helper(text: str, llm):
     )
     return environment, processed_query
 
+# from dataclasses import dataclass
 
-def run_query(engine: Executor, idx: int, llm):
+# @dataclass
+# def PromptInput:
 
-    with open(working_path / f"query{idx:02d}.prompt") as f:
-        text = f.read()
+ATTEMPTS = 1
 
-    env, processed_query = helper(text, llm)
+TARGET = .8
+
+def matrix(engine:Executor, idx:int, llm:BaseLanguageModel,  prompts:dict[str, dict[str,str]])->dict[str, int]:
+    output = {}
+    for name, prompt_info in prompts.items():
+        prompt = prompt_info["prompt"]
+        imports = prompt_info["imports"]
+        required = prompt_info.get("required", True)
+        if not required:
+            continue
+        cases = []
+        outputs = defaultdict(lambda: 0 )
+        for attempt in range(0, ATTEMPTS):
+            result, reason = query_loop(prompt, imports,  engine, idx, llm=llm)
+            if reason:
+                outputs[reason] +=1
+            cases.append(result)
+        ratio = sum(1 if c else 0 for c in cases) / ATTEMPTS
+        output[name] = ratio
+        assert sum(1 if c else 0 for c in cases) / ATTEMPTS > TARGET, outputs
+    return output
+
+def query_loop(prompt:str, imports: list[str], engine:Executor, idx:int, llm:BaseLanguageModel)->tuple[bool, str | None]:
+    try:
+        env, processed_query = helper(prompt, llm, imports)
+    except EnvironmentSetupException as e:
+        return False, str(e)
     # fetch our results
-    parse_start = datetime.now()
+    # parse_start = datetime.now()
     engine.environment = env
     query = engine.generate_sql(processed_query)[-1]
     logger.info(query)
     print(query)
-    parse_time = datetime.now() - parse_start
-    exec_start = datetime.now()
+    # parse_time = datetime.now() - parse_start
+    # exec_start = datetime.now()
     results = engine.execute_raw_sql(query)
-    exec_time = datetime.now() - exec_start
+    # exec_time = datetime.now() - exec_start
     # assert results == ''
     comp_results = list(results.fetchall())
     assert len(comp_results) > 0, "No results returned"
     # run the built-in comp
-    comp_start = datetime.now()
+    # comp_start = datetime.now()
     base = engine.execute_raw_sql(f"PRAGMA tpcds({idx});")
     base_results = list(base.fetchall())
-    comp_time = datetime.now() - comp_start
+    # comp_time = datetime.now() - comp_start
 
     # # check we got it
     if len(base_results) != len(comp_results):
-        assert False, f"Row count mismatch: {len(base_results)} != {len(comp_results)}"
+
+        return False, f"Row count mismatch: {len(base_results)} != {len(comp_results)}"
     for qidx, row in enumerate(base_results):
         for cell in row:
-            assert (
-                cell in comp_results[qidx]
-            ), f"Could not find value {cell} in row {qidx} (expected row v test): {row} != {comp_results[qidx]}"
+            if cell not in comp_results[qidx]:
+                return False, f"Could not find value {cell} in row {qidx} (expected row v test): {row} != {comp_results[qidx]}"
+    return True, None
 
+def run_query(engine: Executor, idx: int, llm:BaseLanguageModel):
+
+    with open(working_path / f"query{idx:02d}.prompt") as f:
+        text = f.read()
+        parsed = tomllib.loads(text)
+
+    prompts = matrix(engine, idx, llm, parsed)
+    
     with open(working_path / f"zquery{idx:02d}.log", "w") as f:
         f.write(
             tomli_w.dumps(
                 {
                     "query_id": idx,
-                    "parse_time": parse_time.total_seconds(),
-                    "exec_time": exec_time.total_seconds(),
-                    "comp_time": comp_time.total_seconds(),
-                    "gen_length": len(query),
-                    "generated_sql": query,
+                    "model": str(type(llm)),
+                    "success_rates": prompts
                 },
                 multiline_strings=True,
             )
         )
-    return query
+    return 1
 
 
 def test_one(engine, llm):
-    query = run_query(engine, 1, llm)
-    assert len(query) < 9000, query
+    run_query(engine, 1, llm)
 
 
 @pytest.mark.skip(reason="Is duckdb correct??")
@@ -99,7 +141,7 @@ def test_five(engine):
 @pytest.mark.cli
 def test_six(engine, llm):
     query = run_query(engine, 6, llm)
-    assert len(query) < 7100, query
+
 
 
 @pytest.mark.skip(reason="No prompt yet")

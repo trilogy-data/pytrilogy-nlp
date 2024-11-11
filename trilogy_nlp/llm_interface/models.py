@@ -1,7 +1,7 @@
 from typing import Optional, Union
 from pydantic import BaseModel, field_validator
 from trilogy.core.enums import ComparisonOperator, Ordering, BooleanOperator
-from pydantic import BaseModel, Field, AliasChoices, ConfigDict
+from pydantic import BaseModel, Field, AliasChoices, ConfigDict, field_validator, ValidationInfo
 
 # from trilogy.core.constants import
 from enum import Enum
@@ -21,6 +21,8 @@ class Literal(BaseModel):
     model_config = ConfigDict(extra="forbid")
     value: Union[str, "Calculation"]
     type: str
+    # we never want this to be provided, but if it exists, use it preferentially
+    # calculation: Optional["Calculation"] = None
 
 
 class Calculation(BaseModel):
@@ -74,6 +76,13 @@ class NLPConditions(BaseModel):
 class NLPComparisonGroup(BaseModel):
     boolean: BooleanOperator
     values: list[Union[NLPConditions, "NLPComparisonGroup"]]
+
+    @field_validator('boolean', mode='before')
+    @classmethod
+    def check_alphanumeric(cls, v: str, info: ValidationInfo) -> str:
+        if isinstance(v, str):
+            return BooleanOperator(v.lower())
+        return BooleanOperator(v)
   
 
 

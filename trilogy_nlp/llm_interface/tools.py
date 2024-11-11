@@ -72,6 +72,10 @@ def get_fields(environment: Environment, search: str, *args, **kwargs) -> str:
     return f"Invalid search; valid options {environment.datasources.keys()}"
 
 
+def get_help(x):
+    raise SyntaxError(x)
+
+
 def sql_agent_tools(environment, prompt: str):
     def validate_response_wrapper(**kwargs):
         return validate_response(
@@ -81,19 +85,19 @@ def sql_agent_tools(environment, prompt: str):
         )
 
     tools = [
-        # Tool.from_function(
-        #     func=lambda x: get_model_description(x, environment),
-        #     name="get_database_description",
-        #     description="""
-        #    Share a directory of folders to look in for exact fields. Takes no arguments. These groupings are never referenced directly.""",
-        #    handle_tool_error='Call with empty string "", not {{}}.'
-        # ),
+        Tool.from_function(
+            func=lambda x: get_model_description(x, environment),
+            name="get_validation_help",
+            description="""
+           Get help with validation errors""",
+            handle_tool_error=True,
+        ),
         StructuredTool(
             name="validate_response",
             description="""
             Check that a response is formatted properly and accurate before your final answer. Always call this with the complete final response before reporting a Final Answer!
             If the response is not correct, the "valid" argument will be false and it will return an array of errors. If it is correct, it will return "true" for the valid argument.
-            This validation checks for syntactic issues, but you will need to check for semantic issues yourself.
+            You must fix all errors returned by validation before submitting. If you are not sure what the error means, ask for help using the get_validation_help tool.
             """,
             func=validate_response_wrapper,
             args_schema=ValidateResponseInterface,

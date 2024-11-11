@@ -27,7 +27,7 @@ from trilogy.core.enums import (
 )
 from enum import Enum
 from trilogy_nlp.llm_interface.examples import COLUMN_DESCRIPTION
-
+import json
 
 def is_valid_function(name: str):
     return name.lower() in [item.value for item in FunctionType]
@@ -42,7 +42,7 @@ def invalid_operator_message(operator: str) -> str | None:
 
 
 class QueryContext(Enum):
-    SELECT = "SELECT"
+    SELECT = "COLUMN"
     FILTER = "FILTER"
     ORDER = "ORDER"
 
@@ -95,12 +95,12 @@ def validate_query(query: dict, environment: Environment, prompt: str):
                 recommendations = e.suggestions
             if recommendations:
                 errors.append(
-                    f"{col.name} in {context} is not a valid field or previously defined; if this is a new metric you need, add a select to calculate it. Did you mean one of {recommendations}?",
+                    f"{col.name} in {context} is not a valid field or previously defined by you; if this is a new metric you need, add a select to calculate it. Is one of these the correct spelling? {recommendations}?",
                 )
             else:
 
                 errors.append(
-                        f"{col.name} in {context} is not a valid field or previously defined. If this is a new metric you need, add a select to calculate it. If you misspelld a field, potential matches are {difflib.get_close_matches(col.name, environment.concepts.keys(), 3, 0.4)}",
+                        f"{col.name} in {context} is not a valid field or previously defined by you. If this is a new metric you need, add a select to calculate it. If you misspelled a field, potential matches are {difflib.get_close_matches(col.name, environment.concepts.keys(), 3, 0.4)}",
                     )
         elif col.name in environment.concepts:
             valid = True
@@ -162,7 +162,7 @@ def validate_query(query: dict, environment: Environment, prompt: str):
                         )
 
     if errors:
-        return {"status": "invalid", "errors": errors[:2]}
+        return {"status": "invalid", "errors": {f'Error {idx}: {error}' for idx, error in enumerate(errors)}}
     tips = [
         f'No validation errors - looking good! Just double check you have all the filters from the original prompt, validate any changes, and send it off! Prompt: "{prompt}"!'
     ]
@@ -193,13 +193,13 @@ def validation_error_to_string(e: ValidationError):
             if e['type'] == 'missing':
                 path = ''.join([str(x) for x in e['loc'][:-1]])
                 path_freq[path] += 1
-                message = f'Missing {e["loc"][-1]} in {e["input"]}. You might have incorrect JSON formats or the key is actually missing. Double check Literal and Column formats.'
+                message = f'Missing "{e["loc"][-1]}" in this JSON object you provided: {json.dumps(e["input"], indent=4)}. You may also be using the wrong object. Double check Literal and Column formats.'
                 path_map[path].append(message)
                 missing.append(message)
             elif e['type'] == 'extra_forbidden':
                 path = ''.join([str(x) for x in e['loc'][:-1]])
                 path_freq[path] += 1
-                message = f'Extra invalid key: {e["loc"][-1]} in {e["input"]}. You might have have incorrect JSON formats or have added an extra key accidentally. Double check Comparison, Literal, Column, formats etc.'
+                message = f'Extra invalid key "{e["loc"][-1]}" in this JSON object you provided: {json.dumps(e["input"], indent=4)}'
                 path_map[path].append(message)
                 missing.append(message)
             else:
@@ -207,7 +207,7 @@ def validation_error_to_string(e: ValidationError):
                 missing.append(missing_path)
         min_path = min(path_freq, key=path_freq.get)
         locations = path_map[min_path]
-        raw_error = f"Syntax error in your filtering clause. Comparisons need a left, right, operator, etc, and Columns and Literal formats are very specific. Hint on where to look: {locations}"
+        raw_error = f"Syntax error in your filtering clause. Check that you only use valid keys for Literal, Comparison, and Column objects, and have all required keys. Look at these locations: {locations}"
     else:
         for e in errors:
             if e['type'] == 'missing':

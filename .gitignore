@@ -25,3 +25,5 @@ local_prompt_cache.db
 memory/
 
 tests/tpc_ds_duckdb/memory.db
+
+sf_*

@@ -92,6 +92,8 @@ def sql_agent_tools(environment, prompt: str):
             name="validate_response",
             description="""
             Check that a response is formatted properly and accurate before your final answer. Always call this with the complete final response before reporting a Final Answer!
+            If the response is not correct, the "valid" argument will be false and it will return an array of errors. If it is correct, it will return "true" for the valid argument.
+            This validation checks for syntactic issues, but you will need to check for semantic issues yourself.
             """,
             func=validate_response_wrapper,
             args_schema=ValidateResponseInterface,
@@ -108,14 +110,14 @@ def sql_agent_tools(environment, prompt: str):
             func=lambda x: get_fields(environment, x),
             name="get_fields",
             description="""
-            Array of json objects containing the names of actual fields that can be referenced, with a description if it exists. Fields always need to be referenced by exact name. Queries operate on fields only, by exact name.
+            Returns array of json objects containing the names of actual fields that can be referenced, with a description if it exists. Fields always need to be referenced by exact name. Queries operate on fields only, by exact name.
             """,
         ),
         Tool.from_function(
             func=get_today_date,
             name="get_today_date",
             description="""
-            Useful to get the date of today.
+            Use to get the date of today.
             """,
         ),
     ]

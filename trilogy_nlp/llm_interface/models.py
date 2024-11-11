@@ -21,7 +21,6 @@ class Literal(BaseModel):
     model_config = ConfigDict(extra="forbid")
     value: Union[str, "Calculation"]
     type: str
-    calculation: Optional["Calculation"] = None
 
 
 class Calculation(BaseModel):
@@ -73,8 +72,9 @@ class NLPConditions(BaseModel):
 
 
 class NLPComparisonGroup(BaseModel):
-    values: list[Union[NLPConditions, "NLPComparisonGroup"]]
     boolean: BooleanOperator
+    values: list[Union[NLPConditions, "NLPComparisonGroup"]]
+  
 
 
 class FilterResultV2(BaseModel):

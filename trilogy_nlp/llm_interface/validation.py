@@ -16,10 +16,11 @@ from trilogy_nlp.llm_interface.models import (
     FilterResultV2,
     OrderResultV2,
     Literal,
+    Calculation,
 )
 from trilogy_nlp.llm_interface.examples import FILTERING_EXAMPLE
 from trilogy_nlp.llm_interface.constants import COMPLICATED_FUNCTIONS
-
+import difflib
 # from trilogy.core.constants import
 from trilogy.core.enums import (
     FunctionType,
@@ -45,6 +46,8 @@ class QueryContext(Enum):
     FILTER = "FILTER"
     ORDER = "ORDER"
 
+    def __str__(self) -> str:
+        return f'{self.value} definition'
 
 def validate_query(query: dict, environment: Environment, prompt: str):
     try:
@@ -56,6 +59,27 @@ def validate_query(query: dict, environment: Environment, prompt: str):
     select = {col.name for col in parsed.columns if col.calculation}
     filtered_on = set()
 
+    def validate_calculation(calc: Calculation, context: QueryContext) -> bool:
+        if not is_valid_function(calc.operator):
+            errors.append(
+                f"{calc} in {context} does not use a valid function (is using {calc.operator}); check that you are using ONLY a valid option from this list: {sorted([x for x in FunctionType.__members__.keys() if x not in COMPLICATED_FUNCTIONS]) }. If the column requires no transformation, drop the calculation field.",
+            )
+            if calc.over:
+                for x in calc.over:
+                    local = validate_column(x, context)
+                    valid = valid and local
+
+            for arg in calc.arguments:
+                if isinstance(arg, Column):
+                    local = validate_column(arg, context)
+                    valid = valid and local
+
+    def validate_literal(lit:Literal, context: QueryContext) -> bool:
+        if isinstance(lit.value, str) and lit.value in environment.concepts:
+            return True
+        elif isinstance(lit.value, Calculation):
+            return validate_calculation(lit.value, context)
+        
     def validate_column(col: Column, context: QueryContext) -> bool:
         print(f'validating {col}')
         valid = False
@@ -69,15 +93,15 @@ def validate_query(query: dict, environment: Environment, prompt: str):
                 environment.concepts[col.name]
             except UndefinedConceptException as e:
                 recommendations = e.suggestions
-
             if recommendations:
                 errors.append(
-                    f"{col.name} in {context} is not a valid field or previously defined; check that you are using the full exact column name (including any prefixes). Did you mean one of {recommendations}?",
+                    f"{col.name} in {context} is not a valid field or previously defined; if this is a new metric you need, add a select to calculate it. Did you mean one of {recommendations}?",
                 )
             else:
+
                 errors.append(
-                    f"{col.name} in {context} is not a valid field or previously defined; check that you are using the full exact column name (including any prefixes). If you want to apply a function, use a calculation - do not include it in the field name.",
-                )
+                        f"{col.name} in {context} is not a valid field or previously defined. If this is a new metric you need, add a select to calculate it. If you misspelld a field, potential matches are {difflib.get_close_matches(col.name, environment.concepts.keys(), 3, 0.4)}",
+                    )
         elif col.name in environment.concepts:
             valid = True
             if col.calculation:
@@ -116,18 +140,21 @@ def validate_query(query: dict, environment: Environment, prompt: str):
         for y in parsed.order:
             if y.column_name not in select:
                 errors.append(
-                    f"{y.column_name} in order not in select; check that you are using only values in the top level of the select.",
+                    f"{y.column_name} being ordered by is not in select output; add if needed.",
                 )
     if parsed.filtering:
         root = parsed.filtering.root
         for val in root.values:
             if isinstance(val, Column):
                 validate_column(val, QueryContext.FILTER)
+            
             elif isinstance(val, NLPConditions):
                 print(val)
                 for subval in [val.left, val.right]:
                     if isinstance(subval, Column):
                         validate_column(subval, QueryContext.FILTER)
+                    elif isinstance(subval, Literal):
+                        validate_literal(subval, QueryContext.FILTER)
                 if isinstance(val.left, Column) and isinstance(val.right, Column):
                     if val.left.name == val.right.name:
                         errors.append(
@@ -135,7 +162,7 @@ def validate_query(query: dict, environment: Environment, prompt: str):
                         )
 
     if errors:
-        return {"status": "invalid", "error": errors}
+        return {"status": "invalid", "errors": errors[:2]}
     tips = [
         f'No validation errors - looking good! Just double check you have all the filters from the original prompt, validate any changes, and send it off! Prompt: "{prompt}"!'
     ]
@@ -181,6 +208,10 @@ def validation_error_to_string(e: ValidationError):
         min_path = min(path_freq, key=path_freq.get)
         locations = path_map[min_path]
         raw_error = f"Syntax error in your filtering clause. Comparisons need a left, right, operator, etc, and Columns and Literal formats are very specific. Hint on where to look: {locations}"
+    else:
+        for e in errors:
+            if e['type'] == 'missing':
+                raw_error = f'Missing {e["loc"][-1]} in {e["input"]}. You might have incorrect JSON formats or the key is actually missing. Double check Literal and Column formats.'
     return raw_error
 
 

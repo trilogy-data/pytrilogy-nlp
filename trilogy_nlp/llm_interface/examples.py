@@ -1,5 +1,6 @@
 FILTERING_EXAMPLE = {
     "root": {
+        "boolean": "and",
         "values": [
             {
                 "operator": ">",
@@ -29,8 +30,7 @@ FILTERING_EXAMPLE = {
                     },
                 }   
             }
-        ],
-        "boolean": "and",
+        ]
     }
 }
 

@@ -8,6 +8,7 @@ from trilogy_nlp.environment import build_env_and_imports
 from trilogy_nlp.constants import logger
 from langchain_core.language_models import BaseLanguageModel
 from collections import defaultdict
+from trilogy.core.processing.concept_strategies_v3 import get_priority_concept
 
 import tomllib
 
@@ -242,10 +243,26 @@ SELECT * FROM dsdgen(sf=1);"""
 
 
 if __name__ == "__main__":
+    TEST_2 = """
+import store_returns as store_returns;
+    WHERE
+    store_returns.return_date.year = 2000 and store_returns.store.state = 'TN'
+SELECT
+    store_returns.customer.text_id,
+    store_returns.store.id,
+    sum(store_returns.return_amount) by store_returns.customer.text_id, store_returns.store.id -> customer_total_returns,
+    avg(customer_total_returns) by store_returns.store.id -> avg_total_returns_by_store,
+    1.2 * avg_total_returns_by_store -> inline_calc_158,
+HAVING
+    customer_total_returns > inline_calc_158 
+ORDER BY
+    store_returns.customer.text_id asc
+
+LIMIT 100;"""
     TEST = """
 import store_returns as store_returns;
 WHERE
-    store_returns.return_date.date.year = 2000 and (store_returns.store.state = 'TN' and True)
+    store_returns.return_date.date.year = 2000 and store_returns.store.state = 'TN'
 SELECT
     store_returns.customer.text_id,
     store_returns.store.id, 
@@ -259,7 +276,7 @@ ORDER BY
     store_returns.customer.text_id asc
 
 LIMIT 100;"""
-    run_adhoc(1, text = TEST, comparison = """WITH customer_total_return AS
+    run_adhoc(1, text = TEST_2, comparison = """WITH customer_total_return AS
   (SELECT sr_customer_sk AS ctr_customer_sk,
           sr_store_sk AS ctr_store_sk,
           sum(sr_return_amt) AS ctr_total_return

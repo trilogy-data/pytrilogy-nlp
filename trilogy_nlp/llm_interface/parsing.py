@@ -33,6 +33,7 @@ from trilogy.core.processing.utility import (
     is_scalar_condition,
     decompose_condition,
 )
+from random import randint
 
 # from trilogy.core.constants import
 from trilogy.core.enums import (
@@ -56,17 +57,17 @@ def parse_datatype(dtype: str):
         return mapping[dtype]
     return DataType.STRING
 
-from random import randint
+def get_next_inline_calc_name(environment: Environment)->str:
+    return f'inline_calc_{len(environment.concepts)+1}'
+
 
 def create_literal(l: Literal, environment: Environment) -> str | float | int | bool:
     # LLMs might get formats mixed up; if they gave us a column, hydrate it here.
     # and carry on
     if isinstance(l.value, Calculation):
-        return create_column(Column(name=f'inline_calc_{randint(0,100)}', calculation=l.value), environment)
+        return create_column(Column(name=get_next_inline_calc_name(environment), calculation=l.value), environment)
     if l.value in environment.concepts:
         return create_column(Column(name=l.value), environment)
-    if l.calculation:
-        return create_column(Column(name=f'inline_calc_{randint(0,100)}', calculation=l.calculation), environment)
     
     # otherwise, we really have a literal
     dtype = parse_datatype(l.type)

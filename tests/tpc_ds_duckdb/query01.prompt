@@ -1,13 +1,13 @@
 [Easy]
 imports = ["store_returns"]
 
-prompt = """Using store_returns info, output the customer text id and store_id for customers and how much they returned to the store the state of Tennessee in 2000. Return at most 100 rows.
+prompt = """Using store_returns info, output the customer text id and store_id for customers and how much they returned to the store the state of TN in 2000. Return at most 100 rows.
 
 Only show customer.text_ids and store_ids where the total returns for that customer were more than 1.2 times the average by STORE of the total return value for a given customer text id and store ID.
 
-(hint: get sum of returns over customer Id and store then average that sum by just customer ID! You can then multiple that by 1.2 before comparing back to the customer total returns.)
+(hint: get sum of returns over customer Id and store id, then average that sum by just customer ID! You can then multiple that by 1.2 before comparing back to the customer total returns.)
 
-hint 2 - make sure your average is calculated on the SUM of returns by store ID and customer!
+hint 2 - make sure your average is calculated on a sub calculation for the SUM of returns by store ID and customer!
 
 1. calculate the total returns for each customer and store
 

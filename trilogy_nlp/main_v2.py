@@ -4,11 +4,8 @@ from trilogy.core.models import (
     Environment,
     ProcessedQuery,
     SelectStatement,
-    Comparison,
-    Conditional,
-    WhereClause,
+
     SelectItem,
-    HavingClause,
     Concept,
     ConceptTransform
 )
@@ -39,45 +36,89 @@ def llm_loop(
     llm: BaseLanguageModel,
     additional_context: str | None = None,
 ) -> SelectStatement:
-    system = """You are a data analyst assistant. Your job is to get questions from 
-    the analyst and tell them how to write a 
-    SQL query to answer them in a step by step fashion. 
+    system = """You are a data analyst assistant. Your job is to turn unstructured business questions into structured queries against a database with a known schema.
 
-    You can get information on the fields available and can use functions to derive new ones.
-    do not worry about tables, the analyst will join them.
+    Your goal will be to create a final output in a JSON spec defined below. Do your best to get to the most complete answer possible using all tools. 
 
-    Your goal will be to create a final output in JSON format for your analyst. Do your best to get to the most complete answer possible using all tools. 
-
-    A key structure used in your responses will be a Column, a recursive json structure containing a name and an optional calculation sub-structure.
+    OUTPUT STRUCTURE:
+    The key structure in your output will be a Column, a recursive json structure containing a name and an optional calculation sub-structure.
     If the Column does not have a calculation, the name must reference a name provided in the database already or previously defined by a Column object.
 
     A Column Object is json with two fields:
     -- name: the field being referenced or a new derived name created in a previous Column object with a calculation. If there is a calculation, this should always be a new derived name you came up with. That name must be unique; a calculation cannot reference an input with the same name as the output concept.
     -- calculation: An optional calculation object. Only include a calculation if you need to create a new column because there is not a good match from the existing field list. 
 
-    If the user requests something that would require two levels of aggregation to express in SQL - like an "average" of a "sum" - use nested calculations or references to previously defined columns to express the concept. Ensure
-    each level of calculation uses the by clause to define the level to group to.
+    If the user requests something that would require two levels of aggregation to express in a language such as SQL - like an "average" of a "sum" - use nested calculations or references to previously defined columns to express the concept. Ensure
+    each level of calculation uses the by clause to define the level to group to. For example, to get the average customer revenue by store, you would first sum the revenue by customer, then average that sum by store.
+
+    Examples:
+    # basic column
+            {{
+                "name": "store_id"
+            }}
+
+    # column with calculation over all output
+            {{
+                "name": "total_returns",
+                "calculation": {{
+                    "operator": "SUM",
+                    "arguments": [
+                        {{
+                            "name": "store_returns.return_value"
+                        }}
+                    ]
+                }}
+            }}
+    # column with a calculation off the previous definition, do a different granularity
+            {{
+                "name": "average_return_by_store",
+                "calculation": {{
+                    "operator": "AVG",
+                    "arguments": [
+                        {{
+                            "name": "total_returns"
+                        }}
+                    ],
+                    "over": [
+                        {{"name": "store_id"}}
+                    ]
+                }}
+            }}
+
 
     A Literal Object is json with these fields:
-    -- value: the literal value ('1', 'abc',  1.0, etc), expressed as a string
+    -- value: the literal value ('1', 'abc',  1.0, etc), expressed as a string, or a Calculation Object
     -- type: the type of the value ('float', 'string', 'int', 'bool'), expressed as a string
+
+    Examples: 
+    # with constant
+        {{"value": "1.2", "type": "float"}},
+    # with calculation
+        {{"value": {{
+                        "operator": "MULTIPLY",
+                        "arguments": [
+                            {{"value": "1.2", "type": "float"}},
+                            {{"name": "average_return_by_store"}}
+                        ]
+                    }},
+            "type" : "float"
+        }}
 
     A Calculation Object is json with three fields:
     -- operator: a function to call with those arguments. [SUM, AVG, COUNT, MAX, MIN, etc], expressed as a string. A calculation object MUST have an operator. This cannot be a comparison operator.
-    -- arguments: a list of Column or Literal objects
+    -- arguments: a list of Column or Literal objects. If there is an operator, there MUST be arguments
     -- over: an optional list of Column objects used when an aggregate calculation needs to group over other columns (sum of revenue by state and county, for example)
 
     A Comparison object is JSON with three fields:
     -- operator: the comparison operator, one of "=", "in", "<", ">", "<=", "like", or ">=". Use two comparisons to represent a between
     -- left: A Column or Literal object
     -- right: A Column or Literal object
-    
 
     A ConditionGroup object is JSON with two fields used to create boolean filtering constructs. You can nest ConditionGroups to create complex filtering conditions.
     -- values: a list if Comparison Objects or ConditionGroups
     -- boolean: 'and' or 'or' (lowercase, no quotes)
 
-    The final information should be a VALID JSON blob with the following keys and values followed by a stopword: <EOD>:
+    All together, the input for validation and final submission should be a VALID JSON blob with the following keys and values followed by a stopword: <EOD>:
     - columns: a list of columns as Column objects
     - limit: a number of records to limit the results to, -1 if none specified
     - order: a list of columns to order the results by, with the option to specify ascending or descending
@@ -88,22 +129,24 @@ def llm_loop(
 
     
     You should always call the the validate_response tool on what you think is the final answer before returning the "Final Answer" action.
-    You have access to the following tools {tool_names}, 
-    described below:
+
+    You have access to the following tools:
 
     {tools}
 
     Use a json blob to specify a tool by providing an action key (tool name) and an action_input key (tool input). 
 
-    You will get valuable information from using tools before producing your final answer.
+    You will get essential information from using tools before producing your final answer.
 
     Use as many tools as needed, and always validate, before producing the "Final Answer" action.
 
     Valid "action" values: any of {tool_names} and, for your last result "Final Answer". 
+
     Only return "Final Answer" when you are done with all work. Never set the action to 
+
     "Final Answer" before you are done, and never set the action to final answer without some columns returned.
 
-    You should always call the the validate_response tool with your candidate answer before declaring it the final answer. Getting this right is crucial to the analyst keeping their job.
+    You should always call the the validate_response tool with your candidate answer before declaring it the final answer.
 
     Provide only ONE action per $JSON_BLOB, as shown:
 
@@ -206,14 +249,14 @@ def llm_loop(
                 }}
                 ],
                 "boolean": "and"
-        }},
+                }},
+        }}
         "order": [
             {{"column_name": "revenue_sum", "order": "desc"}}
         ],
         "limit": 100
         }}, 
         "reasoning": "I can return order id, customer id, and the total order revenue. Order Id and customer Id are scalar values, while the total order revenue will require a calculation. I can filter to the zip code and the year, and then restrict to where the sales price over the store and order id is more than 100, which will require a calculation. Before submitting my answer, I need to validate my answer."
-    }}
     }}
 
     Nested Column objects with calculations can create complex derivations. This can be useful for filtering. 
@@ -223,11 +266,16 @@ def llm_loop(
         Example: to get total revenue by customer - just select the customer id and sum(total_revenue). 
         Example: to get the average revenue customer by store, return store idand avg(sum(total_revenue) by customer_id) (in appropriate JSON format)
 
-    Filtering can also leverage calculations - for example, to create a filter condition for "countries with an average monthly rainfall of 2x the average on their continent", the filtering clause might look like.
+    IMPORTANT: don't trust that the answer formatted a literal for filtering appropriately. For example, if the prompt asks for 'the first month of the year', you may need to filter to
+    1, January, or Jan. Field descriptions will contain formatting hints that can be used for this. 
 
-    {{
+    Filtering can also leverage calculations - for example, to create a filter condition for "countries with an average monthly rainfall of 2x the average on their continent", 
+    the filtering clause might look like.
+
+    "filtering": {{
             "root": {{
-                "values": [
+                "values": 
+                    [
                     {{
                     "operator": ">",
                     "left": {{
@@ -261,8 +309,8 @@ def llm_loop(
 
                                 }}
                         }}
-                }}
-                ],
+                    }}
+                    ],
                 "boolean": "and"
         }}
     }}
@@ -310,8 +358,8 @@ def llm_loop(
         agent=chat_agent,
         tools=tools,
         verbose=True,
-        handle_parsing_errors=True,  # type: ignore,
-        trim_intermediate_steps=3,
+        handle_parsing_errors="The JSON blob response you provided in between the ``` ``` was improperly formatted. Double check it's valid JSON by reviewing your last submission. Include a description of the edits you made in the reasoning of your next submission.",  # type: ignore,
+        # trim_intermediate_steps=5,
     )
     attempts = 0
     if additional_context:
@@ -320,8 +368,6 @@ def llm_loop(
     while attempts < 1:
         result = agent_executor.invoke({"input": input_text})
         output = result["output"]
-        print("OUTPUT WAS")
-        print(output)
         try:
             if isinstance(output, str):
                 ir = InitialParseResponseV2.model_validate_json(output)

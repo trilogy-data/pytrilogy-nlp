@@ -1,7 +1,12 @@
 from typing import Optional, Union
 from pydantic import BaseModel, field_validator
 from trilogy.core.enums import ComparisonOperator, Ordering, BooleanOperator
-from pydantic import BaseModel, Field, AliasChoices, ConfigDict, field_validator, ValidationInfo
+from pydantic import (
+    Field,
+    AliasChoices,
+    ConfigDict,
+    ValidationInfo,
+)
 
 # from trilogy.core.constants import
 from enum import Enum
@@ -77,13 +82,12 @@ class NLPComparisonGroup(BaseModel):
     boolean: BooleanOperator
     values: list[Union[NLPConditions, "NLPComparisonGroup"]]
 
-    @field_validator('boolean', mode='before')
+    @field_validator("boolean", mode="before")
     @classmethod
     def check_alphanumeric(cls, v: str, info: ValidationInfo) -> str:
         if isinstance(v, str):
             return BooleanOperator(v.lower())
         return BooleanOperator(v)
-  
 
 
 class FilterResultV2(BaseModel):

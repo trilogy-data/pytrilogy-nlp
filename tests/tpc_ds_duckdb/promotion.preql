@@ -9,9 +9,9 @@ datasource promotion (
     P_PROMO_SK: id,
     P_PROMO_ID: string_id,
     P_COST: cost,
-    P_CHANNEL_EMAIL: channel_email,
-    P_CHANNEL_EVENT: channel_event,
-    P_CHANNEL_CATALOG: channel_catalog,
+    P_CHANNEL_EMAIL: channel_email, # Single character, Y or N, for if the promotion was sent via email
+    P_CHANNEL_EVENT: channel_event, # Single character, Y or N, for if the promotion was via an event
+    P_CHANNEL_CATALOG: channel_catalog, # Single character, Y or N, for if the promotion was sent via catalog
 )
 grain (id)
 address memory.promotion;

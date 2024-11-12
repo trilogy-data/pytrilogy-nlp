@@ -1,13 +1,15 @@
 [Easy]
 imports = ["store_returns"]
 
-prompt = """Using store_returns info, output the customer text id and store_id for customers and how much they returned to the store the state of TN in 2000. 
+prompt = """Using store_returns info [all your fields will be subsets of store_returns], output the return customer text id and return store id for customers and how much they returned to the store the state of TN in 2000. 
 
-Additionally add this complex filter - return only customer text ID and store ID where the total returns by store for that customer were more than 1.2 times
-the average total returns by customer by store. This will require a nested calculation - first find the total revenue by customer and store, then use that in a calculation of
-average total revenue by store, then compare the customer revenue to this value * 1.2. 
+Additionally add this complex filter - return only return customer text ID and store ID where the total returns by store for that customer were more than 1.2 times
+the average per-cstomer total returns by store. This will require a nested calculation - first find the total returns by customer and store, then use that in a calculation of
+average of total customer returns by store [and only store!], then compare the total returns you calculated to this value * 1.2. 
 
-Return at most 100 rows. Sort results by the customer text_id.
+IMPORTANT: if you take the average by store AND customer you will get the wrong answer!!
+
+Return at most 100 rows. Sort results by customer_text_id asc
 
 """
 

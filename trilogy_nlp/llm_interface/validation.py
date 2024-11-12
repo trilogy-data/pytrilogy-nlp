@@ -18,16 +18,18 @@ from trilogy_nlp.llm_interface.models import (
     Literal,
     Calculation,
 )
-from trilogy_nlp.llm_interface.examples import FILTERING_EXAMPLE
 from trilogy_nlp.llm_interface.constants import COMPLICATED_FUNCTIONS
 import difflib
+
 # from trilogy.core.constants import
 from trilogy.core.enums import (
     FunctionType,
 )
 from enum import Enum
-from trilogy_nlp.llm_interface.examples import COLUMN_DESCRIPTION
 import json
+
+VALID_STATUS = "valid"
+
 
 def is_valid_function(name: str):
     return name.lower() in [item.value for item in FunctionType]
@@ -41,19 +43,25 @@ def invalid_operator_message(operator: str) -> str | None:
     return None
 
 
+VALIDATION_CACHE: dict[str, InitialParseResponseV2] = {}
+
+
 class QueryContext(Enum):
     SELECT = "COLUMN"
     FILTER = "FILTER"
     ORDER = "ORDER"
 
     def __str__(self) -> str:
-        return f'{self.value} definition'
+        return f"{self.value} definition"
 
-def validate_query(query: dict, environment: Environment, prompt: str):
+
+def validate_query(
+    query: dict, environment: Environment, prompt: str
+) -> tuple[dict, InitialParseResponseV2 | None]:
     try:
         parsed = InitialParseResponseV2.model_validate(query)
     except ValidationError as e:
-        return {"status": "invalid", "error": validation_error_to_string(e)}
+        return {"status": "invalid", "error": validation_error_to_string(e)}, None
     errors = []
     # assume to start that all our select calculations are valid
     select = {col.name for col in parsed.columns if col.calculation}
@@ -74,14 +82,14 @@ def validate_query(query: dict, environment: Environment, prompt: str):
                     local = validate_column(arg, context)
                     valid = valid and local
 
-    def validate_literal(lit:Literal, context: QueryContext) -> bool:
+    def validate_literal(lit: Literal, context: QueryContext) -> bool:
         if isinstance(lit.value, str) and lit.value in environment.concepts:
             return True
         elif isinstance(lit.value, Calculation):
             return validate_calculation(lit.value, context)
-        
+
     def validate_column(col: Column, context: QueryContext) -> bool:
-        print(f'validating {col}')
+        print(f"validating {col}")
         valid = False
         if (
             col.name not in select
@@ -100,8 +108,8 @@ def validate_query(query: dict, environment: Environment, prompt: str):
             else:
 
                 errors.append(
-                        f"{col.name} in {context} is not a valid field or previously defined by you. If this is a new metric you need, add a select to calculate it. If you misspelled a field, potential matches are {difflib.get_close_matches(col.name, environment.concepts.keys(), 3, 0.4)}",
-                    )
+                    f"{col.name} in {context} is not a valid field or previously defined by you. If this is a new metric you need, add a select to calculate it. If you misspelled a field, potential matches are {difflib.get_close_matches(col.name, environment.concepts.keys(), 3, 0.4)}",
+                )
         elif col.name in environment.concepts:
             valid = True
             if col.calculation:
@@ -130,7 +138,7 @@ def validate_query(query: dict, environment: Environment, prompt: str):
                 select.add(col.name)
             elif context == QueryContext.FILTER:
                 filtered_on.add(col.name)
-        print('final valid', valid)
+        print("final valid", valid)
         return valid
 
     for x in parsed.columns:
@@ -147,7 +155,7 @@ def validate_query(query: dict, environment: Environment, prompt: str):
         for val in root.values:
             if isinstance(val, Column):
                 validate_column(val, QueryContext.FILTER)
-            
+
             elif isinstance(val, NLPConditions):
                 print(val)
                 for subval in [val.left, val.right]:
@@ -162,19 +170,22 @@ def validate_query(query: dict, environment: Environment, prompt: str):
                         )
 
     if errors:
-        return {"status": "invalid", "errors": {f'Error {idx}: {error}' for idx, error in enumerate(errors)}}
+        return {
+            "status": "invalid",
+            "errors": {f"Error {idx}: {error}" for idx, error in enumerate(errors)},
+        }
     tips = [
-        f'No validation errors - looking good! Just double check you have all the filters from the original prompt, validate any changes, and send it off! Prompt: "{prompt}"!'
+        f'No validation errors - looking good! Just double check you have covered the original prompt, and submit it! (ONLY call revalidate again if you make a change after this. But if you do make a change to submission, you MUST recall validation) Prompt: "{prompt}"!'
     ]
     for x in select.union(filtered_on):
         if x in environment.concepts:
             concept = environment.concepts[x]
             if concept.metadata.description:
                 tips.append(
-                    f'For {x}, reminder that the field description is "{concept.metadata.description}". Make sure to double check any filtering on this field matches the described format!'
+                    f'For {x}, reminder that the field description is "{concept.metadata.description}". Double check any filtering on this field matches the described format! (this is a reminder, not an error)'
                 )
-
-    return {"status": "valid", "tips": tips}
+    VALIDATION_CACHE[prompt] = parsed
+    return {"status": VALID_STATUS, "tips": tips}, parsed
 
 
 def validation_error_to_string(e: ValidationError):
@@ -187,30 +198,42 @@ def validation_error_to_string(e: ValidationError):
     # TODO: better pydantic error parsing
     if "filtering.root." in raw_error:
         missing = []
-        path_freq = defaultdict(lambda : 0)
-        path_map = defaultdict(lambda : [])
+        path_freq = defaultdict(lambda: 0)
+        path_map = defaultdict(lambda: [])
         for e in errors:
-            if e['type'] == 'missing':
-                path = ''.join([str(x) for x in e['loc'][:-1]])
+            if e["type"] == "missing":
+                path = "".join([str(x) for x in e["loc"][:-1]])
                 path_freq[path] += 1
                 message = f'Missing "{e["loc"][-1]}" in this JSON object you provided: {json.dumps(e["input"], indent=4)}. You may also be using the wrong object. Double check Literal and Column formats.'
                 path_map[path].append(message)
                 missing.append(message)
-            elif e['type'] == 'extra_forbidden':
-                path = ''.join([str(x) for x in e['loc'][:-1]])
+            elif e["type"] == "extra_forbidden":
+                path = "".join([str(x) for x in e["loc"][:-1]])
                 path_freq[path] += 1
                 message = f'Extra invalid key "{e["loc"][-1]}" in this JSON object you provided: {json.dumps(e["input"], indent=4)}'
                 path_map[path].append(message)
                 missing.append(message)
             else:
-                missing_path = ".".join([str(v) for v in e["loc"] if str(v) not in ['NLPComparisonGroup', 'NLPConditions', 'Literal', 'Column']])
+                missing_path = ".".join(
+                    [
+                        str(v)
+                        for v in e["loc"]
+                        if str(v)
+                        not in [
+                            "NLPComparisonGroup",
+                            "NLPConditions",
+                            "Literal",
+                            "Column",
+                        ]
+                    ]
+                )
                 missing.append(missing_path)
         min_path = min(path_freq, key=path_freq.get)
         locations = path_map[min_path]
         raw_error = f"Syntax error in your filtering clause. Check that you only use valid keys for Literal, Comparison, and Column objects, and have all required keys. Look at these locations: {locations}"
     else:
         for e in errors:
-            if e['type'] == 'missing':
+            if e["type"] == "missing":
                 raw_error = f'Missing {e["loc"][-1]} in {e["input"]}. You might have incorrect JSON formats or the key is actually missing. Double check Literal and Column formats.'
     return raw_error
 
@@ -222,7 +245,7 @@ def validate_response(
     filtering: Optional[FilterResultV2] = None,
     order: Optional[list[OrderResultV2]] = None,
     limit: int = None,
-):
+) -> tuple[dict, InitialParseResponseV2 | None]:
 
     base = {"columns": columns}
     if not columns:

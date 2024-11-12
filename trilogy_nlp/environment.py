@@ -31,7 +31,6 @@ def get_environment_detailed_values(env: Environment, input: str):
     try:
         new.parse(f"import {input} as {input};")
 
-        
     except (ImportError, InvalidSyntaxException):
         suggestions = get_close_matches(input, get_environment_possible_imports(env))
         base = "This is an invalid database. Refer back to the list from the get_database_list tool. Names must match exactly."

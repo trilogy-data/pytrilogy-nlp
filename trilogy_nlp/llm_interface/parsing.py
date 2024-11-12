@@ -33,9 +33,7 @@ from trilogy.core.processing.utility import (
     is_scalar_condition,
     decompose_condition,
 )
-from random import randint
 
-# from trilogy.core.constants import
 from trilogy.core.enums import (
     FunctionType,
     FunctionClass,
@@ -57,18 +55,22 @@ def parse_datatype(dtype: str):
         return mapping[dtype]
     return DataType.STRING
 
-def get_next_inline_calc_name(environment: Environment)->str:
-    return f'inline_calc_{len(environment.concepts)+1}'
+
+def get_next_inline_calc_name(environment: Environment) -> str:
+    return f"inline_calc_{len(environment.concepts)+1}"
 
 
 def create_literal(l: Literal, environment: Environment) -> str | float | int | bool:
     # LLMs might get formats mixed up; if they gave us a column, hydrate it here.
     # and carry on
     if isinstance(l.value, Calculation):
-        return create_column(Column(name=get_next_inline_calc_name(environment), calculation=l.value), environment)
+        return create_column(
+            Column(name=get_next_inline_calc_name(environment), calculation=l.value),
+            environment,
+        )
     if l.value in environment.concepts:
         return create_column(Column(name=l.value), environment)
-    
+
     # otherwise, we really have a literal
     dtype = parse_datatype(l.type)
 
@@ -87,9 +89,9 @@ def create_column(c: Column, environment: Environment) -> Concept | ConceptTrans
     if not c.calculation:
         return environment.concepts[c.name]
     if c.calculation.operator.lower() not in FunctionType.__members__:
-        if c.calculation.operator == 'RENAME':
-            c.calculation.operator = 'ALIAS'
-            
+        if c.calculation.operator == "RENAME":
+            c.calculation.operator = "ALIAS"
+
     operator = FunctionType(c.calculation.operator.lower())
     if operator in FunctionClass.AGGREGATE_FUNCTIONS.value:
         purpose = Purpose.METRIC
@@ -235,30 +237,10 @@ def parse_filter_flat(
     return parse_filter_obj_flat(input.root, environment, flat=True)
 
 
-def parse_filtering(
-    filtering: FilterResultV2, environment: Environment
-) -> WhereClause:
+def parse_filtering(filtering: FilterResultV2, environment: Environment) -> WhereClause:
     base = []
     parsed = parse_filter(filtering, environment=environment)
-    # flat = parse_filter_flat(filtering, environment=environment)
     return WhereClause(conditional=parsed)
-    if filtering.root and not parsed:
-        raise SyntaxError
-    if parsed:
-        print(parsed)
-        base.append(parsed)
-    if not base:
-        return None
-    print("filtering debug")
-    print(base)
-    if len(base) == 1:
-        return WhereClause(conditional=base[0])
-    left: Conditional | Comparison = base.pop()
-    while base:
-        right = base.pop()
-        new = Conditional(left=left, right=right, operator=BooleanOperator.AND)
-        left = new
-    return WhereClause(conditional=left)
 
 
 def generate_having_and_where(
@@ -277,6 +259,6 @@ def generate_having_and_where(
                 where = where + x if where else x
             else:
                 having = having + x if having else x
-    return WhereClause(conditional=where) if where else None, HavingClause(
-        conditional=having
-    ) if having else None
+    return WhereClause(conditional=where) if where else None, (
+        HavingClause(conditional=having) if having else None
+    )

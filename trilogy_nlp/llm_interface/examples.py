@@ -28,9 +28,9 @@ FILTERING_EXAMPLE = {
                             },
                         ],
                     },
-                }   
+                },
             }
-        ]
+        ],
     }
 }
 

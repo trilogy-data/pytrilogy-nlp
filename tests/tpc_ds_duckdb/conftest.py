@@ -13,7 +13,7 @@ import os
 
 working_path = Path(__file__).parent
 
-SF = .5
+SF = 0.5
 
 
 @fixture(scope="session", autouse=True)
@@ -29,7 +29,7 @@ def llm():
     # yield NLPEngine(provider=Provider.LLAMAFILE, model="na", cache=CacheType.SQLLITE, cache_kwargs={'database_path':".tests.db"}).llm
     yield NLPEngine(
         provider=Provider.OPENAI,
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini",
         cache=CacheType.SQLLITE,
         cache_kwargs={"database_path": ".tests.db"},
     ).llm
@@ -45,7 +45,7 @@ def engine():
         conf=DuckDBConfig(),
     )
     string_sf = str(SF).replace(".", "_")
-    base_path =   working_path / f"sf_{string_sf}" / "memory" 
+    base_path = working_path / f"sf_{string_sf}" / "memory"
     sentinal_file = base_path / "schema.sql"
     if Path(sentinal_file).exists():
         # TODO: Detect if loaded

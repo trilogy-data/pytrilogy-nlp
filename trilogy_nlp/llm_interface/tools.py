@@ -5,11 +5,12 @@ from trilogy.core.models import (
 from langchain.tools import Tool, StructuredTool
 import json
 from trilogy_nlp.tools import get_today_date
-
+from trilogy_nlp.exceptions import ValidationPassedException
 
 from trilogy_nlp.llm_interface.validation import (
     validate_response,
     ValidateResponseInterface,
+    VALID_STATUS,
 )
 
 
@@ -49,36 +50,33 @@ def get_fields(environment: Environment, search: str, *args, **kwargs) -> str:
             ]
         }
     )
-    if search in environment.datasources:
-        return json.dumps(
-            {
-                "fields": [
-                    (
-                        {
-                            "name": concept_to_string(x),
-                            "description": x.metadata.description,
-                        }
-                        if x.metadata.description
-                        else {
-                            "name": concept_to_string(x),
-                        }
-                    )
-                    for x in environment.datasources[search].output_concepts
-                    if "__preql_internal" not in x.address
-                    and not x.address.endswith(".count")
-                ]
-            }
-        )
-    return f"Invalid search; valid options {environment.datasources.keys()}"
 
 
 def get_help(x):
     raise SyntaxError(x)
 
 
+def submit_response(environment, prompt, **kwargs):
+    response, ir = validate_response(
+        environment=environment,
+        prompt=prompt,
+        **kwargs,
+    )
+    if response["status"] == VALID_STATUS:
+        raise ValidationPassedException(ir=ir)
+    return response
+
+
 def sql_agent_tools(environment, prompt: str):
     def validate_response_wrapper(**kwargs):
         return validate_response(
+            environment=environment,
+            prompt=prompt,
+            **kwargs,
+        )
+
+    def submit_wrapper(**kwargs):
+        return submit_response(
             environment=environment,
             prompt=prompt,
             **kwargs,
@@ -102,6 +100,15 @@ def sql_agent_tools(environment, prompt: str):
             func=validate_response_wrapper,
             args_schema=ValidateResponseInterface,
             handle_tool_error=True,
+        ),
+        StructuredTool(
+            name="submit_answer",
+            description="""
+            Submit your final answer. It will be validated, so this function may return errors to correct, similar to the validate_response function. If it passes, the answer will be submitted.
+            """,
+            func=submit_wrapper,
+            args_schema=ValidateResponseInterface,
+            # handle_tool_error=True,
         ),
         # Tool.from_function(
         #     func=lambda x: validate_query(x, environment),

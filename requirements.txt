@@ -1,5 +1,4 @@
 pytrilogy>=0.0.1.96
-promptimize
 openai
 langchain-openai
 mediawikiapi

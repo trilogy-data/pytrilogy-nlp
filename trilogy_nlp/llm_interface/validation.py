@@ -89,7 +89,6 @@ def validate_query(
             return validate_calculation(lit.value, context)
 
     def validate_column(col: Column, context: QueryContext) -> bool:
-        print(f"validating {col}")
         valid = False
         if (
             col.name not in select
@@ -138,7 +137,6 @@ def validate_query(
                 select.add(col.name)
             elif context == QueryContext.FILTER:
                 filtered_on.add(col.name)
-        print("final valid", valid)
         return valid
 
     for x in parsed.columns:
@@ -157,7 +155,6 @@ def validate_query(
                 validate_column(val, QueryContext.FILTER)
 
             elif isinstance(val, NLPConditions):
-                print(val)
                 for subval in [val.left, val.right]:
                     if isinstance(subval, Column):
                         validate_column(subval, QueryContext.FILTER)
@@ -189,9 +186,6 @@ def validate_query(
 
 
 def validation_error_to_string(e: ValidationError):
-    # Here, `validation_error.errors()` will have the full info
-    for x in e.errors():
-        print(x)
     # inject in new context on failed answer
     raw_error = str(e)
     errors = e.errors()

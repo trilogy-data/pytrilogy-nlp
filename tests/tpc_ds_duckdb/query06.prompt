@@ -7,3 +7,5 @@ in january of 2001. (tip: for the sales price filter, get the average item curre
 Restrict rows returned to those with a customer count >=10.
 
 Order results by the customer count asc, then the state ascending"""
+
+

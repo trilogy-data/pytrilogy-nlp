@@ -2,7 +2,7 @@ from pathlib import Path
 import pytest
 import tomli_w
 from trilogy import Executor
-from trilogy_nlp.main import build_query as build_query_v2
+from trilogy_nlp.main import build_query
 from trilogy_nlp.environment import build_env_and_imports
 from trilogy_nlp.constants import logger
 from langchain_core.language_models import BaseLanguageModel
@@ -24,7 +24,7 @@ def helper(text: str, llm, imports: list[str]):
         raise EnvironmentSetupException(
             f"Mismatched imports: {imports} not same  {list(environment.imports.keys())}"
         )
-    processed_query = build_query_v2(
+    processed_query = build_query(
         input_text=text,
         input_environment=environment,
         debug=True,
@@ -98,7 +98,7 @@ def query_loop(
     # # check we got it
     if len(base_results) != len(comp_results):
 
-        return False, f"Row count mismatch: {len(base_results)} != {len(comp_results)}"
+        return False, f"Row count mismatch: target: {len(base_results)} != test: {len(comp_results)}"
     for qidx, row in enumerate(base_results):
         for cell in row:
             if cell not in comp_results[qidx]:

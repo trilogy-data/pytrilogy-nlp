@@ -6,6 +6,7 @@ from trilogy.core.models import (
     SelectItem,
     Concept,
     ConceptTransform,
+    ConceptDeclarationStatement
 )
 from trilogy.core.query_processor import process_query
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -148,7 +149,7 @@ def ir_to_query(
             for o in intermediate_results.order:
                 print(o)
 
-    where, having = generate_having_and_where(filtering)
+    where, having = generate_having_and_where([x.address for x in selection], filtering)
     query = SelectStatement(
         selection=[
             (
@@ -163,29 +164,30 @@ def ir_to_query(
         where_clause=where,
         having_clause=having,
     )
-    if having:
 
-        def append_child_concepts(xes: list[Concept]):
+    # if having:
 
-            def get_address(z):
-                if isinstance(z, Concept):
-                    return z.address
-                elif isinstance(z, ConceptTransform):
-                    return z.output.address
+    #     def append_child_concepts(xes: list[Concept]):
 
-            for x in xes:
-                if not any(
-                    x.address == get_address(item.content) for item in query.selection
-                ):
-                    # if is_local_derived(x):
-                    if x.lineage:
-                        content = ConceptTransform(function=x.lineage, output=x)
-                        query.selection.append(SelectItem(content=content))
-                        append_child_concepts(x.lineage.concept_arguments)
-                    else:
-                        query.selection.append(SelectItem(content=x))
+    #         def get_address(z):
+    #             if isinstance(z, Concept):
+    #                 return z.address
+    #             elif isinstance(z, ConceptTransform):
+    #                 return z.output.address
 
-        append_child_concepts(having.concept_arguments)
+    #         for x in xes:
+    #             if not any(
+    #                 x.address == get_address(item.content) for item in query.selection
+    #             ):
+    #                 # if is_local_derived(x):
+    #                 if x.lineage:
+    #                     content = ConceptTransform(function=x.lineage, output=x)
+    #                     query.selection.append(SelectItem(content=content))
+    #                     append_child_concepts(x.lineage.concept_arguments)
+    #                 else:
+    #                     query.selection.append(SelectItem(content=x))
+
+    #     append_child_concepts(having.concept_arguments)
 
     for item in query.selection:
         # we don't know the grain of an aggregate at assignment time
@@ -205,14 +207,14 @@ def ir_to_query(
             item.content = input_environment.concepts[item.content.address].with_grain(
                 item.content.grain
             )
-    print("select debug")
-    for x in query.selection:
-        print(type(x.content))
-
     from trilogy.parsing.render import Renderer
-
+    renderer = Renderer()
     print("RENDERED QUERY")
-    print(Renderer().to_string(query))
+    for c in input_environment.concepts.values():
+        if is_local_derived(c):
+            print(renderer.to_string(ConceptDeclarationStatement(concept=c)))
+    print(renderer.to_string(query))
+    query.validate_syntax()
     return query
 
 

@@ -5,10 +5,11 @@ import os
 from sys import path as sys_path
 from trilogy.parsing.render import Renderer
 import datetime
+
 from trilogy.dialect.enums import Dialects  # noqa
 from trilogy.executor import Executor
-from trilogy_nlp.environment import helper
-
+from trilogy_nlp.main import build_query
+from trilogy_nlp.environment import build_env_and_imports
 # handles development cases
 nb_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 sys_path.insert(0, nb_path)
@@ -20,9 +21,15 @@ def generate_executor(dialect):
     pass
 
 
-def run_query(text: str, dialect: Dialects, engine: Executor, llm):
+def run_query(text: str, working_path:Path, dialect: Dialects, engine: Executor, llm):
     engine = generate_executor(dialect)
-    env, processed_query = helper(text, llm)
+    env = build_env_and_imports(text, working_path=working_path, llm=llm)
+    processed_query =  build_query(
+        input_text=text,
+        input_environment=env,
+        debug=True,
+        llm=llm,
+    )
     # fetch our results
     parse_start = datetime.now()
     engine.environment = env

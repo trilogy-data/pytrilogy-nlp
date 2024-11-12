@@ -69,11 +69,12 @@ def submit_response(environment, prompt, **kwargs):
 
 def sql_agent_tools(environment, prompt: str):
     def validate_response_wrapper(**kwargs):
-        return validate_response(
+        response, ir = validate_response(
             environment=environment,
             prompt=prompt,
             **kwargs,
         )
+        return response
 
     def submit_wrapper(**kwargs):
         return submit_response(
@@ -108,15 +109,7 @@ def sql_agent_tools(environment, prompt: str):
             """,
             func=submit_wrapper,
             args_schema=ValidateResponseInterface,
-            # handle_tool_error=True,
         ),
-        # Tool.from_function(
-        #     func=lambda x: validate_query(x, environment),
-        #     name="validate_response",
-        #     description="""
-        #     Check that a pure json string response is formatted properly and accurate before your final answer. Always call this!
-        #     """,
-        # ),
         Tool.from_function(
             func=lambda x: get_fields(environment, x),
             name="get_fields",

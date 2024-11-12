@@ -244,12 +244,17 @@ def parse_filtering(filtering: FilterResultV2, environment: Environment) -> Wher
 
 
 def generate_having_and_where(
+    selected: list[str],
     filtering: WhereClause | None = None,
 ) -> tuple[WhereClause | None, HavingClause | None]:
+    """If a concept is output by the select, and it is an aggregate;
+    move that condition to the having clause. If it's an aggregate that is not output,
+    we can keep it in where, as well as any scalars."""
     if not filtering:
         return None, None
     where: Conditional | Comparison | None = None
     having: Conditional | Comparison | None = None
+
     if is_scalar_condition(filtering.conditional):
         where = filtering.conditional
     else:
@@ -258,7 +263,12 @@ def generate_having_and_where(
             if is_scalar_condition(x):
                 where = where + x if where else x
             else:
-                having = having + x if having else x
+                if any([c.address in selected for c in x.concept_arguments]):
+                    if any(isinstance(x.lineage, AggregateWrapper) and not x.lineage.by for x in x.concept_arguments):
+                        having = having + x if having else x
+                        continue
+                # otherwise we end up here
+                where = where + x if where else x
     return WhereClause(conditional=where) if where else None, (
         HavingClause(conditional=having) if having else None
     )

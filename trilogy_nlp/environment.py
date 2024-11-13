@@ -10,6 +10,7 @@ from trilogy_nlp.tools import get_wiki_tool
 from trilogy.core.enums import Modifier
 from difflib import get_close_matches
 from trilogy.core.exceptions import InvalidSyntaxException
+from trilogy_nlp.constants import logger
 
 # from trilogy.core.exceptions import Import
 
@@ -22,7 +23,7 @@ class AddImportResponse(BaseModel):
 
 
 def get_environment_possible_imports(env: Environment) -> list[str]:
-    raw = env.working_path.glob("*.preql")
+    raw = Path(env.working_path).glob("*.preql")
     return [x.stem for x in raw if "query" not in x.stem]
 
 
@@ -224,7 +225,17 @@ def llm_loop(
 def select_required_import(
     input_text: str, environment: Environment, llm: BaseLanguageModel
 ) -> AddImportResponse:
-    return llm_loop(input_text, environment, llm)
+    exception = None
+    ATTEMPTS = 3
+    for attempts in range(ATTEMPTS):
+        try:
+            return llm_loop(input_text, environment, llm)
+        except Exception as e:
+            logger.error("Error in select_required_import: %s", e)
+            exception = e
+    if exception:
+        raise exception
+    raise ValueError(f"Unable to get parseable response after {ATTEMPTS} attempts")
 
 
 def build_env_and_imports(

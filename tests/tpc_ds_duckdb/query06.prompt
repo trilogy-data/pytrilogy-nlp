@@ -1,11 +1,13 @@
 [Easy]
-imports = ["store_sales"]
-prompt = """Using store_sales information, list all the states and the  customer count
-for store sales customers who bought items with a current sales price that is at least 1.2 times the current average price of all other items in the same category
-in january of 2001. (tip: for the sales price filter, get the average item current price by category, multiply by 1.2, then compare to item current price). 
+imports = ["store_sales", "item"]
+target = 0.75
+prompt = """Using just store sales information, list all the states and the customer count
+filtered to those who bought items with a current item price that is more than 1.2 (greater than, not greater than or equal) 
+times higher than the current average item price of all other items in the same category
+in january of 2001. (tip: for the sales price filter, get the average item current price by category, then compare that times 1.2 against the item price to ensure the item price is higher). 
 
-Restrict rows returned to those with a customer count >=10.
+Restrict to sales in January of 2001 where the category is not null and where customer count >=10.
 
-Order results by the customer count asc, then the state ascending"""
+Order results by the customer count asc (nulls first), then the state ascending (nulls first)"""
 
 

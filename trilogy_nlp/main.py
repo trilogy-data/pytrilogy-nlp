@@ -1,4 +1,5 @@
 from langchain.agents import create_structured_chat_agent, AgentExecutor
+from langchain.agents.agent import OutputParserException
 from trilogy.core.models import (
     Environment,
     ProcessedQuery,
@@ -6,7 +7,11 @@ from trilogy.core.models import (
     SelectItem,
     Concept,
     ConceptTransform,
-    ConceptDeclarationStatement
+    ConceptDeclarationStatement,
+    Function,
+    FilterItem,
+    WindowItem,
+    AggregateWrapper,
 )
 from trilogy.core.query_processor import process_query
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -25,10 +30,30 @@ from trilogy_nlp.llm_interface.constants import MAGIC_GENAI_DESCRIPTION
 from trilogy_nlp.prompts_v2.query_system import BASE_1
 from trilogy_nlp.helpers import safe_limit
 from trilogy_nlp.exceptions import ValidationPassedException
+from trilogy_nlp.config import DEFAULT_CONFIG
+from networkx import DiGraph, topological_sort
 
 
 def is_local_derived(x: Concept) -> bool:
     return x.metadata.description == MAGIC_GENAI_DESCRIPTION
+
+
+def handle_parsing_error(x: OutputParserException):
+
+    return """
+The expected action format was below; please try again with the correct format.
+Note that the action is the name of the tool you want to use, and the action_input is the input you want to provide to that tool, and must be valid JSON.
+
+Action:
+```
+{{
+    "action": $TOOL_NAME,
+    "action_input": $INPUT,
+    "reasoning": "Your thinking"
+}}
+```
+Observation:
+"""
 
 
 def llm_loop(
@@ -62,10 +87,9 @@ def llm_loop(
         agent=chat_agent,
         tools=tools,
         verbose=True,
-        max_iterations=5,
+        max_iterations=DEFAULT_CONFIG.LLM_VALIDATION_ATTEMPTS,
         early_stopping_method="force",
-        # handle_parsing_errors="The JSON blob response you provided in between the ``` ``` was improperly formatted. Double check it's valid JSON by reviewing your last submission. Include a description of the edits you made in the reasoning of your next submission.",  # type: ignore,
-        # trim_intermediate_steps=5,
+        handle_parsing_errors=handle_parsing_error,
     )
     attempts = 0
     if additional_context:
@@ -73,7 +97,7 @@ def llm_loop(
     error = None
     while attempts < 1:
         try:
-            result = agent_executor.invoke({"input": input_text})
+            agent_executor.invoke({"input": input_text})
         except ValidationPassedException as e:
             ir = e.ir
             return ir_to_query(ir, input_environment=input_environment, debug=True)
@@ -81,9 +105,6 @@ def llm_loop(
     if error:
         raise error
     raise ValueError(f"Unable to get parseable response after {attempts} attempts")
-
-
-from networkx import DiGraph, topological_sort
 
 
 def determine_ordering(columns: list[Column]):
@@ -124,10 +145,10 @@ def ir_to_query(
     input_environment: Environment,
     debug: bool = True,
 ):
-    ordering = determine_ordering(intermediate_results.columns)
+    ordering = determine_ordering(intermediate_results.output_columns)
     selection = [
         create_column(x, input_environment)
-        for x in sort_by_name_list(intermediate_results.columns, ordering)
+        for x in sort_by_name_list(intermediate_results.output_columns, ordering)
     ]
     order = parse_order(selection, intermediate_results.order or [])
 
@@ -139,7 +160,7 @@ def ir_to_query(
 
     if debug:
         print("Concepts found")
-        for c in intermediate_results.columns:
+        for c in intermediate_results.output_columns:
             print(c)
         if intermediate_results.filtering:
             print("filtering")
@@ -148,16 +169,22 @@ def ir_to_query(
             print("Ordering")
             for o in intermediate_results.order:
                 print(o)
-
-    where, having = generate_having_and_where([x.address for x in selection], filtering)
+    normalized_select = [x if isinstance(x, Concept) else x.output for x in selection]
+    where, having = generate_having_and_where(
+        [x.address for x in normalized_select], filtering
+    )
     query = SelectStatement(
         selection=[
             (
                 ConceptTransform(function=x.lineage, output=x)
                 if is_local_derived(x)
+                and x.lineage
+                and isinstance(
+                    x.lineage, (Function, FilterItem, WindowItem, AggregateWrapper)
+                )
                 else SelectItem(content=x)
             )
-            for x in selection
+            for x in normalized_select
         ],
         limit=safe_limit(intermediate_results.limit),
         order_by=order,
@@ -165,29 +192,34 @@ def ir_to_query(
         having_clause=having,
     )
 
-    # if having:
+    if having:
 
-    #     def append_child_concepts(xes: list[Concept]):
+        def append_child_concepts(xes: list[Concept]):
 
-    #         def get_address(z):
-    #             if isinstance(z, Concept):
-    #                 return z.address
-    #             elif isinstance(z, ConceptTransform):
-    #                 return z.output.address
+            def get_address(z):
+                if isinstance(z, Concept):
+                    return z.address
+                elif isinstance(z, ConceptTransform):
+                    return z.output.address
 
-    #         for x in xes:
-    #             if not any(
-    #                 x.address == get_address(item.content) for item in query.selection
-    #             ):
-    #                 # if is_local_derived(x):
-    #                 if x.lineage:
-    #                     content = ConceptTransform(function=x.lineage, output=x)
-    #                     query.selection.append(SelectItem(content=content))
-    #                     append_child_concepts(x.lineage.concept_arguments)
-    #                 else:
-    #                     query.selection.append(SelectItem(content=x))
+            for x in xes:
+                if not any(
+                    x.address == get_address(item.content) for item in query.selection
+                ):
+                    if (
+                        is_local_derived(x)
+                        and x.lineage
+                        and isinstance(
+                            x.lineage,
+                            (Function, FilterItem, WindowItem, AggregateWrapper),
+                        )
+                    ):
+                        content = ConceptTransform(function=x.lineage, output=x)
+                        query.selection.append(SelectItem(content=content))
+                        if x.lineage:
+                            append_child_concepts(x.lineage.concept_arguments)
 
-    #     append_child_concepts(having.concept_arguments)
+        append_child_concepts(having.concept_arguments)
 
     for item in query.selection:
         # we don't know the grain of an aggregate at assignment time
@@ -199,7 +231,7 @@ def ir_to_query(
                 conditional=None,
                 environment=input_environment,
             )
-            input_environment.add_concept(new_concept)
+            input_environment.add_concept(new_concept, force=True)
             item.content.output = new_concept
         elif isinstance(item.content, Concept):
             # Sometimes cached values here don't have the latest info
@@ -208,11 +240,12 @@ def ir_to_query(
                 item.content.grain
             )
     from trilogy.parsing.render import Renderer
+
     renderer = Renderer()
     print("RENDERED QUERY")
-    for c in input_environment.concepts.values():
-        if is_local_derived(c):
-            print(renderer.to_string(ConceptDeclarationStatement(concept=c)))
+    for new_c in input_environment.concepts.values():
+        if is_local_derived(new_c):
+            print(renderer.to_string(ConceptDeclarationStatement(concept=new_c)))
     print(renderer.to_string(query))
     query.validate_syntax()
     return query

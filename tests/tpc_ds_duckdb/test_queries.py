@@ -20,9 +20,9 @@ class EnvironmentSetupException(Exception):
 def helper(text: str, llm, imports: list[str]):
     environment = build_env_and_imports(text, working_path=working_path, llm=llm)
 
-    if not set(imports) == set(environment.imports.keys()):
+    if not set(environment.imports.keys()).issubset(set(imports)):
         raise EnvironmentSetupException(
-            f"Mismatched imports: {imports} not same  {list(environment.imports.keys())}"
+            f"Mismatched imports: {imports} should be a superset of selected {list(environment.imports.keys())}"
         )
     processed_query = build_query(
         input_text=text,
@@ -54,18 +54,20 @@ def matrix(
         prompt = prompt_info["prompt"]
         imports = prompt_info["imports"]
         required = prompt_info.get("required", True)
+        target = prompt_info.get("target", TARGET)
+        attempts = prompt_info.get("attempts", ATTEMPTS)
         if not required:
             continue
         cases = []
         outputs = defaultdict(lambda: 0)
-        for attempt in range(0, ATTEMPTS):
+        for _ in range(0, ATTEMPTS):
             result, reason = query_loop(prompt, imports, engine, idx, llm=llm)
             if reason:
                 outputs[reason] += 1
             cases.append(result)
         ratio = sum(1 if c else 0 for c in cases) / ATTEMPTS
         output[name] = ratio
-        assert sum(1 if c else 0 for c in cases) / ATTEMPTS > TARGET, outputs
+        assert sum(1 if c else 0 for c in cases) / ATTEMPTS > target, outputs
     return output
 
 
@@ -81,7 +83,6 @@ def query_loop(
     engine.environment = env
     query = engine.generate_sql(processed_query)[-1]
     logger.info(query)
-    print(query)
     # parse_time = datetime.now() - parse_start
     # exec_start = datetime.now()
     results = engine.execute_raw_sql(query)
@@ -98,7 +99,10 @@ def query_loop(
     # # check we got it
     if len(base_results) != len(comp_results):
 
-        return False, f"Row count mismatch: target: {len(base_results)} != test: {len(comp_results)}"
+        return (
+            False,
+            f"Row count mismatch: target: {len(base_results)} != test: {len(comp_results)}",
+        )
     for qidx, row in enumerate(base_results):
         for cell in row:
             if cell not in comp_results[qidx]:
@@ -234,7 +238,7 @@ def run_adhoc(number: int, text: str | None = None, comparison: str | None = Non
     engine.execute_raw_sql(
         """INSTALL tpcds;
 LOAD tpcds;
-SELECT * FROM dsdgen(sf=1);"""
+SELECT * FROM dsdgen(sf=.5);"""
     )
     if text:
         if comparison:
@@ -245,71 +249,52 @@ SELECT * FROM dsdgen(sf=1);"""
         comp_results = comp.fetchall()
         results = engine.execute_text(text)
         for idx, row in enumerate(results[0].fetchall()):
-            print(row)
-            print(comp_results[idx])
+            print("test: ", row, " vs sql: ", comp_results[idx])
+
     else:
         run_query(engine, number)
 
 
 if __name__ == "__main__":
-    TEST_2 = """
-import store_returns as store_returns;
-    WHERE
-    store_returns.return_date.year = 2000 and store_returns.store.state = 'TN'
+    TEST = """
+import store_sales as store_sales;
+
+metric customer_count <- count(store_sales.customer.id); # local to select
+metric average_item_price_by_category <- avg(store_sales.item.current_price) by store_sales.item.category; # local to select
+property inline_calc_319 <- average_item_price_by_category * 1.2; # local to select
+WHERE
+    ((store_sales.item.current_price > inline_calc_319 and store_sales.date.date.month = 1) and store_sales.date.date.year = 2001) and store_sales.item.category is not null
 SELECT
-    store_returns.customer.text_id,
-    store_returns.store.id,
-    sum(store_returns.return_amount) by store_returns.customer.text_id, store_returns.store.id -> customer_total_returns,
-    avg(customer_total_returns) by store_returns.store.id -> avg_total_returns_by_store,
-    1.2 * avg_total_returns_by_store -> inline_calc_158,
+    count(store_sales.customer.id) -> customer_count,
+    store_sales.customer.state,
 HAVING
-    customer_total_returns > inline_calc_158 
+    customer_count >= 10 and True
+
 ORDER BY
-    store_returns.customer.text_id asc
+    customer_count asc,
+    store_sales.customer.state asc
 
 LIMIT 100;"""
     TEST = """
-import store_returns as store_returns;
+import store_sales as store_sales;
 WHERE
-    store_returns.return_date.date.year = 2000 and store_returns.store.state = 'TN'
+    store_sales.customer.demographics.gender = 'M' 
+    and store_sales.customer.demographics.marital_status = 'S' and
+    store_sales.customer.demographics.education_status = 'College' 
+    and store_sales.date.date.year = 2000 and (store_sales.promotion.channel_event = 'N' or store_sales.promotion.channel_email = 'N')
 SELECT
-    store_returns.customer.text_id,
-    store_returns.store.id, 
-    sum(store_returns.return_amount) -> total_return_amount,
-    avg(total_return_amount) by store_returns.store.id -> avg_return_per_store,
-    1.2 * avg_return_per_store -> twelve_times_avg_return_per_store,
-HAVING
-    total_return_amount > twelve_times_avg_return_per_store
-
+    avg(store_sales.quantity) -> average_quantity_sold,
+    avg(store_sales.list_price) -> average_list_price,
+    avg(store_sales.coupon_amt) -> average_coupon_amount,
+    avg(store_sales.sales_price) -> average_sales_price,
+    store_sales.item.name,
 ORDER BY
-    store_returns.customer.text_id asc
+    store_sales.item.name asc
 
-LIMIT 100;"""
+LIMIT 100;
+"""
+
     run_adhoc(
-        1,
-        text=TEST_2,
-        comparison="""WITH customer_total_return AS
-  (SELECT sr_customer_sk AS ctr_customer_sk,
-          sr_store_sk AS ctr_store_sk,
-          sum(sr_return_amt) AS ctr_total_return
-   FROM store_returns,
-        date_dim
-   WHERE sr_returned_date_sk = d_date_sk
-     AND d_year = 2000
-   GROUP BY sr_customer_sk,
-            sr_store_sk)
-SELECT 
-    c_customer_id
-FROM customer_total_return ctr1,
-     store,
-     customer
-WHERE ctr1.ctr_total_return >
-    (SELECT avg(ctr_total_return)*1.2
-     FROM customer_total_return ctr2
-     WHERE ctr1.ctr_store_sk = ctr2.ctr_store_sk)
-  AND s_store_sk = ctr1.ctr_store_sk
-  AND s_state = 'TN'
-  AND ctr1.ctr_customer_sk = c_customer_sk
-ORDER BY c_customer_id
-LIMIT 100;""",
+        7,
+        text=TEST,
     )

@@ -6,7 +6,7 @@ import time as return_time;
 import customer as customer;
 import customer as return_customer;
 import promotion as promotion;
-import customer_demographic as customer_demographic;
+import customer_demographic as point_in_time_customer_demographic;
 import store as store;
 import store as return_store;
 
@@ -32,7 +32,8 @@ datasource store_sales (
     SS_SOLD_DATE_SK: date.id,
     SS_SOLD_TIME_SK: time.id,
     SS_CUSTOMER_SK: customer.id,
-    SS_CDEMO_SK: customer_demographic.id,
+    # TODO: figure out how to readd this
+    SS_CDEMO_SK: point_in_time_customer_demographic.id,
     SS_TICKET_NUMBER: ticket_number,
     SS_ITEM_SK: item.id,
     SS_SALES_PRICE: sales_price,

@@ -11,9 +11,11 @@ from trilogy.core.models import (
     Metadata,
     HavingClause,
     ConceptTransform,
+    MagicConstants,
+    Parenthetical,
 )
 from typing import List
-from trilogy.core.enums import Ordering, Purpose, BooleanOperator
+from trilogy.core.enums import Purpose, BooleanOperator, ComparisonOperator, Ordering
 from trilogy.parsing.common import arbitrary_to_concept
 from trilogy.core.models import DataType
 
@@ -60,29 +62,35 @@ def get_next_inline_calc_name(environment: Environment) -> str:
     return f"inline_calc_{len(environment.concepts)+1}"
 
 
-def create_literal(l: Literal, environment: Environment) -> str | float | int | bool:
+def create_literal(
+    literal: Literal, environment: Environment
+) -> str | float | int | bool | MagicConstants | Concept | ConceptTransform:
     # LLMs might get formats mixed up; if they gave us a column, hydrate it here.
     # and carry on
-    if isinstance(l.value, Calculation):
+    if isinstance(literal.value, Calculation):
         return create_column(
-            Column(name=get_next_inline_calc_name(environment), calculation=l.value),
+            Column(
+                name=get_next_inline_calc_name(environment), calculation=literal.value
+            ),
             environment,
         )
-    if l.value in environment.concepts:
-        return create_column(Column(name=l.value), environment)
+    if literal.value in environment.concepts:
+        return create_column(Column(name=literal.value), environment)
 
     # otherwise, we really have a literal
-    dtype = parse_datatype(l.type)
+    if literal.type == "null":
+        return MagicConstants.NULL
+    dtype = parse_datatype(literal.type)
 
     if dtype == DataType.STRING:
-        return l.value
+        return literal.value
     if dtype == DataType.INTEGER:
-        return int(l.value)
+        return int(literal.value)
     if dtype == DataType.FLOAT:
-        return float(l.value)
+        return float(literal.value)
     if dtype == DataType.BOOL:
-        return bool(l.value)
-    return l.value
+        return bool(literal.value)
+    return literal.value
 
 
 def create_column(c: Column, environment: Environment) -> Concept | ConceptTransform:
@@ -107,20 +115,23 @@ def create_column(c: Column, environment: Environment) -> Concept | ConceptTrans
         base_name = f"{c.name}_deriv"
     # TODO: use better helpers here
     # this duplicates a bit of pytrilogy logic
-    derivation = Function(
+    deriv_function = Function(
         operator=FunctionType(c.calculation.operator.lower()),
         output_datatype=arg_to_datatype(args[0]),
         output_purpose=purpose,
         arguments=args,
         arg_count=InfiniteFunctionArgs,
     )
+    derivation: Function | AggregateWrapper
     if c.calculation.over:
         if purpose != Purpose.METRIC:
             raise ValueError("Can only use over with aggregate functions.")
         derivation = AggregateWrapper(
-            function=derivation,
+            function=deriv_function,
             by=[parse_object(c, environment) for c in c.calculation.over],
         )
+    else:
+        derivation = deriv_function
 
     new = arbitrary_to_concept(
         derivation,
@@ -134,11 +145,13 @@ def create_column(c: Column, environment: Environment) -> Concept | ConceptTrans
 
 
 def parse_order(
-    input_concepts: List[Concept], ordering: List[OrderResultV2] | None
+    input_concepts: List[Concept | ConceptTransform],
+    ordering: List[OrderResultV2] | None,
 ) -> OrderBy:
+    normalized = [x if isinstance(x, Concept) else x.output for x in input_concepts]
     default_order = [
         OrderItem(expr=c, order=Ordering.DESCENDING)
-        for c in input_concepts
+        for c in normalized
         if c.purpose == Purpose.METRIC
     ]
     if not ordering:
@@ -147,15 +160,16 @@ def parse_order(
     for order in ordering:
         possible_matches = [
             x
-            for x in input_concepts
+            for x in normalized
             if x.address == order.column_name or x.name == order.column_name
         ]
         if not possible_matches:
-            has_lineage = [x for x in input_concepts if x.lineage]
+
             possible_matches = [
                 x
-                for x in has_lineage
-                if any(
+                for x in normalized
+                if x.lineage
+                and any(
                     [
                         y.address == order.column_name
                         for y in x.lineage.concept_arguments
@@ -174,18 +188,26 @@ def parse_filter_obj(
         children = [parse_filter_obj(x, environment) for x in inp.values]
 
         def generate_conditional(list: list, operator: BooleanOperator):
-            if not list:
-                return True
             left = list.pop(0)
+            if not list:
+                return left
             right = generate_conditional(list, operator)
             return Conditional(left=left, right=right, operator=operator)
 
-        return generate_conditional(children, operator=inp.boolean)
+        base = generate_conditional(children, operator=inp.boolean)
+        if inp.boolean == BooleanOperator.OR:
+            return Parenthetical(content=base)
+        return base
     elif isinstance(inp, NLPConditions):
+        left = parse_filter_obj(inp.left, environment)
+        right = parse_filter_obj(inp.right, environment)
+        operator = inp.operator
+        if right == MagicConstants.NULL and operator == ComparisonOperator.NE:
+            operator = ComparisonOperator.IS_NOT
         return Comparison(
-            left=parse_filter_obj(inp.left, environment),
-            right=parse_filter_obj(inp.right, environment),
-            operator=inp.operator,
+            left=left,
+            right=right,
+            operator=operator,
         )
     elif isinstance(inp, (Column, Literal)):
         return parse_object(inp, environment)
@@ -231,16 +253,13 @@ def parse_filter(
     return parse_filter_obj(input.root, environment)
 
 
-def parse_filter_flat(
-    input: FilterResultV2, environment: Environment
-) -> list[Conditional]:
-    return parse_filter_obj_flat(input.root, environment, flat=True)
-
-
-def parse_filtering(filtering: FilterResultV2, environment: Environment) -> WhereClause:
-    base = []
+def parse_filtering(
+    filtering: FilterResultV2, environment: Environment
+) -> WhereClause | None:
     parsed = parse_filter(filtering, environment=environment)
-    return WhereClause(conditional=parsed)
+    if parsed:
+        return WhereClause(conditional=parsed)
+    return None
 
 
 def generate_having_and_where(
@@ -252,8 +271,8 @@ def generate_having_and_where(
     we can keep it in where, as well as any scalars."""
     if not filtering:
         return None, None
-    where: Conditional | Comparison | None = None
-    having: Conditional | Comparison | None = None
+    where: Conditional | Comparison | Parenthetical | None = None
+    having: Conditional | Comparison | Parenthetical | None = None
 
     if is_scalar_condition(filtering.conditional):
         where = filtering.conditional
@@ -264,7 +283,20 @@ def generate_having_and_where(
                 where = where + x if where else x
             else:
                 if any([c.address in selected for c in x.concept_arguments]):
-                    if any(isinstance(x.lineage, AggregateWrapper) and not x.lineage.by for x in x.concept_arguments):
+                    if any(
+                        (
+                            (
+                                isinstance(x.lineage, AggregateWrapper)
+                                # and not x.lineage.by
+                            )
+                            or (
+                                isinstance(x.lineage, Function)
+                                and x.lineage.operator
+                                in FunctionClass.AGGREGATE_FUNCTIONS.value
+                            )
+                        )
+                        for x in x.concept_arguments
+                    ):
                         having = having + x if having else x
                         continue
                 # otherwise we end up here

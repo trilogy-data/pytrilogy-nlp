@@ -55,6 +55,8 @@ class NLPComparisonOperator(Enum):
 
     @classmethod
     def _missing_(cls, value):
+        if str(value) == "<>":
+            return ComparisonOperator.NE
         if not isinstance(value, list) and " " in str(value):
             value = str(value).split()
         if isinstance(value, list):
@@ -84,7 +86,7 @@ class NLPComparisonGroup(BaseModel):
 
     @field_validator("boolean", mode="before")
     @classmethod
-    def check_alphanumeric(cls, v: str, info: ValidationInfo) -> str:
+    def check_boolean(cls, v: str, info: ValidationInfo) -> BooleanOperator:
         if isinstance(v, str):
             return BooleanOperator(v.lower())
         return BooleanOperator(v)
@@ -102,7 +104,7 @@ NLPComparisonGroup.model_rebuild()
 class InitialParseResponseV2(BaseModel):
     """The result of the initial parse"""
 
-    columns: list[Column]
+    output_columns: list[Column]
     limit: Optional[int] = 100
     order: Optional[list[OrderResultV2]] = None
     filtering: Optional[FilterResultV2] = None

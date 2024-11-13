@@ -13,8 +13,8 @@ property id.college_dependent_count int;
 datasource customer_demographics (
         CD_DEMO_SK: id,
         CD_GENDER: gender,
-        CD_MARITAL_STATUS: marital_status,
-        CD_EDUCATION_STATUS: education_status,
+        CD_MARITAL_STATUS: marital_status, # Single string value. M for married, S for single.
+        CD_EDUCATION_STATUS: education_status, #String; 'College' for college
         CD_PURCHASE_ESTIMATE: purchase_estimate,
         CD_CREDIT_RATING: credit_rating,
         CD_DEP_COUNT: dependent_count,

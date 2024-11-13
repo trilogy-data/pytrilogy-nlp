@@ -23,31 +23,41 @@ class NLPEngine(object):
         self.model = model
         self.api_key = api_key
         self.llm = self.create_llm()
-        self.cache = self.create_cache(cache, cache_kwargs or {})
+        self.cache = self.create_cache(cache, cache_kwargs or {}) if cache else None
 
     def create_cache(self, cache: CacheType, cache_kwargs: dict):
+        from langchain_core.caches import BaseCache
+
+        cache_instance: BaseCache
         if cache == CacheType.SQLLITE:
             from langchain.cache import SQLiteCache
 
-            cache = SQLiteCache(**cache_kwargs)
+            cache_instance = SQLiteCache(**cache_kwargs)
         elif cache == CacheType.MEMORY:
             from langchain.cache import InMemoryCache
 
-            cache = InMemoryCache()
+            cache_instance = InMemoryCache()
         else:
             return None
-        set_llm_cache(cache)
-        return cache
+        set_llm_cache(cache_instance)
+        return cache_instance
 
     def create_llm(self):
         if self.provider == Provider.OPENAI:
             from langchain_community.chat_models import ChatOpenAI
+            import openai
 
             llm = ChatOpenAI(
                 model_name=self.model if self.model else DEFAULT_GPT,
                 openai_api_key=self.api_key,
                 # model_kwargs=chat_openai_model_kwargs,
-            ).with_retry()
+            ).with_retry(
+                retry_if_exception_type=(
+                    openai.APIConnectionError,
+                    openai.APIError,
+                    openai.APITimeoutError,
+                )
+            )
         elif self.provider == Provider.GOOGLE:
             from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -55,7 +65,7 @@ class NLPEngine(object):
                 model=self.model if self.model else DEFAULT_GEMINI,
                 convert_system_message_to_human=True,
                 google_api_key=self.api_key,
-            )
+            ).with_retry()
         elif self.provider == Provider.LLAMAFILE:
             from langchain_community.chat_models import ChatOpenAI
 

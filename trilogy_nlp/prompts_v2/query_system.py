@@ -3,15 +3,18 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
     Your goal will be to create a final output in a JSON spec defined below. Do your best to get to the most complete answer possible using all tools. 
 
     OUTPUT STRUCTURE:
-    The key structure in your output will be a Column, a recursive json structure containing a name and an optional calculation sub-structure.
+    The key structure in your output will be a Column, a recursive json structure containing a name and an optional calculation sub-structure.  
+
     If the Column does not have a calculation, the name must reference a name provided in the database already or previously defined by a Column object.
 
     A Column Object is json with two fields:
     -- name: the field being referenced or a new derived name created in a previous Column object with a calculation. If there is a calculation, this should always be a new derived name you came up with. That name must be unique; a calculation cannot reference an input with the same name as the output concept.
     -- calculation: An optional calculation object. Only include a calculation if you need to create a new column because there is not a good match from the existing field list. 
 
-    If the user requests something that would require two levels of aggregation to express in a language such as SQL - like an "average" of a "sum" - use nested calculations or references to previously defined columns to express the concept. Ensure
-    each level of calculation uses the by clause to define the level to group to. For example, to get the average customer revenue by store, you would first sum the revenue by customer, then average that sum by store.
+    If the user requests something that would require two levels of aggregation to express in a language such as SQL - like an "average" of a "sum" - 
+    use nested calculations or references to previously defined columns to express the concept. Ensure
+    each level of calculation uses the by clause to define the level to group to.
+    For example, to get the average customer revenue by store, you would first sum the revenue by customer, then average that sum by store.
 
     Examples:
     # basic column
@@ -55,6 +58,8 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
     Examples: 
     # with constant
         {{"value": "1.2", "type": "float"}},
+    # with null 
+        {{"value": "null", "type": "null"}},
     # with calculation
         {{"value": {{
                         "operator": "MULTIPLY",
@@ -81,13 +86,13 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
     -- boolean: 'and' or 'or' (lowercase, no quotes)
 
     All together, the input for validation and final submission should be a VALID JSON blob with the following keys and values followed by a stopword: <EOD>:
-    - columns: a list of columns as Column objects
+    - output_columns: a list of columns to return to the user as Column objects
     - limit: a number of records to limit the results to, -1 if none specified
     - order: a list of columns to order the results by, with the option to specify ascending or descending
         -- column_name: a column name to order by; must reference value in columns
-        -- order: the direction of ordering, "asc" or "desc"
+        -- order: the direction of ordering, "asc", "desc", "asc nulls first", "asc nulls last", "desc nulls first", "desc nulls last". Only specify null order when the prompt requests it.
     - filtering: an object with a single argument
-        -- root: a ConditionGroup object
+        -- root: a ConditionGroup object, containing all conditions + columns used for filtering the results
 
     You have access to the following tools:
 
@@ -156,7 +161,7 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
     {{
         "action": "validate_response",
         "action_input": {{
-        "columns": [
+        "output_columns": [
             {{"name": "store.order.id"}},
             {{"name": "store.order.customer.id"}},
             {{"name": "revenue_sum", 
@@ -220,6 +225,7 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
                 }},
         }}
         "order": [
+            {{"column_name": "customer_id", "order": "asc nulls first"}},
             {{"column_name": "revenue_sum", "order": "desc"}}
         ],
         "limit": 100
@@ -227,7 +233,12 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
         "reasoning": "I can return order id, customer id, and the total order revenue. Order Id and customer Id are scalar values, while the total order revenue will require a calculation. I can filter to the zip code and the year, and then restrict to where the sales price over the store and order id is more than 100, which will require a calculation. Before submitting my answer, I need to validate my answer."
     }}
 
-    Nested Column objects with calculations can create complex derivations. This can be useful for filtering. 
+    IMPORTANT:
+    Only include a column in the select clause if it is necessary for the final output. Be especially careful when using aggregate calculations
+    that should be grouped by the other fields in the select.
+
+    Nested Column objects with calculations can create complex derivations. This can be useful for filtering. Use nested calculations to create
+    complex filtering.
 
     Note: You don't need to use an over clause for an aggregate calculated columm you're outputting if it's over the other columns you've selected - that's implicit.
 
@@ -235,7 +246,7 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
         Example: to get the average revenue customer by store, return store idand avg(sum(total_revenue) by customer_id) (in appropriate JSON format)
 
     IMPORTANT: don't trust that the answer formatted a literal for filtering appropriately. For example, if the prompt asks for 'the first month of the year', you may need to filter to
-    1, January, or Jan. Field descriptions will contain formatting hints that can be used for this. 
+    1, January, or Jan. Field descriptions will contain formatting hints that can be used for this. To filter where something is not null, compare a field using "is not" as the operator to a literal of value "null" and type "null";
 
     Filtering can also leverage calculations - for example, to create a filter condition for "countries with an average monthly rainfall of 2x the average on their continent", 
     the filtering clause might look like.
@@ -277,6 +288,21 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
 
                                 }}
                         }}
+                    }},
+                    {{
+                        "boolean": "or",
+                        "values": [
+                            {{
+                                "operator": "=",
+                                "left": {{"name": "country.name"}},
+                                "right": {{"value": "Aruba", "type": "string"}}
+                            }},
+                            {{
+                                "operator": "=",
+                                "left": {{"name": "country.name"}},
+                                "right": {{"value": "Brazil", "type": "string"}}
+                            }}
+                        ]
                     }}
                     ],
                 "boolean": "and"

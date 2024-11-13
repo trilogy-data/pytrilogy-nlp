@@ -3,7 +3,8 @@ from trilogy.core.models import (
     Environment,
 )
 from typing import List
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
+from pydantic_core import ValidationError, ErrorDetails
 from trilogy.core.enums import ComparisonOperator
 from langchain_core.tools import ToolException
 from trilogy.core.exceptions import UndefinedConceptException
@@ -25,6 +26,7 @@ import difflib
 from trilogy.core.enums import (
     FunctionType,
 )
+from trilogy.core.models import DataType
 from enum import Enum
 import json
 
@@ -37,7 +39,7 @@ def is_valid_function(name: str):
 
 def invalid_operator_message(operator: str) -> str | None:
     try:
-        operator = ComparisonOperator(operator)
+        ComparisonOperator(operator)
     except Exception as e:
         return str(e)
     return None
@@ -64,29 +66,32 @@ def validate_query(
         return {"status": "invalid", "error": validation_error_to_string(e)}, None
     errors = []
     # assume to start that all our select calculations are valid
-    select = {col.name for col in parsed.columns if col.calculation}
+    select = {col.name for col in parsed.output_columns if col.calculation}
     filtered_on = set()
 
     def validate_calculation(calc: Calculation, context: QueryContext) -> bool:
+        valid = True
         if not is_valid_function(calc.operator):
             errors.append(
                 f"{calc} in {context} does not use a valid function (is using {calc.operator}); check that you are using ONLY a valid option from this list: {sorted([x for x in FunctionType.__members__.keys() if x not in COMPLICATED_FUNCTIONS]) }. If the column requires no transformation, drop the calculation field.",
             )
-            if calc.over:
-                for x in calc.over:
-                    local = validate_column(x, context)
-                    valid = valid and local
+        if calc.over:
+            for x in calc.over:
+                local = validate_column(x, context)
+                valid = valid and local
 
-            for arg in calc.arguments:
-                if isinstance(arg, Column):
-                    local = validate_column(arg, context)
-                    valid = valid and local
+        for arg in calc.arguments:
+            if isinstance(arg, Column):
+                local = validate_column(arg, context)
+                valid = valid and local
+        return valid
 
     def validate_literal(lit: Literal, context: QueryContext) -> bool:
         if isinstance(lit.value, str) and lit.value in environment.concepts:
             return True
         elif isinstance(lit.value, Calculation):
             return validate_calculation(lit.value, context)
+        return True
 
     def validate_column(col: Column, context: QueryContext) -> bool:
         valid = False
@@ -123,6 +128,15 @@ def validate_query(
                 )
             else:
                 valid = True
+            if col.calculation.operator in ["AVG", "SUM", "MIN", "MAX", "COUNT"]:
+                for arg in col.calculation.arguments:
+                    if isinstance(arg, Column):
+                        if arg.name in environment.concepts:
+                            dtype = environment.concepts[arg.name].datatype
+                            if dtype == DataType.STRING:
+                                errors.append(
+                                    f"Aggregate function {col.calculation.operator} in {context} is being used on a string field {arg.name}; do you need a calculation, or are you using the wrong field?",
+                                )
             if col.calculation.over:
                 for x in col.calculation.over:
                     local = validate_column(x, context)
@@ -139,14 +153,14 @@ def validate_query(
                 filtered_on.add(col.name)
         return valid
 
-    for x in parsed.columns:
+    for x in parsed.output_columns:
         validate_column(x, QueryContext.SELECT)
 
     if parsed.order:
         for y in parsed.order:
             if y.column_name not in select:
                 errors.append(
-                    f"{y.column_name} being ordered by is not in select output; add if needed.",
+                    f"{y.column_name} being ordered by is not in output_columns, add if needed.",
                 )
     if parsed.filtering:
         root = parsed.filtering.root
@@ -170,31 +184,31 @@ def validate_query(
         return {
             "status": "invalid",
             "errors": {f"Error {idx}: {error}" for idx, error in enumerate(errors)},
-        }
+        }, parsed
     tips = [
-        f'No validation errors - looking good! Just double check you have covered the original prompt, and submit it! (ONLY call revalidate again if you make a change after this. But if you do make a change to submission, you MUST recall validation) Prompt: "{prompt}"!'
+        f'No validation errors - looking good! Just double check you are outputting only (and all of) the required info from the original prompt, and submit it! (Remember that a column used just for filtering should only exist in filtering; do ) Prompt: "{prompt}"!'
     ]
-    for x in select.union(filtered_on):
-        if x in environment.concepts:
-            concept = environment.concepts[x]
+    for all_address in select.union(filtered_on):
+        if all_address in environment.concepts:
+            concept = environment.concepts[all_address]
             if concept.metadata.description:
                 tips.append(
-                    f'For {x}, reminder that the field description is "{concept.metadata.description}". Double check any filtering on this field matches the described format! (this is a reminder, not an error)'
+                    f'For {all_address}, reminder that the field description is "{concept.metadata.description}". Double check any filtering on this field matches the described format! (this is a reminder, not an error)'
                 )
     VALIDATION_CACHE[prompt] = parsed
     return {"status": VALID_STATUS, "tips": tips}, parsed
 
 
-def validation_error_to_string(e: ValidationError):
+def validation_error_to_string(err: ValidationError):
     # inject in new context on failed answer
-    raw_error = str(e)
-    errors = e.errors()
-    # TODO: better pydantic error parsing
+    raw_error = str(err)
+    errors = err.errors()
     if "filtering.root." in raw_error:
         missing = []
-        path_freq = defaultdict(lambda: 0)
-        path_map = defaultdict(lambda: [])
-        for e in errors:
+        path_freq: dict[str, int] = defaultdict(lambda: 0)
+        path_map: dict[str, list[str]] = defaultdict(lambda: [])
+        for validation_error in errors:
+            e: ErrorDetails = validation_error
             if e["type"] == "missing":
                 path = "".join([str(x) for x in e["loc"][:-1]])
                 path_freq[path] += 1
@@ -222,7 +236,7 @@ def validation_error_to_string(e: ValidationError):
                     ]
                 )
                 missing.append(missing_path)
-        min_path = min(path_freq, key=path_freq.get)
+        min_path = min(path_freq, key=path_freq.get)  # type: ignore
         locations = path_map[min_path]
         raw_error = f"Syntax error in your filtering clause. Check that you only use valid keys for Literal, Comparison, and Column objects, and have all required keys. Look at these locations: {locations}"
     else:
@@ -235,14 +249,16 @@ def validation_error_to_string(e: ValidationError):
 def validate_response(
     environment: Environment,
     prompt: str,
-    columns: List[Column],
+    output_columns: List[Column],
     filtering: Optional[FilterResultV2] = None,
     order: Optional[list[OrderResultV2]] = None,
-    limit: int = None,
+    limit: int | None = None,
 ) -> tuple[dict, InitialParseResponseV2 | None]:
 
-    base = {"columns": columns}
-    if not columns:
+    base: dict[str, list[Column] | FilterResultV2 | list[OrderResultV2] | int] = {
+        "output_columns": output_columns
+    }
+    if not output_columns:
         raise ToolException(
             "A request to validate should include at least one column. The input should be the exactly same as the input for your final answer. Generate your answer, call this tool again, and then submit it if it passes."
         )
@@ -262,7 +278,7 @@ def validate_response(
 class ValidateResponseInterface(BaseModel):
     # deliberately permissive interface
     # so that we can handle the error inside the tool
-    columns: List[dict]
-    filtering: Optional[dict] = (None,)
-    order: Optional[list[dict]] = (None,)
-    limit: int = None
+    output_columns: List[dict]
+    filtering: Optional[dict] = None
+    order: Optional[list[dict]] = None
+    limit: int | None = None

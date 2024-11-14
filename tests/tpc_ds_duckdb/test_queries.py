@@ -60,7 +60,7 @@ def matrix(
             continue
         cases = []
         outputs = defaultdict(lambda: 0)
-        for _ in range(0, ATTEMPTS):
+        for _ in range(0, attempts):
             result, reason = query_loop(prompt, imports, engine, idx, llm=llm)
             if reason:
                 outputs[reason] += 1

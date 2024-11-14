@@ -1,6 +1,7 @@
 [Easy]
-imports = ["store_sales", "item"]
+attempts = 4
 target = 0.75
+imports = ["store_sales", "item"]
 prompt = """Using just store sales information, list all the states and the customer count
 filtered to those who bought items with a current item price that is more than 1.2 (greater than, not greater than or equal) 
 times higher than the current average item price of all other items in the same category

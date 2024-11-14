@@ -1,4 +1,6 @@
 [Easy]
+attempts = 4
+target = 0.75
 imports = ["store_returns"]
 
 prompt = """Using store_returns info [all your fields will be subsets of store_returns], output the return customer text id and return store id for customers, how much they returned to the store,

@@ -1,5 +1,7 @@
 pytrilogy>=0.0.1.96
 openai
+langchain
+langchain-community
 langchain-openai
 mediawikiapi
 wikibase-rest-api-client

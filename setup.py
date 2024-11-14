@@ -44,6 +44,8 @@ setuptools.setup(
     },
     extras_require={
         "gemini": ["langchain-google-genai"],
+        "openai": ["langchain-openai"],
+        "anthropic": ["langchain-anthropic"],
     },
     entry_points={
         "console_scripts": [

@@ -65,9 +65,9 @@ def matrix(
             if reason:
                 outputs[reason] += 1
             cases.append(result)
-        ratio = sum(1 if c else 0 for c in cases) / ATTEMPTS
+        ratio = sum(1 if c else 0 for c in cases) / attempts
         output[name] = ratio
-        assert sum(1 if c else 0 for c in cases) / ATTEMPTS > target, outputs
+        assert sum(1 if c else 0 for c in cases) / attempts > target, outputs
     return output
 
 

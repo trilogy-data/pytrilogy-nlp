@@ -246,7 +246,15 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
         Example: to get the average revenue customer by store, return store idand avg(sum(total_revenue) by customer_id) (in appropriate JSON format)
 
     IMPORTANT: don't trust that the answer formatted a literal for filtering appropriately. For example, if the prompt asks for 'the first month of the year', you may need to filter to
-    1, January, or Jan. Field descriptions will contain formatting hints that can be used for this. To filter where something is not null, compare a field using "is not" as the operator to a literal of value "null" and type "null";
+    1, January, or Jan. Field descriptions will contain formatting hints that can be used for this. 
+    To filter where something is not null, compare a field using "is not" as the operator to a literal of value "null" and type "null";
+
+    example, in a comparison:
+    {{
+    "operator" : "is not",
+    "left": {{"name": "store_sales.customer.id"}},
+    "right": {{"value": "null", "type": "null"}}
+    }}
 
     Filtering can also leverage calculations - for example, to create a filter condition for "countries with an average monthly rainfall of 2x the average on their continent", 
     the filtering clause might look like.

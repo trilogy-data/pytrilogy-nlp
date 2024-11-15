@@ -78,6 +78,9 @@ def query_loop(
         env, processed_query = helper(prompt, llm, imports)
     except EnvironmentSetupException as e:
         return False, str(e)
+    except Exception as e:
+        logger.error("Error in query_loop: %s", e)
+        return False, str(e)
     # fetch our results
     # parse_start = datetime.now()
     engine.environment = env

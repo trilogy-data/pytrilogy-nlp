@@ -105,14 +105,18 @@ def validate_query(
                 environment.concepts[col.name]
             except UndefinedConceptException as e:
                 recommendations = e.suggestions
+            if context == QueryContext.FILTER:
+                hint = "add another nested column with a calculation to define it in this filter"
+            else:
+                hint = "add a select to calculate it"
             if recommendations:
                 errors.append(
-                    f"{col.name} in {context} is not a valid field or previously defined by you; if this is a new metric you need, add a select to calculate it. Is one of these the correct spelling? {recommendations}?",
+                    f"{col.name} in {context} is not a valid field or previously defined by you; if this is a new metric you need, {hint}. Is one of these the correct spelling? {recommendations}?",
                 )
             else:
 
                 errors.append(
-                    f"{col.name} in {context} is not a valid field or previously defined by you. If this is a new metric you need, add a select to calculate it. If you misspelled a field, potential matches are {difflib.get_close_matches(col.name, environment.concepts.keys(), 3, 0.4)}",
+                    f"{col.name} in {context} is not a valid field or previously defined by you. If this is a new metric you need,  {hint}. If you misspelled a field, potential matches are {difflib.get_close_matches(col.name, environment.concepts.keys(), 3, 0.4)}",
                 )
         elif col.name in environment.concepts:
             valid = True

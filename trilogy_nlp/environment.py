@@ -95,25 +95,26 @@ def environment_agent_tools(environment):
 def llm_loop(
     input_text: str, input_environment: Environment, llm: BaseLanguageModel
 ) -> AddImportResponse:
-    system = """Thought Process: You are a data analyst assistant. Your job is to get businesss questions and help them write a SQL query that matches in the intent. 
-
-    If you need additional contextual information to understand the query that would not be in the database, use the wikimedia tool to get it.
-
-    Do your best to get to the most complete answer possible using all tools. 
-
-    First you will pick the databases the analyst should look in. You should select the minimum number
-    of databases required to answer the question. 
-    
-    A database will contain sub-information; eg an orders database may contain customer information about those who placed orders,
-    and you would not need to also access the customer database to answer a question about only orders.
+    system = """Thought Process: You are a data analyst assistant. Your job is to identify the datasource most relevant to answering a business question. 
+    You should select the minimum number of databases that covers information. Some databases will reference others; if that's the case, 
+    eg sales.customer; you do not need to explicitly include the customer database as well when looking for customer information about store sales.
 
     Example: if you are asked for "orders by customer", you ONLY return the orders database.
 
-    If you are asked for "address of all employees, and how many orders they've placed" you would return employees and orders, because not all employees may have placed orders. 
+    If you need additional contextual information to understand the query that would not be in the database, use the wikimedia tool to get it.
+
+    Sometimes you may need multiple sources:
+
+    Example: If you are asked for "address of all employees, and how many orders they've placed" you would return employees and orders, because not all employees may have placed orders. 
+
+    If the question suggests you use a specific datasource, eg "using ocean shipment data", assume that is sufficient.
 
     The output to the analyst should be a VALID JSON blob with the following keys and values followed by a stopword: <EOD>:
     - namespaces: a list of databases to use
-    - reasoning: a string explaining why all are required. Remember, each additional database you includde costs money!
+    - reasoning: a string explaining why all are required. Remember, each additional database you include costs money!
+
+    To start, pick a database and call the get_database_description tool on it. This will give you a description of the database and its fields. 
+    Continue until you believe you have found all fields required to answer the question.
 
     You should always call the the validate_response tool on what you think is the final answer before returning the "Final Answer" action.
     You have access to the following tools:

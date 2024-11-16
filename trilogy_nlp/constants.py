@@ -1,5 +1,5 @@
 from logging import getLogger
 
-logger = getLogger("preql_nlp")
+logger = getLogger("trilogy_nlp")
 
 DEFAULT_LIMIT = 100

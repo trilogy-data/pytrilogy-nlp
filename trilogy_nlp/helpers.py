@@ -5,8 +5,17 @@ import re
 
 import openai
 from trilogy.constants import logger
+from trilogy_nlp.constants import DEFAULT_LIMIT
 
 extract = re.compile("Please try again in ([0-9]+)s")
+
+
+def safe_limit(input: int | None) -> int:
+    if not input:
+        return DEFAULT_LIMIT
+    if input in (-1, 0):
+        return DEFAULT_LIMIT
+    return input
 
 
 # define a retry decorator

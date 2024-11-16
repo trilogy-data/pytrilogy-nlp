@@ -1,0 +1,5 @@
+query_id = 6
+model = "<class 'langchain_core.runnables.retry.RunnableRetry'>"
+
+[success_rates]
+Easy = 1.0

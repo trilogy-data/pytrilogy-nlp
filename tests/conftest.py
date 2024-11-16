@@ -13,4 +13,7 @@ def test_logger():
 
 @fixture(scope="session", autouse=True)
 def engine():
-    yield NLPEngine(provider=Provider.OPENAI, model="gpt-3.5-turbo").llm
+    yield NLPEngine(
+        provider=Provider.OPENAI,
+        model="gpt-3.5-turbo",
+    ).llm

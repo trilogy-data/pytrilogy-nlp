@@ -1,0 +1,14 @@
+[Medium]
+attempts = 4
+target = 0.75
+imports = ["store_sales", "item"]
+prompt = """For store sales, report the total sales - defined as the sum of extended store sales price -
+as well as year, brand id and brand name for the manufacturer id 128 in the month of november. Return at most 100 rows. 
+Order by the year ascending, total sales in descending order, and brand_id ascending"""
+
+
+[Hard]
+required = false
+imports = ["store_sales"]
+prompt = """Report total store sales by extended store sales price for the month of november each year for brands using the manufacturer id 128, showing brand id and name. Return at most 100 rows. 
+Order by the year ascending, total sales in descending order, and brand_id ascending"""

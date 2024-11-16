@@ -9,7 +9,7 @@ path.insert(0, root_path)
 
 
 from trilogy_public_models import models
-from trilogy_nlp.main_v2 import parse_query
+from trilogy_nlp.main import parse_query
 from logging import StreamHandler, INFO
 from trilogy_nlp.constants import logger
 from trilogy.parsing.render import render_query
@@ -22,7 +22,7 @@ logger.addHandler(StreamHandler())
 
 # grab the model we want to parse
 environment = models["bigquery.thelook_ecommerce"]
-open_ai = NLPEngine(provider=Provider.OPENAI, model="gpt-3.5-turbo")
+open_ai = NLPEngine(provider=Provider.OPENAI, model="gpt-4o-mini")
 
 processed_query = parse_query(
     input_text="How many orders were placed by customers living in Burlington, VT in 2023?",

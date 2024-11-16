@@ -36,4 +36,4 @@ def test_e2e_basic(engine):
         debug=True,
         llm=engine,
     )
-    assert location in [x for x in processed_query.output_components]
+    assert location in [x for x in processed_query.where_clause.concept_arguments]

@@ -1,0 +1,2 @@
+class EventTracker:
+    pass

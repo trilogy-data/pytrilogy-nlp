@@ -18,13 +18,13 @@ from logging import StreamHandler, DEBUG
 
 from trilogy_nlp.constants import logger
 from trilogy_nlp.main import build_query
-from trilogy_nlp.core import NLPEngine
+from trilogy_nlp.llm_interface import NLPEngine
 
-#how many passengers survived in first and second class?
+# how many passengers survived in first and second class?
 
 TEST_CASES = [
-    'how many passengers survived in first and second class?',
-    'HOw many passengers survived in each cabin?'
+    "how many passengers survived in first and second class?",
+    "HOw many passengers survived in each cabin?",
 ]
 if __name__ == "__main__":
     provider_type = Provider.GOOGLE

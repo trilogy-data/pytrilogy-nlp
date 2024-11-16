@@ -1,398 +1,264 @@
-import uuid
-from typing import List, Union
-from trilogy.core.enums import BooleanOperator, Purpose
-from trilogy.core.query_processor import process_query
+from langchain.agents import create_structured_chat_agent, AgentExecutor
+from langchain.agents.agent import OutputParserException
 from trilogy.core.models import (
-    Comparison,
-    Concept,
-    Conditional,
-    DataType,
     Environment,
-    OrderBy,
-    Ordering,
-    OrderItem,
-    SelectStatement,
-    WhereClause,
     ProcessedQuery,
-    unique,
+    SelectStatement,
+    SelectItem,
+    Concept,
+    ConceptTransform,
+    ConceptDeclarationStatement,
+    Function,
+    FilterItem,
+    WindowItem,
+    AggregateWrapper,
 )
-
-from trilogy_nlp.constants import DEFAULT_LIMIT, logger
-from trilogy_nlp.models import (
-    FilterResult,
-    FinalFilterResult,
-    FinalOrderResult,
-    InitialParseResponse,
-    IntermediateParseResults,
-    OrderResult,
-    # TokenInputs,
-    SemanticTokenResponse,
-    FinalParseResponse,
-)
-from trilogy_nlp.prompts import (
-    FilterRefinementCase,
-    FilterRefinementErrorCase,
-    SelectionPromptCase,
-    SemanticExtractionPromptCase,
-    SemanticToTokensPromptCase,
-    run_prompt,
-)
-from trilogy_nlp.tokenization import build_token_list_by_purpose, tokens_to_concept
+from trilogy.core.query_processor import process_query
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.language_models import BaseLanguageModel
-from uuid import UUID
+from trilogy_nlp.tools import get_wiki_tool
+
+from trilogy_nlp.llm_interface.parsing import (
+    parse_filtering,
+    parse_order,
+    create_column,
+    generate_having_and_where,
+)
+from trilogy_nlp.llm_interface.models import InitialParseResponseV2, Column
+from trilogy_nlp.llm_interface.tools import sql_agent_tools
+from trilogy_nlp.llm_interface.constants import MAGIC_GENAI_DESCRIPTION
+from trilogy_nlp.prompts_v2.query_system import BASE_1
+from trilogy_nlp.helpers import safe_limit
+from trilogy_nlp.exceptions import ValidationPassedException
+from trilogy_nlp.config import DEFAULT_CONFIG
+from networkx import DiGraph, topological_sort
 
 
-def get_phrase_from_x(x: Union[str, FilterResult, OrderResult]):
-    if isinstance(x, str):
-        return x
-    elif isinstance(x, FilterResult):
-        if len(x.values) == 1:
-            return f"{x.concept} {x.values[0]}"
-        return f"{x.concept} {x.values}"
-    elif isinstance(x, OrderResult):
-        return x.concept
-    raise ValueError
+def is_local_derived(x: Concept) -> bool:
+    return x.metadata.description == MAGIC_GENAI_DESCRIPTION
 
 
-def tokenize_phrases(
-    purpose: str,
-    phrase_list: List[str],
-    tokens: List[str],
-    session_uuid,
-    log_info: bool,
-    llm: BaseLanguageModel,
-) -> SemanticTokenResponse:
-    phrase_tokens: SemanticTokenResponse = run_prompt(  # type: ignore
-        SemanticToTokensPromptCase(
-            phrases=phrase_list,
-            tokens=tokens,
-            purpose=purpose,
-            llm=llm,
-        ),
-        debug=True,
-        session_uuid=session_uuid,
-        log_info=log_info,
-    )
+def handle_parsing_error(x: OutputParserException):
 
-    return phrase_tokens
+    return """
+The expected action format was below; please try again with the correct format.
+Note that the action is the name of the tool you want to use, and the action_input is the input you want to provide to that tool, and must be valid JSON.
+
+Action:
+```
+{{
+    "action": $TOOL_NAME,
+    "action_input": $INPUT,
+    "reasoning": "Your thinking"
+}}
+```
+Observation:
+"""
 
 
-def concept_names_from_token_response(
-    phrase_tokens: SemanticTokenResponse,
-    concepts: dict[str, Concept],
-    token_universe: list | None,
-) -> list[str]:
-    token_universe_internal = token_universe or []
-    output: list[str] = []
-
-    for mapping in phrase_tokens:
-        token_universe_internal += mapping.tokens
-    token_universe_internal = list(set(token_universe_internal))
-    for mapping in phrase_tokens.root:
-        found = False
-        concepts_str_matches = tokens_to_concept(
-            mapping.tokens,
-            [c for c in concepts.keys()],
-            limits=50,
-            universe=token_universe_internal,
-        )
-        logger.debug(f"For phrase {mapping.phrase} got {concepts_str_matches}")
-        if concepts_str_matches:
-            # logger.info(f"For phrase {mapping.phrase} got {concepts_str_matches}")
-            output += concepts_str_matches
-            found = True
-            continue
-        if not found:
-            raise ValueError(
-                f"Could not find concept for input {mapping.phrase} with tokens {mapping.tokens} and concepts {list(concepts.keys())}"
-            )
-    return output
-
-
-def coerce_values(input: List[Union[str, int, float, bool]], dtype=DataType):
-    if dtype == DataType.INTEGER:
-        return [int(x) for x in input]
-    elif dtype == DataType.FLOAT:
-        return [float(x) for x in input]
-    elif dtype == DataType.BOOL:
-        return [bool(x) for x in input]
-    return input
-
-
-def enrich_filter_parent(
-    input: FinalFilterResult,
-    log_info: bool,
-    llm: BaseLanguageModel,
-    session_uuid: UUID | None,
-):
-    try:
-        enrich_filter(
-            input=input,
-            log_info=log_info,
-            llm=llm,
-            session_uuid=session_uuid,
-        )
-    except ValueError:
-        return
-
-
-def enrich_filter(
-    input: FinalFilterResult,
-    log_info: bool,
-    llm: BaseLanguageModel,
-    session_uuid: UUID | None = None,
-):
-    if not (input.concept.metadata and input.concept.metadata.description):
-        # coerce even without description
-        try:
-            input.values = coerce_values(input.values, input.concept.datatype)
-            return input
-        except ValueError as e:
-            input.values = coerce_values(
-                run_prompt(  # type: ignore
-                    FilterRefinementErrorCase(
-                        values=input.values,
-                        error=str(e),
-                        datatype=input.concept.datatype,
-                        llm=llm,
-                    ),
-                    session_uuid=session_uuid,
-                    log_info=log_info,
-                ).new_values,
-                input.concept.datatype,
-            )
-            return input
-
-    try:
-        input.values = coerce_values(
-            run_prompt(  # type: ignore
-                FilterRefinementCase(
-                    values=input.values,
-                    description=input.concept.metadata.description,
-                    datatype=input.concept.datatype,
-                    llm=llm,
-                ),
-                session_uuid=session_uuid,
-                log_info=log_info,
-            ).new_values,
-            input.concept.datatype,
-        )
-    except ValueError as e:
-        input.values = coerce_values(
-            run_prompt(  # type: ignore
-                FilterRefinementErrorCase(
-                    values=input.values,
-                    error=str(e),
-                    datatype=input.concept.datatype,
-                    llm=llm,
-                ),
-                session_uuid=session_uuid,
-                log_info=log_info,
-            ).new_values,
-            input.concept.datatype,
-        )
-        return input
-
-
-def discover_inputs(
+def llm_loop(
     input_text: str,
-    llm: BaseLanguageModel,
     input_environment: Environment,
-    debug: bool = False,
-    log_info: bool = True,
-) -> IntermediateParseResults:
-    # the core logic flow
+    llm: BaseLanguageModel,
+    additional_context: str | None = None,
+) -> SelectStatement:
 
-    # DETERMINSTIC: setup logging
-    # LLM: semantic extraction
-    # LLM: tokenization of all strings (reduce search space over all concepts)
-    # DETERMINISTIC: concept candidates from tokens (map reduced search space to candidates)
-    # LLM: final selection of concepts and mapping to output roles
-    # LLM: enrich filter values
-    # DETERMINISTIC: return results
+    human = """{input}
 
-    # DETERMINISTIC: setup logging
-    session_uuid = uuid.uuid4()
-    env_concepts = input_environment.concepts
+    {agent_scratchpad}
 
-    # LLM: semantic extraction
-    parsed: InitialParseResponse = run_prompt(  # type:ignore
-        SemanticExtractionPromptCase(input_text, llm=llm),
-        debug=debug,
-        log_info=log_info,
-        session_uuid=session_uuid,
-    )
+    (reminder to respond in a JSON blob no matter what)"""
 
-    # LLM: tokenization of all strings (reduce search space over all concepts)
-    concept_candidates = []
-    token_response_mapping: dict[str, SemanticTokenResponse] = {}
-    for semantic_category, valid_purposes in {
-        "metrics": [Purpose.METRIC],
-        "dimensions": [Purpose.KEY, Purpose.PROPERTY, Purpose.CONSTANT],
-        "filtering": list(Purpose),
-        "order": list(Purpose),
-    }.items():
-        category_tokens = build_token_list_by_purpose(env_concepts, valid_purposes)
-        local_phrases = [
-            get_phrase_from_x(x) for x in getattr(parsed, semantic_category)
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", BASE_1),
+            MessagesPlaceholder("chat_history", optional=True),
+            ("human", human),
         ]
-        # skip if we have no relevant phrases
-        if not local_phrases:
-            continue
-        if not category_tokens:
-            raise ValueError("No tokens for category")
-        token_mapping = tokenize_phrases(
-            semantic_category,
-            local_phrases,
-            category_tokens,
-            log_info=log_info,
-            session_uuid=session_uuid,
-            llm=llm,
-        )
-        token_response_mapping[semantic_category] = token_mapping
+    )
 
-    # DETERMINISTIC - generate concept candidates from tokens (map reduced search space to candidates)
-    token_universe = set()
-    for _, token_mapping_pass_one in token_response_mapping.items():
-        for mapping in token_mapping_pass_one:
-            for t in mapping.tokens:
-                token_universe.add(t)
-    token_universe_list = list(token_universe)
+    tools = sql_agent_tools(input_environment, input_text) + [get_wiki_tool()]
+    chat_agent = create_structured_chat_agent(
+        llm=llm,
+        tools=tools,
+        prompt=prompt,
+    )
+    agent_executor = AgentExecutor(
+        agent=chat_agent,
+        tools=tools,
+        verbose=True,
+        max_iterations=DEFAULT_CONFIG.LLM_VALIDATION_ATTEMPTS,
+        early_stopping_method="force",
+        handle_parsing_errors=handle_parsing_error,
+    )
+    attempts = 0
+    if additional_context:
+        input_text += additional_context
+    error = None
+    while attempts < 1:
+        try:
+            agent_executor.invoke({"input": input_text})
+        except ValidationPassedException as e:
+            ir = e.ir
+            return ir_to_query(ir, input_environment=input_environment, debug=True)
+        attempts += 1
+    if error:
+        raise error
+    raise ValueError(f"Unable to get parseable response after {attempts} attempts")
 
-    for _, token_mapping_pass_two in token_response_mapping.items():
-        for item in token_mapping_pass_two:
-            if not all([x in category_tokens] for x in item.tokens):
-                invalid = [x for x in item.tokens if x not in category_tokens]
-                raise ValueError(
-                    f"Phrase {item.phrase} return invalid tokens {invalid}"
+
+def determine_ordering(columns: list[Column]):
+    edges = []
+
+    def handle_column(column: Column):
+        calculation = column.calculation
+        if not calculation:
+            return
+        for arg in calculation.arguments:
+            if not isinstance(arg, Column):
+                continue
+            edges.append((arg.name, column.name))
+            handle_column(arg)
+        for arg in calculation.over or []:
+            if not isinstance(arg, Column):
+                continue
+            edges.append((arg.name, column.name))
+            handle_column(arg)
+
+    for ic in columns:
+        handle_column(ic)
+    graph: DiGraph = DiGraph(edges)
+    base = list(topological_sort(graph))
+    for column in columns:
+        if column.name not in base:
+            base.append(column.name)
+    return base
+
+
+def sort_by_name_list(arr: list[Column], reference: list[str]):
+    order_map = {value: index for index, value in enumerate(reference)}
+    return sorted(arr, key=lambda x: order_map.get(x.name, float("inf")))
+
+
+def ir_to_query(
+    intermediate_results: InitialParseResponseV2,
+    input_environment: Environment,
+    debug: bool = True,
+):
+    ordering = determine_ordering(intermediate_results.output_columns)
+    selection = [
+        create_column(x, input_environment)
+        for x in sort_by_name_list(intermediate_results.output_columns, ordering)
+    ]
+    order = parse_order(selection, intermediate_results.order or [])
+
+    filtering = (
+        parse_filtering(intermediate_results.filtering, input_environment)
+        if intermediate_results.filtering
+        else None
+    )
+
+    if debug:
+        print("Concepts found")
+        for c in intermediate_results.output_columns:
+            print(c)
+        if intermediate_results.filtering:
+            print("filtering")
+            print(str(intermediate_results.filtering))
+        if intermediate_results.order:
+            print("Ordering")
+            for o in intermediate_results.order:
+                print(o)
+    normalized_select = [x if isinstance(x, Concept) else x.output for x in selection]
+    where, having = generate_having_and_where(
+        [x.address for x in normalized_select], filtering
+    )
+    query = SelectStatement(
+        selection=[
+            (
+                ConceptTransform(function=x.lineage, output=x)
+                if is_local_derived(x)
+                and x.lineage
+                and isinstance(
+                    x.lineage, (Function, FilterItem, WindowItem, AggregateWrapper)
                 )
-        concept_candidates += concept_names_from_token_response(
-            token_mapping_pass_two, env_concepts, token_universe=token_universe_list
-        )
-
-    # LLM - use our concept candidates to generate the final output
-    selections: FinalParseResponse = run_prompt(  # type: ignore
-        SelectionPromptCase(
-            concept_names=concept_candidates,
-            all_concept_names=list(env_concepts.keys()),
-            question=input_text,
-            llm=llm,
-        ),
-        debug=debug,
-        session_uuid=session_uuid,
-        log_info=log_info,
-    )
-    selected_concepts = list(set(selections.selection))
-
-    final_ordering = [
-        FinalOrderResult(concept=env_concepts[order.concept], order=order.order)
-        for order in selections.order
-    ]
-
-    final_filters_pre = [
-        FinalFilterResult(
-            concept=env_concepts[filter.concept],
-            operator=filter.operator,
-            values=filter.values,
-        )
-        for filter in selections.filtering
-    ]
-
-    # LLM: enrich filter values
-    for item in final_filters_pre:
-        enrich_filter(item, log_info=log_info, session_uuid=session_uuid, llm=llm)
-
-    # DETERMINISTIC: return results
-    return IntermediateParseResults(
-        select=[env_concepts[c] for c in selected_concepts],
-        limit=parsed.limit or 20,
-        order=final_ordering,
-        filtering=final_filters_pre,
+                else SelectItem(content=x)
+            )
+            for x in normalized_select
+        ],
+        limit=safe_limit(intermediate_results.limit),
+        order_by=order,
+        where_clause=where,
+        having_clause=having,
     )
 
+    if having:
 
-def safe_limit(input: int | None) -> int:
-    if not input:
-        return DEFAULT_LIMIT
-    if input in (-1, 0):
-        return DEFAULT_LIMIT
-    return input
+        def append_child_concepts(xes: list[Concept]):
 
+            def get_address(z):
+                if isinstance(z, Concept):
+                    return z.address
+                elif isinstance(z, ConceptTransform):
+                    return z.output.address
 
-def parse_order(
-    input_concepts: List[Concept], ordering: List[FinalOrderResult] | None
-) -> OrderBy:
-    default_order = [
-        OrderItem(expr=c, order=Ordering.DESCENDING)
-        for c in input_concepts
-        if c.purpose == Purpose.METRIC
-    ]
-    if not ordering:
-        return OrderBy(items=default_order)
-    final = []
-    for order in ordering:
-        final.append(OrderItem(expr=order.concept, order=order.order))
-    return OrderBy(items=final)
+            for x in xes:
+                if not any(
+                    x.address == get_address(item.content) for item in query.selection
+                ):
+                    if (
+                        is_local_derived(x)
+                        and x.lineage
+                        and isinstance(
+                            x.lineage,
+                            (Function, FilterItem, WindowItem, AggregateWrapper),
+                        )
+                    ):
+                        content = ConceptTransform(function=x.lineage, output=x)
+                        query.selection.append(SelectItem(content=content))
+                        if x.lineage:
+                            append_child_concepts(x.lineage.concept_arguments)
 
+        append_child_concepts(having.concept_arguments)
 
-def parse_filter(input: FinalFilterResult) -> Comparison | None:
-    return Comparison(
-        left=input.concept,
-        right=input.values[0] if len(input.values) == 1 else input.values,
-        operator=input.operator,
-    )
+    for item in query.selection:
+        # we don't know the grain of an aggregate at assignment time
+        # so rebuild at this point in the tree
+        # TODO: simplify
+        if isinstance(item.content, ConceptTransform):
+            new_concept = item.content.output.with_select_context(
+                query.grain,
+                conditional=None,
+                environment=input_environment,
+            )
+            input_environment.add_concept(new_concept, force=True)
+            item.content.output = new_concept
+        elif isinstance(item.content, Concept):
+            # Sometimes cached values here don't have the latest info
+            # but we can't just use environment, as it might not have the right grain.
+            item.content = input_environment.concepts[item.content.address].with_grain(
+                item.content.grain
+            )
+    from trilogy.parsing.render import Renderer
 
-
-def parse_filtering(filtering: List[FinalFilterResult]) -> WhereClause | None:
-    base = []
-    for item in filtering:
-        parsed = parse_filter(item)
-        if parsed:
-            base.append(parsed)
-    if not base:
-        return None
-    if len(base) == 1:
-        return WhereClause(conditional=base[0])
-    left: Conditional | Comparison = base.pop()
-    while base:
-        right = base.pop()
-        new = Conditional(left=left, right=right, operator=BooleanOperator.AND)
-        left = new
-    return WhereClause(conditional=left)
+    renderer = Renderer()
+    print("RENDERED QUERY")
+    for new_c in input_environment.concepts.values():
+        if is_local_derived(new_c):
+            print(renderer.to_string(ConceptDeclarationStatement(concept=new_c)))
+    print(renderer.to_string(query))
+    query.validate_syntax()
+    return query
 
 
 def parse_query(
     input_text: str,
-    llm: BaseLanguageModel,
     input_environment: Environment,
+    llm: BaseLanguageModel,
     debug: bool = False,
     log_info: bool = True,
-):
-    intermediate_results = discover_inputs(
-        input_text=input_text,
-        input_environment=input_environment,
-        debug=debug,
-        log_info=log_info,
-        llm=llm,
-    )
-    selection = unique(intermediate_results.select, "address")
-
-    order = parse_order(selection, intermediate_results.order)
-
-    filtering = parse_filtering(intermediate_results.filtering)
-    # from trilogy.core.models import unique
-    # concepts = unique(concepts, 'address')
-    if debug:
-        print("Concepts found")
-        for c in intermediate_results.select:
-            print(c.address)
-    query = SelectStatement(
-        selection=selection,
-        limit=safe_limit(intermediate_results.limit),
-        order_by=order,
-        where_clause=filtering,
-    )
-    return query
+) -> SelectStatement:
+    return llm_loop(input_text, input_environment, llm=llm)
 
 
 def build_query(
@@ -403,10 +269,10 @@ def build_query(
     log_info: bool = True,
 ) -> ProcessedQuery:
     query = parse_query(
-        input_text=input_text,
-        input_environment=input_environment,
-        llm=llm,
+        input_text,
+        input_environment,
         debug=debug,
+        llm=llm,
         log_info=log_info,
     )
     return process_query(statement=query, environment=input_environment)

@@ -21,3 +21,9 @@ local_prompt_cache.db
 
 .mypy_cache
 .ruff_cache
+
+memory/
+
+tests/tpc_ds_duckdb/memory.db
+
+sf_*

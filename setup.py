@@ -42,6 +42,16 @@ setuptools.setup(
     package_data={
         "": ["*.tf", "*.jinja2", "py.typed"],
     },
+    extras_require={
+        "gemini": ["langchain-google-genai"],
+        "openai": ["langchain-openai"],
+        "anthropic": ["langchain-anthropic"],
+    },
+    entry_points={
+        "console_scripts": [
+            "ask-trilogy=trilogy_nlp.scripts.main:main",
+        ],
+    },
     install_requires=install_requires,
     classifiers=[
         "Programming Language :: Python",
@@ -49,5 +59,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
     ],
 )

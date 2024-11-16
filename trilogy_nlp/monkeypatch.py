@@ -6,7 +6,7 @@ from typing import (
     Union,
 )
 import langchain_community.llms.openai as langchain_openai
-from promptimize.prompt_cases import BasePromptCase, utils
+
 from tenacity import (
     before_sleep_log,
     retry,
@@ -14,23 +14,6 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
-
-
-def patch_promptimize():
-    def test(self):
-        test_results = []
-        for evaluator in self.evaluators:
-            result = evaluator(self.response)
-            if not (utils.is_numeric(result) and 0 <= result <= 1):
-                raise Exception("Value should be between 0 and 1")
-            test_results.append(result)
-
-        if len(test_results):
-            self.execution.score = sum(test_results) / len(test_results)
-            self.execution.results = test_results
-        self.was_tested = True
-
-    BasePromptCase.test = test
 
 
 def patch_langchain():

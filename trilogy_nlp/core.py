@@ -84,9 +84,11 @@ class NLPEngine(object):
         result = local.invoke("Hello")
         print(result.content)
 
-    def build_query_from_text(self, input_text: str, env: Environment):
+    def build_query_from_text(self, text: str, env: Environment):
+        # avoid mutating our model
+        env = env.model_copy(deep=True)
         return build_query(
-            input_text=input_text,
+            input_text=text,
             input_environment=env,
             debug=self.debug,
             llm=self.llm,

@@ -13,7 +13,12 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
 
     If the user requests something that would require two levels of aggregation to express in a language such as SQL - like an "average" of a "sum" - 
     use nested calculations or references to previously defined columns to express the concept. Ensure
-    each level of calculation uses the by clause to define the level to group to.
+    each level of calculation uses the "over" clause to define the level to group to.
+
+    Reinforcement: make sure you use the "over" clause on a nested calculation if you need to group to a particular leve.
+    For example, when calculating a ratio of costs to revenue by state, you would have a nested calculation of costs by state and a calculation of revenue by state, and a parent division calculation with no over clause.
+
+
     For example, to get the average customer revenue by store, you would first sum the revenue by customer, then average that sum by store.
 
     Examples:

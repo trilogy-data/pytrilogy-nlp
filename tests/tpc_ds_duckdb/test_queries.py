@@ -159,7 +159,7 @@ def test_five(engine):
 
 @pytest.mark.cli
 def test_six(engine, llm):
-    query = run_query(engine, 6, llm)
+    run_query(engine, 6, llm)
 
 
 def test_seven(engine, llm):

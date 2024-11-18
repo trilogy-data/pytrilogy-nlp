@@ -79,6 +79,10 @@ def validate_query(
             for x in calc.over:
                 local = validate_column(x, context)
                 valid = valid and local
+            if calc.operator not in ["AVG", "SUM", "MIN", "MAX", "COUNT"]:
+                errors.append(
+                f"{calc} in {context} can only use one of [AVG, SUM, MIN, MAX, COUNT] when setting an 'over' clause (is using {calc.operator}); If this is a calculation off aggregates, move the 'over' into each input",
+            )
 
         for arg in calc.arguments:
             if isinstance(arg, Column):
@@ -190,7 +194,7 @@ def validate_query(
             "errors": {f"Error {idx}: {error}" for idx, error in enumerate(errors)},
         }, parsed
     tips = [
-        f'No validation errors - looking good! Just double check you are outputting only (and all of) the required info from the original prompt, and submit it! (Remember that a column used just for filtering should only exist in filtering; do ) Prompt: "{prompt}"!'
+        f'No validation errors - looking good! Just double check you are outputting only (and all of) the required info from the original prompt, and submit it! (Remember that a column used just for filtering should only exist in filtering) Prompt: "{prompt}"!'
     ]
     for all_address in select.union(filtered_on):
         if all_address in environment.concepts:

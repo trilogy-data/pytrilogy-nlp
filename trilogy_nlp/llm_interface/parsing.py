@@ -250,6 +250,8 @@ def parse_filter_obj_flat(
 def parse_filter(
     input: FilterResultV2, environment: Environment
 ) -> Comparison | Conditional | None:
+    if not input.root.values:
+        return None
     return parse_filter_obj(input.root, environment)
 
 

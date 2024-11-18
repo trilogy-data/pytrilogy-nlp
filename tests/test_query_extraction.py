@@ -527,7 +527,6 @@ def test_aggregate_grain():
     validated = InitialParseResponseV2.model_validate(loaded["action_input"])
     environment = Environment(working_path=Path(__file__).parent / "tpc_ds_duckdb")
     environment.add_file_import("store_sales", "store_sales")
-    from trilogy.parsing.render import Renderer
 
     ir = ir_to_query(validated, input_environment=environment, debug=False)
     for x in ir.output_components:

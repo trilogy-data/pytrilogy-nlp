@@ -2,13 +2,7 @@ from trilogy import Environment
 from pathlib import Path
 from trilogy_nlp.main import ir_to_query
 from trilogy_nlp.llm_interface.models import InitialParseResponseV2
-from trilogy_nlp.main import ir_to_query
 from trilogy.core.models import SelectStatement
-from trilogy_nlp.llm_interface.parsing import (
-    parse_filtering,
-    generate_having_and_where,
-)
-from trilogy.parsing.render import Renderer
 
 INPUT = """{
         "output_columns": [

@@ -26,12 +26,12 @@ def get_fields(environment: Environment, search: str, *args, **kwargs) -> str:
                     {
                         "name": concept_to_string(x),
                         "description": x.metadata.description
-                        + f" A {x.datatype} field.",
+                        + f" A {x.datatype.value.lower()} field.",
                     }
                     if x.metadata.description
                     else {
                         "name": concept_to_string(x),
-                        "description": f"A {x.datatype} field.",
+                        "description": f"A {x.datatype.value.lower()} field.",
                     }
                 )
                 for x in environment.concepts.values()

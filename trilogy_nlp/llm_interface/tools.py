@@ -35,7 +35,7 @@ def get_fields(environment: Environment, search: str, *args, **kwargs) -> str:
                     }
                 )
                 for x in environment.concepts.values()
-                if not x.address.startswith("_") and not x.address.endswith(".count")
+                if not x.name.startswith("_") and not x.address.endswith(".count")
             ]
         }
     )

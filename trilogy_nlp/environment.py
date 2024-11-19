@@ -43,7 +43,7 @@ def get_environment_detailed_values(env: Environment, input: str):
         k.split(".", 1)[1]
         for k, v in new.concepts.items()
         # skipp hidden values
-        if not k.startswith("_") and not k.endswith(".count")
+        if not v.name.startswith("_") and not k.endswith(".count")
     }
 
 

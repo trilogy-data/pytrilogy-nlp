@@ -58,7 +58,9 @@ query = engine.generate_query(
 )
 
 # which can compile it to SQL
-print(executor.generate_sql(query))
+# this might be multiple statements in some cases
+# but here we can just grab the last one
+print(executor.generate_sql(query)[-1])
 
 
 ```
@@ -103,10 +105,18 @@ tests (surprise).
 trilogy-nlp is python 3.10+
 
 ## Open AI Config
-Requires setting the following environment variables
+Requires setting the following environment variables or passing them into NLPEngine creation.
+
 - OPENAI_API_KEY
 - OPENAI_MODEL
 
-Recommended to use "gpt-3.5-turbo" or higher as the model.
+Recommended to use "gpt-4o-mini" or higher as the model.
+
+## Gemini
+Requires setting the following environment variables or passing them into NLpEngine reation
+
+- GOOGLE_API_KEY
 
 ## LlamaFile Config
+
+Run server locally

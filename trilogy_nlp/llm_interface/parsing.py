@@ -211,7 +211,7 @@ def parse_filter_obj(
                 operator=FunctionType.CAST,
                 output_datatype=arg_to_datatype(left),
                 output_purpose=Purpose.PROPERTY,
-                arguments=[right, arg_to_datatype(left)], #type: ignore
+                arguments=[right, arg_to_datatype(left)],  # type: ignore
                 arg_count=2,
             )
         return Comparison(

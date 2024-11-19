@@ -12,6 +12,11 @@ import tomllib
 
 working_path = Path(__file__).parent
 
+# defaults
+ATTEMPTS = 1
+
+TARGET = 0.8
+
 
 class EnvironmentSetupException(Exception):
     pass
@@ -31,16 +36,6 @@ def helper(text: str, llm, imports: list[str]):
         llm=llm,
     )
     return environment, processed_query
-
-
-# from dataclasses import dataclass
-
-# @dataclass
-# def PromptInput:
-
-ATTEMPTS = 1
-
-TARGET = 0.8
 
 
 def matrix(
@@ -95,6 +90,9 @@ def query_loop(
         return False, str(e)
     except Exception as e:
         logger.error("Error in query_loop: %s", e)
+        print(
+            f"Error in query_loop: {str(e)}",
+        )
         if debug:
             raise e
         return False, str(e)

@@ -50,4 +50,3 @@ query = engine.generate_query(
 # this might be multiple statements in some cases
 # but here we can just grab the last one
 print(executor.generate_sql(query)[-1])
-

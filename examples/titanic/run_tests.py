@@ -17,7 +17,6 @@ from trilogy_nlp.main import build_query
 from logging import StreamHandler, DEBUG
 
 from trilogy_nlp.constants import logger
-from trilogy_nlp.main import build_query
 from trilogy_nlp.core import NLPEngine
 
 # how many passengers survived in first and second class?
@@ -54,7 +53,7 @@ if __name__ == "__main__":
     google_engine = NLPEngine(provider=Provider.GOOGLE)
 
     google_engine.test_connection()
-    processed_query_v2 = build_query_v2(
+    processed_query_v2 = build_query(
         question, environment, debug=True, llm=NLPEngine(provider=Provider.GOOGLE).llm
     )
 

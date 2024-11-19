@@ -7,6 +7,7 @@ from trilogy_nlp.environment import build_env_and_imports
 from trilogy_nlp.constants import logger
 from langchain_core.language_models import BaseLanguageModel
 from collections import defaultdict
+from datetime import datetime
 
 import tomllib
 
@@ -44,8 +45,10 @@ def matrix(
     llm: BaseLanguageModel,
     prompts: dict[str, dict[str, str]],
     debug: bool = False,
-) -> dict[str, int]:
+) -> dict[str, dict[str, int | list[int]]]:
     output = {}
+    output["cases"] = {}
+    output["durations"] = {}
     for name, prompt_info in prompts.items():
         prompt = prompt_info["prompt"]
         imports = prompt_info["imports"]
@@ -55,8 +58,10 @@ def matrix(
         if not required:
             continue
         cases = []
-        outputs = defaultdict(lambda: 0)
+        success_rate = defaultdict(lambda: 0)
+        durations = []
         for _ in range(0, attempts):
+            start = datetime.now()
             result, reason = query_loop(
                 prompt,
                 imports,
@@ -66,11 +71,16 @@ def matrix(
                 debug=debug,
             )
             if reason:
-                outputs[reason] += 1
+                success_rate[reason] += 1
             cases.append(result)
+            end = datetime.now()
+            duration = start - end
+            durations.append(duration)
+
         ratio = sum(1 if c else 0 for c in cases) / attempts
-        output[name] = ratio
-        assert sum(1 if c else 0 for c in cases) / attempts >= target, outputs
+        output["cases"][name] = ratio
+        output["durations"][name] = durations
+        assert sum(1 if c else 0 for c in cases) / attempts >= target, success_rate
     return output
 
 
@@ -137,12 +147,16 @@ def run_query(engine: Executor, idx: int, llm: BaseLanguageModel, debug: bool = 
         text = f.read()
         parsed = tomllib.loads(text)
 
-    prompts = matrix(engine, idx, llm, parsed, debug=debug)
+    matrix_info = matrix(engine, idx, llm, parsed, debug=debug)
 
     with open(working_path / f"zquery{idx:02d}.log", "w") as f:
         f.write(
             tomli_w.dumps(
-                {"query_id": idx, "model": str(type(llm)), "success_rates": prompts},
+                {
+                    "query_id": idx,
+                    "model": getattr(llm, "model_name", "unknown model"),
+                    **matrix_info,
+                },
                 multiline_strings=True,
             )
         )
@@ -174,7 +188,7 @@ def test_five(engine):
 
 @pytest.mark.cli
 def test_six(engine, llm):
-    run_query(engine, 6, llm)
+    run_query(engine, 6, llm, debug=True)
 
 
 def test_seven(engine, llm):

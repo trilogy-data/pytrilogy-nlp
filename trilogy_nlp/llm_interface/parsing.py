@@ -206,7 +206,13 @@ def parse_filter_obj(
         operator = inp.operator
         if right == MagicConstants.NULL and operator == ComparisonOperator.NE:
             operator = ComparisonOperator.IS_NOT
-        if not arg_to_datatype(left) == arg_to_datatype(right):
+        cast_eligible = operator not in [
+            ComparisonOperator.IS_NOT,
+            ComparisonOperator.IS,
+            ComparisonOperator.IN,
+            ComparisonOperator.NOT_IN,
+        ]
+        if cast_eligible and arg_to_datatype(left) != arg_to_datatype(right):
             right = Function(
                 operator=FunctionType.CAST,
                 output_datatype=arg_to_datatype(left),

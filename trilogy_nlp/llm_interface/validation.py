@@ -116,12 +116,12 @@ def validate_query(
                 hint = "add a select to calculate it"
             if recommendations:
                 errors.append(
-                    f"{col.name} in {context} is not a valid field or previously defined by you; if this is a new metric you need, {hint}. Is one of these the correct spelling? {recommendations}?",
+                    f"{col.name} in {context} is not a valid field or previously defined by you; if this is a new metric you need, {hint}. Did you want to use one of these? {recommendations}?",
                 )
             else:
 
                 errors.append(
-                    f"{col.name} in {context} is not a valid field or previously defined by you. If this is a new metric you need,  {hint}. If you misspelled a field, potential matches are {difflib.get_close_matches(col.name, environment.concepts.keys(), 3, 0.4)}",
+                    f"{col.name} in {context} is not a valid field or previously defined by you. If this is a new metric you need,  {hint}. If you misspelled a field, potential matches are {difflib.get_close_matches(col.name, [k for k,v in environment.concepts.items() if not v.name.startswith('_')], 3, 0.4)}",
                 )
         elif col.name in environment.concepts:
             valid = True
@@ -144,7 +144,7 @@ def validate_query(
                             dtype = environment.concepts[arg.name].datatype
                             if dtype == DataType.STRING:
                                 errors.append(
-                                    f"Aggregate function {col.calculation.operator} in {context} is being used on a string field {arg.name}; do you need a calculation, or are you using the wrong field?",
+                                    f"Aggregate function {col.calculation.operator} in {context} is being used on a string field {arg.name}; if you need this field in the output, just return it without a calculation. Or are you using the wrong field?",
                                 )
             if col.calculation.over:
                 for x in col.calculation.over:
@@ -192,7 +192,7 @@ def validate_query(
     if errors:
         return {
             "status": "invalid",
-            "errors": {f"Error {idx}: {error}" for idx, error in enumerate(errors)},
+            "errors": {f"Error {idx+1}: {error}" for idx, error in enumerate(errors)},
         }, parsed
     tips = [
         f'No validation errors - looking good! Just double check you are outputting only (and all of) the required info from the original prompt, and submit it! (Remember that a column used just for filtering should only exist in filtering) Prompt: "{prompt}"!'
@@ -221,7 +221,12 @@ def validation_error_to_string(err: ValidationError):
             if e["type"] == "missing":
                 path = "".join([str(x) for x in e["loc"][:-1]])
                 path_freq[path] += 1
+                key = e["loc"][-1]
                 message = f'Missing "{e["loc"][-1]}" in this JSON object you provided: {json.dumps(e["input"], indent=4)}. You may also be using the wrong object. Double check Literal and Column formats.'
+                if key == "type" and "value" in e["input"]:
+                    nested = e["input"]["value"]
+                    if "type" in nested:
+                        message = f'Missing "{e["loc"][-1]}". You have have overly nested a literal in {json.dumps(e["input"], indent=4)}. Flatten the inner object {json.dumps(nested, indent=4)} out into the parent.'
                 path_map[path].append(message)
                 missing.append(message)
             elif e["type"] == "extra_forbidden":

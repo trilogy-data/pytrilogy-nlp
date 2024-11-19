@@ -75,7 +75,7 @@ def matrix(
             cases.append(result)
             end = datetime.now()
             duration = start - end
-            durations.append(duration)
+            durations.append(duration.total_seconds())
 
         ratio = sum(1 if c else 0 for c in cases) / attempts
         output["cases"][name] = ratio

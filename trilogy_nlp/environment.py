@@ -13,8 +13,6 @@ from trilogy.core.exceptions import InvalidSyntaxException
 from trilogy_nlp.constants import logger
 from trilogy_nlp.prompts_v2.query_environment import BASE_1
 
-# from trilogy.core.exceptions import Import
-
 
 class AddImportResponse(BaseModel):
     """result of initial parse request"""
@@ -48,7 +46,11 @@ def get_environment_detailed_values(env: Environment, input: str):
     }
 
 
-def validate_response(namespaces: list[str], reasoning: str, environment: Environment):
+def validate_response(
+    namespaces: list[str],
+    environment: Environment,
+    reasoning: str | None = None,
+):
     possible = get_environment_possible_imports(environment)
     if not all(x in possible for x in namespaces):
         return {"status": "invalid", "error": "Not all of those databases exist!"}
@@ -62,7 +64,7 @@ def environment_agent_tools(environment):
     def get_import_wrapper(*args, **kwargs):
         return get_environment_possible_imports(environment)
 
-    def validate_response_wrapper(namespaces: list[str], reasoning: str):
+    def validate_response_wrapper(namespaces: list[str], reasoning: str | None = None):
         return validate_response(
             namespaces=namespaces, reasoning=reasoning, environment=environment
         )

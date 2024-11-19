@@ -98,10 +98,12 @@ def llm_loop(
     error = None
     while attempts < 1:
         try:
-            agent_executor.invoke({"input": input_text})
+            output = agent_executor.invoke({"input": input_text})
+            return ir_to_query(InitialParseResponseV2.parse_obj(output["output"]), input_environment, debug=debug)
         except ValidationPassedException as e:
             ir = e.ir
             return ir_to_query(ir, input_environment=input_environment, debug=True)
+        
         attempts += 1
     if error:
         raise error

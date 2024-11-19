@@ -93,7 +93,7 @@ def create_literal(
     return literal.value
 
 
-def create_column(c: Column, environment: Environment) -> Concept | ConceptTransform:
+def create_column(c: Column, environment: Environment, level:int = 1) -> Concept | ConceptTransform:
     if not c.calculation:
         return environment.concepts[c.name]
     if c.calculation.operator.lower() not in FunctionType.__members__:

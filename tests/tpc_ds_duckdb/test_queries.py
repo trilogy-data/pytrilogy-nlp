@@ -48,6 +48,7 @@ def matrix(
     idx: int,
     llm: BaseLanguageModel,
     prompts: dict[str, dict[str, str]],
+    debug:bool = False,
 ) -> dict[str, int]:
     output = {}
     for name, prompt_info in prompts.items():
@@ -61,7 +62,7 @@ def matrix(
         cases = []
         outputs = defaultdict(lambda: 0)
         for _ in range(0, attempts):
-            result, reason = query_loop(prompt, imports, engine, idx, llm=llm)
+            result, reason = query_loop(prompt, imports, engine, idx, llm=llm, debug=debug,)
             if reason:
                 outputs[reason] += 1
             cases.append(result)
@@ -72,14 +73,19 @@ def matrix(
 
 
 def query_loop(
-    prompt: str, imports: list[str], engine: Executor, idx: int, llm: BaseLanguageModel
+    prompt: str, imports: list[str], engine: Executor, idx: int, llm: BaseLanguageModel,
+    debug:bool = False
 ) -> tuple[bool, str | None]:
     try:
         env, processed_query = helper(prompt, llm, imports)
     except EnvironmentSetupException as e:
+        if debug:
+            raise e
         return False, str(e)
     except Exception as e:
         logger.error("Error in query_loop: %s", e)
+        if debug:
+            raise e
         return False, str(e)
     # fetch our results
     # parse_start = datetime.now()
@@ -116,13 +122,13 @@ def query_loop(
     return True, None
 
 
-def run_query(engine: Executor, idx: int, llm: BaseLanguageModel):
+def run_query(engine: Executor, idx: int, llm: BaseLanguageModel, debug: bool = False):
 
     with open(working_path / f"query{idx:02d}.prompt") as f:
         text = f.read()
         parsed = tomllib.loads(text)
 
-    prompts = matrix(engine, idx, llm, parsed)
+    prompts = matrix(engine, idx, llm, parsed, debug=debug)
 
     with open(working_path / f"zquery{idx:02d}.log", "w") as f:
         f.write(
@@ -255,7 +261,15 @@ SELECT * FROM dsdgen(sf=.5);"""
             print("test: ", row, " vs sql: ", comp_results[idx])
 
     else:
-        run_query(engine, number)
+        from trilogy_nlp import NLPEngine, Provider
+        from trilogy_nlp.enums import CacheType
+        llm = NLPEngine(
+        provider=Provider.OPENAI,
+        model="gpt-4o-mini",
+        cache=CacheType.SQLLITE,
+        cache_kwargs={"database_path": ".tests.db"},
+    ).llm
+        run_query(engine, number, llm=llm, debug=True)
 
 
 if __name__ == "__main__":
@@ -278,26 +292,8 @@ ORDER BY
     store_sales.customer.state asc
 
 LIMIT 100;"""
-    TEST = """
-import store_sales as store_sales;
-WHERE
-    store_sales.customer.demographics.gender = 'M' 
-    and store_sales.customer.demographics.marital_status = 'S' and
-    store_sales.customer.demographics.education_status = 'College' 
-    and store_sales.date.date.year = 2000 and (store_sales.promotion.channel_event = 'N' or store_sales.promotion.channel_email = 'N')
-SELECT
-    avg(store_sales.quantity) -> average_quantity_sold,
-    avg(store_sales.list_price) -> average_list_price,
-    avg(store_sales.coupon_amt) -> average_coupon_amount,
-    avg(store_sales.sales_price) -> average_sales_price,
-    store_sales.item.name,
-ORDER BY
-    store_sales.item.name asc
 
-LIMIT 100;
-"""
 
     run_adhoc(
-        7,
-        text=TEST,
+        1,
     )

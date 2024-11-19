@@ -147,7 +147,7 @@ def ir_to_query(
 ):
     ordering = determine_ordering(intermediate_results.output_columns)
     selection = [
-        create_column(x, input_environment)
+        create_column(x, input_environment, level = 0)
         for x in sort_by_name_list(intermediate_results.output_columns, ordering)
     ]
     order = parse_order(selection, intermediate_results.order or [])

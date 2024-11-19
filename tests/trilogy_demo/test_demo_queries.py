@@ -34,6 +34,8 @@ def test_filtering(normalized_engine:Executor, test_env):
 
     query = nlp_engine.build_query_from_text(text = 'How many survivors in each cabin in 1st class?', env=test_env)
 
-    results = executor.execute_query(query).fetchall()
+    query_text = executor.generate_sql(query)[0]
+
+    executor.execute_query(query).fetchall()
     
-    assert ''
+    assert 'dim_class."class" = 1' in query_text

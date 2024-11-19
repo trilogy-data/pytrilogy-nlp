@@ -2,4 +2,4 @@ query_id = 3
 model = "<class 'langchain_core.runnables.retry.RunnableRetry'>"
 
 [success_rates]
-Medium = 1.0
+Medium = 0.75

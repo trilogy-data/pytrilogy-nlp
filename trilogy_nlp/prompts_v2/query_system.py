@@ -15,9 +15,8 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
     use nested calculations or references to previously defined columns to express the concept. Ensure
     each level of calculation uses the "over" clause to define the level to group to.
 
-    Reinforcement: make sure you use the "over" clause on a nested calculation if you need to group to a particular leve.
+    Reinforcement: make sure you use the "over" clause on any aggregate calculation if you need to group to a particular level.
     For example, when calculating a ratio of costs to revenue by state, you would have a nested calculation of costs by state and a calculation of revenue by state, and a parent division calculation with no over clause.
-
 
     For example, to get the average customer revenue by store, you would first sum the revenue by customer, then average that sum by store.
 
@@ -29,7 +28,7 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
 
     # column with calculation over all output
             {{
-                "name": "total_returns",
+                "name": "total_store_returns",
                 "calculation": {{
                     "operator": "SUM",
                     "arguments": [
@@ -37,20 +36,24 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
                             "name": "store_returns.return_value"
                         }}
                     ]
+                    "over": [
+                        {{"name": "store_id"}}
+                    ]
                 }}
             }}
     # column with a calculation off the previous definition, do a different granularity
             {{
-                "name": "average_return_by_store",
+                "name": "average_return_by_store_state",
                 "calculation": {{
                     "operator": "AVG",
                     "arguments": [
                         {{
-                            "name": "total_returns"
+                            "name": "total_store_returns"
                         }}
                     ],
                     "over": [
-                        {{"name": "store_id"}}
+                    
+                        {{"name": "state_id"}}
                     ]
                 }}
             }}
@@ -79,7 +82,7 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
     A Calculation Object is json with three fields:
     -- operator: a function to call with those arguments. [SUM, AVG, COUNT, MAX, MIN, etc], expressed as a string. A calculation object MUST have an operator. This cannot be a comparison operator.
     -- arguments: a list of Column or Literal objects. If there is an operator, there MUST be arguments
-    -- over: an optional list of Column objects used when an aggregate calculation needs to group over other columns (sum of revenue by state and county, for example)
+    -- over: an optional list of Column objects used when an aggregate calculation needs to group over other columns (sum of revenue by state and county, for example). Mandataory for aggregations.
 
     A Comparison object is JSON with three fields:
     -- operator: the comparison operator, one of "=", "in", "<", ">", "<=", "like", or ">=". Use two comparisons to represent a between
@@ -182,7 +185,10 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
                                     ]
                                 }}
                             }}
-                        ]
+                        ],
+                        "over": [
+                            {{"name": "store.order.id"}},
+                            {{"name": "store.order.customer.id"}}]
                     }}
             }}
         ],
@@ -239,16 +245,10 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
     }}
 
     IMPORTANT:
-    Only include a column in the select clause if it is necessary for the final output. Be especially careful when using aggregate calculations
-    that should be grouped by the other fields in the select.
+    Only include a column in the select clause if it is necessary for the final output.
 
     Nested Column objects with calculations can create complex derivations. This can be useful for filtering. Use nested calculations to create
     complex filtering.
-
-    Note: You don't need to use an over clause for an aggregate calculated columm you're outputting if it's over the other columns you've selected - that's implicit.
-
-        Example: to get total revenue by customer - just select the customer id and sum(total_revenue). 
-        Example: to get the average revenue customer by store, return store idand avg(sum(total_revenue) by customer_id) (in appropriate JSON format)
 
     IMPORTANT: don't trust that the answer formatted a literal for filtering appropriately. For example, if the prompt asks for 'the first month of the year', you may need to filter to
     1, January, or Jan. Field descriptions will contain formatting hints that can be used for this. 

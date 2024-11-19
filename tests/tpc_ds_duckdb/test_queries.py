@@ -48,7 +48,7 @@ def matrix(
     idx: int,
     llm: BaseLanguageModel,
     prompts: dict[str, dict[str, str]],
-    debug:bool = False,
+    debug: bool = False,
 ) -> dict[str, int]:
     output = {}
     for name, prompt_info in prompts.items():
@@ -62,7 +62,14 @@ def matrix(
         cases = []
         outputs = defaultdict(lambda: 0)
         for _ in range(0, attempts):
-            result, reason = query_loop(prompt, imports, engine, idx, llm=llm, debug=debug,)
+            result, reason = query_loop(
+                prompt,
+                imports,
+                engine,
+                idx,
+                llm=llm,
+                debug=debug,
+            )
             if reason:
                 outputs[reason] += 1
             cases.append(result)
@@ -73,8 +80,12 @@ def matrix(
 
 
 def query_loop(
-    prompt: str, imports: list[str], engine: Executor, idx: int, llm: BaseLanguageModel,
-    debug:bool = False
+    prompt: str,
+    imports: list[str],
+    engine: Executor,
+    idx: int,
+    llm: BaseLanguageModel,
+    debug: bool = False,
 ) -> tuple[bool, str | None]:
     try:
         env, processed_query = helper(prompt, llm, imports)
@@ -263,12 +274,13 @@ SELECT * FROM dsdgen(sf=.5);"""
     else:
         from trilogy_nlp import NLPEngine, Provider
         from trilogy_nlp.enums import CacheType
+
         llm = NLPEngine(
-        provider=Provider.OPENAI,
-        model="gpt-4o-mini",
-        cache=CacheType.SQLLITE,
-        cache_kwargs={"database_path": ".tests.db"},
-    ).llm
+            provider=Provider.OPENAI,
+            model="gpt-4o-mini",
+            cache=CacheType.SQLLITE,
+            cache_kwargs={"database_path": ".tests.db"},
+        ).llm
         run_query(engine, number, llm=llm, debug=True)
 
 
@@ -292,7 +304,6 @@ ORDER BY
     store_sales.customer.state asc
 
 LIMIT 100;"""
-
 
     run_adhoc(
         1,

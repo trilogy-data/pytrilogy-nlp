@@ -91,7 +91,7 @@ def test_ir_parsing():
         == "local.total_return_amount<store_returns.item.id,store_returns.ticket_number> > local.1.2_times_avg_return_per_store<store_returns.store.id>"
     ), str(query.having_clause)
 
-    response: SelectStatement = ir_to_query(
+    SelectStatement = ir_to_query(
         intermediate_results=parsed,
         input_environment=env,
     )

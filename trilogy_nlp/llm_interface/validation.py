@@ -67,6 +67,7 @@ def validate_query(
     errors = []
     # assume to start that all our select calculations are valid
     select = {col.name for col in parsed.output_columns if col.calculation}
+    top_select = {col.name for col in parsed.output_columns}
     filtered_on = set()
 
     def validate_calculation(calc: Calculation, context: QueryContext) -> bool:
@@ -81,8 +82,8 @@ def validate_query(
                 valid = valid and local
             if calc.operator not in ["AVG", "SUM", "MIN", "MAX", "COUNT"]:
                 errors.append(
-                f"{calc} in {context} can only use one of [AVG, SUM, MIN, MAX, COUNT] when setting an 'over' clause (is using {calc.operator}); If this is a calculation off aggregates, move the 'over' into each input",
-            )
+                    f"{calc} in {context} can only use one of [AVG, SUM, MIN, MAX, COUNT] when setting an 'over' clause (is using {calc.operator}); If this is a calculation off aggregates, move the 'over' into each input",
+                )
 
         for arg in calc.arguments:
             if isinstance(arg, Column):
@@ -166,7 +167,7 @@ def validate_query(
 
     if parsed.order:
         for y in parsed.order:
-            if y.column_name not in select:
+            if y.column_name not in top_select:
                 errors.append(
                     f"{y.column_name} being ordered by is not in output_columns, add if needed.",
                 )

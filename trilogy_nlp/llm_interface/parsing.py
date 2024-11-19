@@ -93,7 +93,9 @@ def create_literal(
     return literal.value
 
 
-def create_column(c: Column, environment: Environment, level:int = 1) -> Concept | ConceptTransform:
+def create_column(
+    c: Column, environment: Environment, level: int = 1
+) -> Concept | ConceptTransform:
     if not c.calculation:
         return environment.concepts[c.name]
     if c.calculation.operator.lower() not in FunctionType.__members__:
@@ -204,6 +206,14 @@ def parse_filter_obj(
         operator = inp.operator
         if right == MagicConstants.NULL and operator == ComparisonOperator.NE:
             operator = ComparisonOperator.IS_NOT
+        if not arg_to_datatype(left) == arg_to_datatype(right):
+            right = Function(
+                operator=FunctionType.CAST,
+                output_datatype=arg_to_datatype(left),
+                output_purpose=Purpose.PROPERTY,
+                arguments=[right, arg_to_datatype(left)], #type: ignore
+                arg_count=2,
+            )
         return Comparison(
             left=left,
             right=right,

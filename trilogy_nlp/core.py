@@ -1,7 +1,9 @@
-from trilogy import Environment
+from trilogy import Environment, Executor
 from trilogy_nlp.enums import Provider, CacheType
 from trilogy_nlp.main import build_query
 from langchain.globals import set_llm_cache
+from trilogy.executor import CursorResult
+from trilogy.core.models import ProcessedQuery
 
 DEFAULT_GPT = "gpt-4o-mini"
 DEFAULT_GEMINI = "gemini-pro"
@@ -30,7 +32,7 @@ class NLPEngine(object):
 
         cache_instance: BaseCache
         if cache == CacheType.SQLLITE:
-            from langchain.cache import SQLiteCache
+            from langchain_community.cache import SQLiteCache
 
             cache_instance = SQLiteCache(**cache_kwargs)
         elif cache == CacheType.MEMORY:
@@ -44,7 +46,7 @@ class NLPEngine(object):
 
     def create_llm(self):
         if self.provider == Provider.OPENAI:
-            from langchain_community.chat_models import ChatOpenAI
+            from langchain_openai import ChatOpenAI
             import openai
 
             llm = ChatOpenAI(
@@ -84,7 +86,9 @@ class NLPEngine(object):
         result = local.invoke("Hello")
         print(result.content)
 
-    def build_query_from_text(self, text: str, env: Environment):
+    def generate_query(self, text: str, env: Environment | Executor) -> ProcessedQuery:
+        if isinstance(env, Executor):
+            env = env.environment
         # avoid mutating our model
         env = env.model_copy(deep=True)
         return build_query(
@@ -93,3 +97,7 @@ class NLPEngine(object):
             debug=self.debug,
             llm=self.llm,
         )
+
+    def run_query(self, text: str, executor: Executor) -> CursorResult:
+        query = self.generate_query(text, executor)
+        return executor.execute_query(query)

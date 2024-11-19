@@ -116,7 +116,7 @@ def test_ordering_resolution():
     environment.add_file_import("store_sales", "store_sales")
     environment.add_file_import("item", "item")
     environment.parse("MERGE store_sales.item.id INTO ~item.id;")
-    ir = ir_to_query(validated, input_environment=environment, debug=False)
+    ir_to_query(validated, input_environment=environment, debug=False)
 
 
 HAVING_WHERE_SPLIT = """{

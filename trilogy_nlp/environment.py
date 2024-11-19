@@ -42,7 +42,8 @@ def get_environment_detailed_values(env: Environment, input: str):
     return {
         k.split(".", 1)[1]
         for k, v in new.concepts.items()
-        if "__preql_internal" not in k and not k.endswith(".count")
+        # skipp hidden values
+        if not k.startswith("_") and not k.endswith(".count")
     }
 
 

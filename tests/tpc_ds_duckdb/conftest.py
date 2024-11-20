@@ -3,13 +3,13 @@ from trilogy.dialect.config import DuckDBConfig
 import pytest
 from pathlib import Path
 
-# from tests.modeling.tpc_ds_duckdb.analyze_test_results import analyze
 from trilogy_nlp.constants import logger
 from pytest import fixture
 from logging import StreamHandler, DEBUG
 from trilogy_nlp import NLPEngine, Provider
 from trilogy_nlp.enums import CacheType
 import os
+from tests.tpc_ds_duckdb.analyze_test_results import analyze
 
 working_path = Path(__file__).parent
 
@@ -30,9 +30,9 @@ def llm():
     yield NLPEngine(
         provider=Provider.OPENAI,
         model="gpt-4o-mini",
-        cache=CacheType.SQLLITE,
+        cache=CacheType.MEMORY,
         cache_kwargs={"database_path": ".tests.db"},
-    ).llm
+    )
     # yield NLPEngine(provider=Provider.OPENAI, model="gpt-4").llm
 
 
@@ -70,4 +70,4 @@ def my_fixture():
     # setup_stuff
     yield
     # teardown_stuff
-    # analyze()
+    analyze()

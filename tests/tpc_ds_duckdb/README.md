@@ -6,7 +6,7 @@ Go [here](https://github.com/duckdb/duckdb/tree/main/extension/tpcds/dsdgen/quer
 
 Copy SQL to query.sql.
 
-Use that to create query.preql and query .promp.
+Use that to create query.preql and query .prompt.
 
 Prompt format should specify expected inputs, the attempts, and the target success rate.
 

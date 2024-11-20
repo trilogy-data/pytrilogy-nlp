@@ -3,6 +3,7 @@ import pytest
 import tomli_w
 from trilogy import Executor
 from trilogy_nlp.main import build_query
+from trilogy_nlp import NLPEngine
 from trilogy_nlp.environment import build_env_and_imports
 from trilogy_nlp.constants import logger
 from langchain_core.language_models import BaseLanguageModel
@@ -74,7 +75,7 @@ def matrix(
                 success_rate[reason] += 1
             cases.append(result)
             end = datetime.now()
-            duration = start - end
+            duration = end - start
             durations.append(duration.total_seconds())
 
         ratio = sum(1 if c else 0 for c in cases) / attempts
@@ -110,7 +111,6 @@ def query_loop(
     # parse_start = datetime.now()
     engine.environment = env
     query = engine.generate_sql(processed_query)[-1]
-    logger.info(query)
     # parse_time = datetime.now() - parse_start
     # exec_start = datetime.now()
     results = engine.execute_raw_sql(query)
@@ -141,20 +141,20 @@ def query_loop(
     return True, None
 
 
-def run_query(engine: Executor, idx: int, llm: BaseLanguageModel, debug: bool = False):
+def run_query(engine: Executor, idx: int, llm: NLPEngine, debug: bool = False):
 
     with open(working_path / f"query{idx:02d}.prompt") as f:
         text = f.read()
         parsed = tomllib.loads(text)
 
-    matrix_info = matrix(engine, idx, llm, parsed, debug=debug)
+    matrix_info = matrix(engine, idx, llm.llm, parsed, debug=debug)
 
     with open(working_path / f"zquery{idx:02d}.log", "w") as f:
         f.write(
             tomli_w.dumps(
                 {
                     "query_id": idx,
-                    "model": getattr(llm, "model_name", "unknown model"),
+                    "model": f"{llm.provider.value}-{llm.model}",
                     **matrix_info,
                 },
                 multiline_strings=True,

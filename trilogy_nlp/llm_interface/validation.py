@@ -195,14 +195,14 @@ def validate_query(
             "errors": {f"Error {idx+1}: {error}" for idx, error in enumerate(errors)},
         }, parsed
     tips = [
-        f'No validation errors - looking good! A few final checks - if they are good, submit it! First, check that you are outputting all the requested fields. If a field is defined just for filtering, you might be able to move it out of the select (move the entire definition). (Remember that a column used just for filtering should only exist in filtering) Prompt: "{prompt}"!'
+        f'Congrats! No validation errors - looking good! A few final checks - if you believe these do not apply, go ahead and submit this response as your final answer! (or make a tweak or two!) First, check that you have all fields you think are required in the output. Even better; keep it clean - if an output column is added only to be used in filtering and not explicitly asked for, you might be able to move it out of the select (move the entire definition into a nested reference).  The original prompt was: "{prompt}"!'
     ]
     for all_address in select.union(filtered_on):
         if all_address in environment.concepts:
             concept = environment.concepts[all_address]
             if concept.metadata.description:
                 tips.append(
-                    f'For {all_address}, reminder that the field description is "{concept.metadata.description}". Double check any filtering on this field matches the described format! (this is a reminder, not an error)'
+                    f'And another one - for the field {all_address}, reminder that the field description is "{concept.metadata.description}". Double check that any filtering on this field matches the described format! (this is a reminder, not an error)'
                 )
     VALIDATION_CACHE[prompt] = parsed
     return {"status": VALID_STATUS, "tips": tips}, parsed

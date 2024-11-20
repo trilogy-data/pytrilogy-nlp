@@ -1,5 +1,13 @@
 query_id = 6
-model = "<class 'langchain_core.runnables.retry.RunnableRetry'>"
+model = "unknown model"
 
-[success_rates]
-Easy = 1.0
+[cases]
+Easy = 0.75
+
+[durations]
+Easy = [
+    -40.019222,
+    -139.462918,
+    -89.143327,
+    -68.492643,
+]

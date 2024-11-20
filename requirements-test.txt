@@ -6,3 +6,5 @@ mypy
 ruff
 types-tabulate
 pandas
+seaborn
+matplotlib

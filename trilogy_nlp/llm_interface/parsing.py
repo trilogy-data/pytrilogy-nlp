@@ -64,7 +64,18 @@ def get_next_inline_calc_name(environment: Environment) -> str:
 
 def create_literal(
     literal: Literal, environment: Environment
-) -> str | float | int | bool | MagicConstants | Concept | ConceptTransform:
+) -> (
+    str
+    | float
+    | int
+    | bool
+    | MagicConstants
+    | Concept
+    | ConceptTransform
+    | list[str]
+    | list[int]
+    | list[float]
+):
     # LLMs might get formats mixed up; if they gave us a column, hydrate it here.
     # and carry on
     if isinstance(literal.value, Calculation):
@@ -74,14 +85,15 @@ def create_literal(
             ),
             environment,
         )
-    if literal.value in environment.concepts:
+    if isinstance(literal.value, str) and literal.value in environment.concepts:
         return create_column(Column(name=literal.value), environment)
 
     # otherwise, we really have a literal
     if literal.type == "null":
         return MagicConstants.NULL
     dtype = parse_datatype(literal.type)
-
+    if isinstance(literal.value, list):
+        return literal.value
     if dtype == DataType.STRING:
         return literal.value
     if dtype == DataType.INTEGER:
@@ -90,6 +102,8 @@ def create_literal(
         return float(literal.value)
     if dtype == DataType.BOOL:
         return bool(literal.value)
+    if dtype == DataType.ARRAY:
+        return literal.value
     return literal.value
 
 

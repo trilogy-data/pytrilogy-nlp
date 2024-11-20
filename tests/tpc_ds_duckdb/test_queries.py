@@ -206,9 +206,10 @@ def test_ten(engine, llm):
     query = run_query(engine, 10, llm)
     assert len(query) < 7000, query
 
+
 @pytest.mark.skip(reason="No prompt yet")
 def test_twelve(engine, llm):
-    run_query(engine, 12, llm)
+    run_query(engine, 12, llm, debug=True)
 
 
 @pytest.mark.skip(reason="No prompt yet")

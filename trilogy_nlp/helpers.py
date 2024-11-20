@@ -24,7 +24,9 @@ def is_relevent_concept(concept: Concept) -> bool:
         return False
     if concept.name.endswith(".count"):
         return False
-    if any(x.startswith("_") for x in concept.namespace.split(".")):
+    if concept.namespace and any(
+        x.startswith("_") for x in concept.namespace.split(".")
+    ):
         return False
     return True
 

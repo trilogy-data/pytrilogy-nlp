@@ -24,7 +24,7 @@ class OrderResultV2(BaseModel):
 
 class Literal(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    value: Union[str, "Calculation"]
+    value: Union[str, "Calculation", list[str], list[int], list[float]]
     type: str
     # we never want this to be provided, but if it exists, use it preferentially
     # calculation: Optional["Calculation"] = None

@@ -195,7 +195,7 @@ def validate_query(
             "errors": {f"Error {idx+1}: {error}" for idx, error in enumerate(errors)},
         }, parsed
     tips = [
-        f'No validation errors - looking good! Just double check you are outputting only (and all of) the required info from the original prompt, and submit it! (Remember that a column used just for filtering should only exist in filtering) Prompt: "{prompt}"!'
+        f'No validation errors - looking good! A few final checks - if they are good, submit it! First, check that you are outputting all the requested fields. If a field is defined just for filtering, you might be able to move it out of the select (move the entire definition). (Remember that a column used just for filtering should only exist in filtering) Prompt: "{prompt}"!'
     ]
     for all_address in select.union(filtered_on):
         if all_address in environment.concepts:

@@ -17,6 +17,7 @@ from trilogy.core.query_processor import process_query
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.language_models import BaseLanguageModel
 from trilogy_nlp.tools import get_wiki_tool
+from trilogy_nlp.constants import logger
 
 from trilogy_nlp.llm_interface.parsing import (
     parse_filtering,
@@ -97,13 +98,21 @@ def llm_loop(
         input_text += additional_context
     error = None
     while attempts < 1:
+        output = None
         try:
             output = agent_executor.invoke({"input": input_text})
-            return ir_to_query(InitialParseResponseV2.parse_obj(output["output"]), input_environment, debug=debug)
+            return ir_to_query(
+                InitialParseResponseV2.parse_obj(output["output"]),
+                input_environment,
+                debug=debug,
+            )
         except ValidationPassedException as e:
             ir = e.ir
             return ir_to_query(ir, input_environment=input_environment, debug=True)
-        
+        except Exception as e:
+            logger.error(
+                f"Error in main execution llm loop with output {output}: {str(e)}"
+            )
         attempts += 1
     if error:
         raise error

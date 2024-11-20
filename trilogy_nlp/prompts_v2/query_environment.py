@@ -43,7 +43,6 @@ BASE_1 = """Thought Process: You are a data analyst assistant. Your job is to id
     {{
         "action": $TOOL_NAME,
         "action_input": $INPUT,
-        "reasoning": "Your thinking"
     }}
     ```
     Observation:
@@ -69,10 +68,26 @@ BASE_1 = """Thought Process: You are a data analyst assistant. Your job is to id
     Action:
     ```
     {{
+        "action": "list_databases",
+        "action_input": ""
+    }}
+    ```
+    Observation: ['orders', 'customers', 'products']
+    Thought: The relevant database for customer customer is like customers, and orders orders. Let me confirm the orders database description.
+    ```
+    {{
         "action": "get_database_description",
         "action_input": "orders"
     }}
-
+    ```
+    Observation: <some description>
+    Thought: Let me check customers
+    ```
+    {{
+        "action": "get_database_description",
+        "action_input": "customers"
+    }}
+    ```
     Observation: <some description>
     Thought: I should check my answer
     Action:
@@ -94,9 +109,11 @@ BASE_1 = """Thought Process: You are a data analyst assistant. Your job is to id
     final answer, you cannot take any more steps.
 
     A final answer would look like this:
+    ```
     {{
         "action": "Final Answer",
         "action_input": <VALID_JSON_SPEC_DEFINED_ABOVE>
     }}
+    ```
 
     Begin! Reminder to ALWAYS respond with a valid json blob of an action. Always use tools. Respond directly if appropriate. Format is Action:```$JSON_BLOB```then Observation"""

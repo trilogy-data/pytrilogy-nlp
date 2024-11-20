@@ -19,6 +19,7 @@ from trilogy_nlp.llm_interface.models import (
     Literal,
     Calculation,
 )
+from trilogy_nlp.helpers import is_relevent_concept
 from trilogy_nlp.llm_interface.constants import COMPLICATED_FUNCTIONS
 import difflib
 
@@ -54,7 +55,9 @@ class QueryContext(Enum):
     ORDER = "ORDER"
 
     def __str__(self) -> str:
-        return f"{self.value} definition"
+        if self == QueryContext.SELECT:
+            return "output column declaration"
+        return f"{self.value.lower()} declaration"
 
 
 def validate_query(
@@ -113,15 +116,15 @@ def validate_query(
             if context == QueryContext.FILTER:
                 hint = "add another nested column with a calculation to define it in this filter"
             else:
-                hint = "add a select to calculate it"
+                hint = "add an output column to calculate it"
             if recommendations:
                 errors.append(
-                    f"{col.name} in {context} is not a valid field or previously defined by you; if this is a new metric you need, {hint}. Did you want to use one of these? {recommendations}?",
+                    f"'{col.name}' in {context} is not a valid preexisting field returned by the get fields tool or previously defined by you; if this is a new calculated column you need to answer the question, {hint}. Did you want to use one of these? {recommendations}?",
                 )
             else:
 
                 errors.append(
-                    f"{col.name} in {context} is not a valid field or previously defined by you. If this is a new metric you need,  {hint}. If you misspelled a field, potential matches are {difflib.get_close_matches(col.name, [k for k,v in environment.concepts.items() if not v.name.startswith('_')], 3, 0.4)}",
+                    f"'{col.name}' in {context} is not a valid preexisting field returned by the get fields tool or previously defined by you. If this is a new calculated column you need to answer the question, {hint}. If you just misspelled an existing field, maybe it should be one of {difflib.get_close_matches(col.name, [k for k,v in environment.concepts.items() if is_relevent_concept(v)], 3, 0.4)}",
                 )
         elif col.name in environment.concepts:
             valid = True
@@ -144,7 +147,7 @@ def validate_query(
                             dtype = environment.concepts[arg.name].datatype
                             if dtype == DataType.STRING:
                                 errors.append(
-                                    f"Aggregate function {col.calculation.operator} in {context} is being used on a string field {arg.name}; if you need this field in the output, just return it without a calculation. Or are you using the wrong field?",
+                                    f"Aggregate function {col.calculation.operator} in {context} is being used on a string field {arg.name}; if you need this field in the output, just return it without a calculation. (Don't forget to set the full name {arg.name} when you drop the calculation!)",
                                 )
             if col.calculation.over:
                 for x in col.calculation.over:

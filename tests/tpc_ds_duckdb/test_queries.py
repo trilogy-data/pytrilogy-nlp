@@ -82,6 +82,7 @@ def matrix(
         output["cases"][name] = ratio
         output["durations"][name] = durations
         assert sum(1 if c else 0 for c in cases) / attempts >= target, success_rate
+        logger.info(f"Successful run for query {idx}!")
     return output
 
 
@@ -204,7 +205,6 @@ def test_eight(engine, llm):
 def test_ten(engine, llm):
     query = run_query(engine, 10, llm)
     assert len(query) < 7000, query
-
 
 @pytest.mark.skip(reason="No prompt yet")
 def test_twelve(engine, llm):

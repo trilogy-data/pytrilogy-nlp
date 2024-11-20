@@ -4,8 +4,14 @@ import pandas as pd
 import json
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+import sys
 import tomllib
+from os import environ
+
+# https://github.com/python/cpython/issues/125235#issuecomment-2412948604
+if not environ.get("TCL_LIBRARY"):
+    sys_path = Path(sys.base_prefix)
+    environ["TCL_LIBRARY"] = str(sys_path / "tcl" / "tcl8.6")
 
 
 def analyze(show: bool = False):
@@ -45,7 +51,8 @@ def analyze(show: bool = False):
                     "query_id": row["query_id"],
                     "case": row["model"] + "-" + case_type,
                     "success_rate": success_rate,
-                    "durations": row["durations"].get(case_type, []),
+                    "avg_duration": sum(row["durations"].get(case_type, [1]))
+                    / len(row["durations"].get(case_type, [1])),
                 }
             )
 
@@ -77,6 +84,24 @@ def analyze(show: bool = False):
         plt.show()
     else:
         plt.savefig(root / "tpc-ds-perf.png")
+    sns.catplot(
+        data=df_transformed,
+        kind="bar",
+        x="avg_duration",
+        y="query_id",  # `query_id` on the y-axis
+        hue="case",  # Separate bars by `model`
+        palette="coolwarm",
+        dodge=True,
+        height=5,
+        aspect=1.2,
+    )
+    # Customize plot
+    plt.subplots_adjust(top=0.9)  # Adjust the top to make room for the title
+    plt.suptitle("Average Timing by Query ID and Model Breakdown", fontsize=16)
+    if show:
+        plt.show()
+    else:
+        plt.savefig(root / "tpc-ds-timing.png")
 
 
 if __name__ == "__main__":

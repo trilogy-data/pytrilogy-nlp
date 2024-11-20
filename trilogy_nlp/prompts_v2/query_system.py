@@ -15,29 +15,36 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
     use nested calculations or references to previously defined columns to express the concept. Ensure
     each level of calculation uses the "over" clause to define the level to group to.
 
-    Reinforcement: make sure you use the "over" clause on any aggregate calculation if you need to group to a particular level.
+    Reinforcement: make sure you use the "over" clause on any aggregate calculation if you need to group to a particular level. In general, you'll use this for any aggregate function w/ the output columns you select, except
+    if the query specifically asks for an aggregate at a different level. 
     For example, when calculating a ratio of costs to revenue by state, you would have a nested calculation of costs by state and a calculation of revenue by state, and a parent division calculation with no over clause.
 
     For example, to get the average customer revenue by store, you would first sum the revenue by customer, then average that sum by store.
 
     Examples:
     # basic column
+    # use this whenever you just need to return a value that fits the question. No calculation is required.
             {{
-                "name": "store_id"
+                "name": "store.id"
+            }}
+        or
+            {{
+                "name": "customer.address.zip"
             }}
 
-    # column with calculation over all output
+    # column with calculation over another column
             {{
-                "name": "total_store_returns",
+                "name": "total_per_customer_store_returns",
                 "calculation": {{
                     "operator": "SUM",
                     "arguments": [
                         {{
-                            "name": "store_returns.return_value"
+                            "name": "store.return_value"
                         }}
                     ]
                     "over": [
-                        {{"name": "store_id"}}
+                        {{"name": "store.id"}},
+                        {{"name": "customer.id"}}
                     ]
                 }}
             }}
@@ -48,12 +55,12 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
                     "operator": "AVG",
                     "arguments": [
                         {{
-                            "name": "total_store_returns"
+                            "name": "total_per_customer_store_returns"
                         }}
                     ],
                     "over": [
                     
-                        {{"name": "state_id"}}
+                        {{"name": "store.state.id"}}
                     ]
                 }}
             }}
@@ -80,7 +87,7 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
         }}
 
     A Calculation Object is json with three fields:
-    -- operator: a function to call with those arguments. [SUM, AVG, COUNT, MAX, MIN, etc], expressed as a string. A calculation object MUST have an operator. This cannot be a comparison operator.
+    -- operator: a function to call with those arguments. [SUM, AVG, COUNT, MAX, MIN, SUBSTRING, etc], expressed as a string. A calculation object MUST have an operator. This cannot be a comparison operator.
     -- arguments: a list of Column or Literal objects. If there is an operator, there MUST be arguments
     -- over: an optional list of Column objects used when an aggregate calculation needs to group over other columns (sum of revenue by state and county, for example). Mandataory for aggregations.
 

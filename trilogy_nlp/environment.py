@@ -12,6 +12,7 @@ from difflib import get_close_matches
 from trilogy.core.exceptions import InvalidSyntaxException
 from trilogy_nlp.constants import logger
 from trilogy_nlp.prompts_v2.query_environment import BASE_1
+from trilogy_nlp.helpers import is_relevent_concept
 
 
 class AddImportResponse(BaseModel):
@@ -42,7 +43,7 @@ def get_environment_detailed_values(env: Environment, input: str):
         k.split(".", 1)[1]
         for k, v in new.concepts.items()
         # skipp hidden values
-        if not v.name.startswith("_") and not k.endswith(".count")
+        if is_relevent_concept(v)
     }
 
 

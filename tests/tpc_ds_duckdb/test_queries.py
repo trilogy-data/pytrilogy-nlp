@@ -118,7 +118,12 @@ def query_loop(
     # exec_time = datetime.now() - exec_start
     # assert results == ''
     comp_results = list(results.fetchall())
-    assert len(comp_results) > 0, "No results returned"
+    try:
+        assert len(comp_results) > 0, "No results returned"
+    except AssertionError as e:
+        if debug:
+            raise e
+        return False, str(e)
     # run the built-in comp
     # comp_start = datetime.now()
     base = engine.execute_raw_sql(f"PRAGMA tpcds({idx});")

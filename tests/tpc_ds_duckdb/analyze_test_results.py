@@ -30,7 +30,6 @@ def analyze(show: bool = False):
     )
     df = df.drop(
         columns=[
-            "success_rates",
             "parse_time",
             "exec_time",
             "comp_time",

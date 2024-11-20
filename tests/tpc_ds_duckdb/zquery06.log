@@ -1,13 +1,13 @@
 query_id = 6
-model = "unknown model"
+model = "openai-gpt-4o-mini"
 
 [cases]
 Easy = 0.75
 
 [durations]
 Easy = [
-    -40.019222,
-    -139.462918,
-    -89.143327,
-    -68.492643,
+    29.914398,
+    88.848832,
+    119.764938,
+    35.30386,
 ]

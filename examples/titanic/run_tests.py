@@ -13,12 +13,11 @@ from examples.titanic.setup_environment import setup_engine, setup_titanic
 from trilogy_nlp.enums import Provider
 from trilogy.core.models import Environment
 
-from trilogy_nlp.main_v2 import build_query as build_query_v2
+from trilogy_nlp.main import build_query
 from logging import StreamHandler, DEBUG
 
 from trilogy_nlp.constants import logger
-from trilogy_nlp.main import build_query
-from trilogy_nlp.llm_interface import NLPEngine
+from trilogy_nlp.core import NLPEngine
 
 # how many passengers survived in first and second class?
 
@@ -54,7 +53,7 @@ if __name__ == "__main__":
     google_engine = NLPEngine(provider=Provider.GOOGLE)
 
     google_engine.test_connection()
-    processed_query_v2 = build_query_v2(
+    processed_query_v2 = build_query(
         question, environment, debug=True, llm=NLPEngine(provider=Provider.GOOGLE).llm
     )
 

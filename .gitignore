@@ -27,3 +27,6 @@ memory/
 tests/tpc_ds_duckdb/memory.db
 
 sf_*
+
+.demo.db
+.tests.db

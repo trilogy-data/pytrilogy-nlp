@@ -5,6 +5,9 @@ from trilogy_nlp.llm_interface.validation import (
 )
 from trilogy import Environment
 
+from pathlib import Path
+import json
+
 
 INVALID_FUNCTION = {
     "output_columns": [
@@ -260,9 +263,6 @@ INVALID_FIELD = """{
     "reasoning": "I corrected the syntax error in the filtering clause by ensuring that the right-hand side of the comparison is correctly formatted as a Calculation object with a specified type. Now, I will submit this response."
 }"""
 
-from pathlib import Path
-import json
-
 
 def test_validate_response_invalid_field():
     # check to make sure that the invalid function is detected
@@ -291,4 +291,4 @@ def test_validate_response_invalid_field():
 
     assert response["status"] == "invalid", response
     errors = response["errors"]
-    assert "is not a valid field or previously defined by you." in str(errors), errors
+    assert "is not a valid preexisting field returned by the get" in str(errors), errors

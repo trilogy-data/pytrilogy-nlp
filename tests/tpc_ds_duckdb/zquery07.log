@@ -1,5 +1,13 @@
 query_id = 7
-model = "<class 'langchain_core.runnables.retry.RunnableRetry'>"
+model = "openai-gpt-4o-mini"
 
-[success_rates]
+[cases]
 Easy = 1.0
+
+[durations]
+Easy = [
+    57.642128,
+    36.489723,
+    45.157679,
+    45.603542,
+]

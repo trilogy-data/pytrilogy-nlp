@@ -2,13 +2,7 @@ from trilogy import Environment
 from pathlib import Path
 from trilogy_nlp.main import ir_to_query
 from trilogy_nlp.llm_interface.models import InitialParseResponseV2
-from trilogy_nlp.main import ir_to_query
 from trilogy.core.models import SelectStatement
-from trilogy_nlp.llm_interface.parsing import (
-    parse_filtering,
-    generate_having_and_where,
-)
-from trilogy.parsing.render import Renderer
 
 INPUT = """{
         "output_columns": [
@@ -97,7 +91,7 @@ def test_ir_parsing():
         == "local.total_return_amount<store_returns.item.id,store_returns.ticket_number> > local.1.2_times_avg_return_per_store<store_returns.store.id>"
     ), str(query.having_clause)
 
-    response: SelectStatement = ir_to_query(
+    _ = ir_to_query(
         intermediate_results=parsed,
         input_environment=env,
     )

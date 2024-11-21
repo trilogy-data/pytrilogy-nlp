@@ -17,6 +17,7 @@ from trilogy.core.query_processor import process_query
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.language_models import BaseLanguageModel
 from trilogy_nlp.tools import get_wiki_tool
+from trilogy_nlp.constants import logger
 
 from trilogy_nlp.llm_interface.parsing import (
     parse_filtering,
@@ -61,6 +62,7 @@ def llm_loop(
     input_environment: Environment,
     llm: BaseLanguageModel,
     additional_context: str | None = None,
+    debug: bool = False,
 ) -> SelectStatement:
 
     human = """{input}
@@ -86,7 +88,7 @@ def llm_loop(
     agent_executor = AgentExecutor(
         agent=chat_agent,
         tools=tools,
-        verbose=True,
+        verbose=True if debug else False,
         max_iterations=DEFAULT_CONFIG.LLM_VALIDATION_ATTEMPTS,
         early_stopping_method="force",
         handle_parsing_errors=handle_parsing_error,
@@ -96,12 +98,23 @@ def llm_loop(
         input_text += additional_context
     error = None
     while attempts < 1:
+        output = None
         try:
-            agent_executor.invoke({"input": input_text})
+            output = agent_executor.invoke({"input": input_text})
+            return ir_to_query(
+                InitialParseResponseV2.model_validate(output["output"]),
+                input_environment,
+                debug=debug,
+            )
         except ValidationPassedException as e:
             ir = e.ir
             return ir_to_query(ir, input_environment=input_environment, debug=True)
-        attempts += 1
+
+        except Exception as e:
+            logger.error(
+                f"Error in main execution llm loop with output {output}: {str(e)}"
+            )
+            attempts += 1
     if error:
         raise error
     raise ValueError(f"Unable to get parseable response after {attempts} attempts")
@@ -143,11 +156,11 @@ def sort_by_name_list(arr: list[Column], reference: list[str]):
 def ir_to_query(
     intermediate_results: InitialParseResponseV2,
     input_environment: Environment,
-    debug: bool = True,
+    debug: bool = False,
 ):
     ordering = determine_ordering(intermediate_results.output_columns)
     selection = [
-        create_column(x, input_environment)
+        create_column(x, input_environment, level=0)
         for x in sort_by_name_list(intermediate_results.output_columns, ordering)
     ]
     order = parse_order(selection, intermediate_results.order or [])
@@ -159,11 +172,11 @@ def ir_to_query(
     )
 
     if debug:
-        print("Concepts found")
+        print("Output Concepts")
         for c in intermediate_results.output_columns:
             print(c)
         if intermediate_results.filtering:
-            print("filtering")
+            print("Filtering")
             print(str(intermediate_results.filtering))
         if intermediate_results.order:
             print("Ordering")
@@ -243,10 +256,12 @@ def ir_to_query(
 
     renderer = Renderer()
     print("RENDERED QUERY")
+    print("---------")
     for new_c in input_environment.concepts.values():
         if is_local_derived(new_c):
             print(renderer.to_string(ConceptDeclarationStatement(concept=new_c)))
     print(renderer.to_string(query))
+    print("---------")
     query.validate_syntax()
     return query
 
@@ -258,7 +273,7 @@ def parse_query(
     debug: bool = False,
     log_info: bool = True,
 ) -> SelectStatement:
-    return llm_loop(input_text, input_environment, llm=llm)
+    return llm_loop(input_text, input_environment, llm=llm, debug=debug)
 
 
 def build_query(

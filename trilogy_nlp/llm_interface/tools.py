@@ -6,24 +6,12 @@ from langchain.tools import Tool, StructuredTool
 import json
 from trilogy_nlp.tools import get_today_date
 from trilogy_nlp.exceptions import ValidationPassedException
-
+from trilogy_nlp.helpers import is_relevent_concept
 from trilogy_nlp.llm_interface.validation import (
     validate_response,
     ValidateResponseInterface,
     VALID_STATUS,
 )
-
-
-def get_model_description(query: str, environment: Environment):
-    """
-    Get the description of the dataset.
-    """
-    datasources = [{"name": x.identifier} for x in environment.datasources.values()]
-    return json.dumps(
-        {
-            "description": f"Contains the following datasources: {datasources}. Use the get_fields tool with a name to get more specific information about any given one."
-        }
-    )
 
 
 def concept_to_string(concept: Concept) -> str:
@@ -37,16 +25,17 @@ def get_fields(environment: Environment, search: str, *args, **kwargs) -> str:
                 (
                     {
                         "name": concept_to_string(x),
-                        "description": x.metadata.description,
+                        "description": x.metadata.description
+                        + f" A {x.datatype.value.lower()} field.",
                     }
                     if x.metadata.description
                     else {
                         "name": concept_to_string(x),
+                        "description": f"A {x.datatype.value.lower()} field.",
                     }
                 )
                 for x in environment.concepts.values()
-                if "__preql_internal" not in x.address
-                and not x.address.endswith(".count")
+                if is_relevent_concept(x)
             ]
         }
     )
@@ -84,13 +73,6 @@ def sql_agent_tools(environment, prompt: str):
         )
 
     tools = [
-        Tool.from_function(
-            func=lambda x: get_model_description(x, environment),
-            name="get_validation_help",
-            description="""
-           Get help with validation errors""",
-            handle_tool_error=True,
-        ),
         StructuredTool(
             name="validate_response",
             description="""

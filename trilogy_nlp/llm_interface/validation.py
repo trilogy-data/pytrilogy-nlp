@@ -19,6 +19,7 @@ from trilogy_nlp.llm_interface.models import (
     Literal,
     Calculation,
 )
+from trilogy_nlp.helpers import is_relevent_concept
 from trilogy_nlp.llm_interface.constants import COMPLICATED_FUNCTIONS
 import difflib
 
@@ -54,7 +55,9 @@ class QueryContext(Enum):
     ORDER = "ORDER"
 
     def __str__(self) -> str:
-        return f"{self.value} definition"
+        if self == QueryContext.SELECT:
+            return "output column declaration"
+        return f"{self.value.lower()} declaration"
 
 
 def validate_query(
@@ -67,6 +70,7 @@ def validate_query(
     errors = []
     # assume to start that all our select calculations are valid
     select = {col.name for col in parsed.output_columns if col.calculation}
+    top_select = {col.name for col in parsed.output_columns}
     filtered_on = set()
 
     def validate_calculation(calc: Calculation, context: QueryContext) -> bool:
@@ -79,6 +83,10 @@ def validate_query(
             for x in calc.over:
                 local = validate_column(x, context)
                 valid = valid and local
+            if calc.operator not in ["AVG", "SUM", "MIN", "MAX", "COUNT"]:
+                errors.append(
+                    f"{calc} in {context} can only use one of [AVG, SUM, MIN, MAX, COUNT] when setting an 'over' clause (is using {calc.operator}); If this is a calculation off aggregates, move the 'over' into each input",
+                )
 
         for arg in calc.arguments:
             if isinstance(arg, Column):
@@ -108,15 +116,15 @@ def validate_query(
             if context == QueryContext.FILTER:
                 hint = "add another nested column with a calculation to define it in this filter"
             else:
-                hint = "add a select to calculate it"
+                hint = "add an output column to calculate it"
             if recommendations:
                 errors.append(
-                    f"{col.name} in {context} is not a valid field or previously defined by you; if this is a new metric you need, {hint}. Is one of these the correct spelling? {recommendations}?",
+                    f"'{col.name}' in {context} is not a valid preexisting field returned by the get fields tool or previously defined by you; if this is a new calculated column you need to answer the question, {hint}. Did you want to use one of these? {recommendations}?",
                 )
             else:
 
                 errors.append(
-                    f"{col.name} in {context} is not a valid field or previously defined by you. If this is a new metric you need,  {hint}. If you misspelled a field, potential matches are {difflib.get_close_matches(col.name, environment.concepts.keys(), 3, 0.4)}",
+                    f"'{col.name}' in {context} is not a valid preexisting field returned by the get fields tool or previously defined by you. If this is a new calculated column you need to answer the question, {hint}. If you just misspelled an existing field, maybe it should be one of {difflib.get_close_matches(col.name, [k for k,v in environment.concepts.items() if is_relevent_concept(v)], 3, 0.4)}",
                 )
         elif col.name in environment.concepts:
             valid = True
@@ -139,7 +147,7 @@ def validate_query(
                             dtype = environment.concepts[arg.name].datatype
                             if dtype == DataType.STRING:
                                 errors.append(
-                                    f"Aggregate function {col.calculation.operator} in {context} is being used on a string field {arg.name}; do you need a calculation, or are you using the wrong field?",
+                                    f"Aggregate function {col.calculation.operator} in {context} is being used on a string field {arg.name}; if you need this field in the output, just return it without a calculation. (Don't forget to set the full name {arg.name} when you drop the calculation!)",
                                 )
             if col.calculation.over:
                 for x in col.calculation.over:
@@ -162,7 +170,7 @@ def validate_query(
 
     if parsed.order:
         for y in parsed.order:
-            if y.column_name not in select:
+            if y.column_name not in top_select:
                 errors.append(
                     f"{y.column_name} being ordered by is not in output_columns, add if needed.",
                 )
@@ -187,17 +195,17 @@ def validate_query(
     if errors:
         return {
             "status": "invalid",
-            "errors": {f"Error {idx}: {error}" for idx, error in enumerate(errors)},
+            "errors": {f"Error {idx+1}: {error}" for idx, error in enumerate(errors)},
         }, parsed
     tips = [
-        f'No validation errors - looking good! Just double check you are outputting only (and all of) the required info from the original prompt, and submit it! (Remember that a column used just for filtering should only exist in filtering; do ) Prompt: "{prompt}"!'
+        f'Congrats! No validation errors - looking good! A few final checks - if you believe these do not apply, go ahead and submit this response as your final answer! (or make a tweak or two!) First, check that you have all fields you think are required in the output. Even better; keep it clean - if an output column is added only to be used in filtering and not explicitly asked for, you might be able to move it out of the select (move the entire definition into a nested reference).  The original prompt was: "{prompt}"!'
     ]
     for all_address in select.union(filtered_on):
         if all_address in environment.concepts:
             concept = environment.concepts[all_address]
             if concept.metadata.description:
                 tips.append(
-                    f'For {all_address}, reminder that the field description is "{concept.metadata.description}". Double check any filtering on this field matches the described format! (this is a reminder, not an error)'
+                    f'And another one - for the field {all_address}, reminder that the field description is "{concept.metadata.description}". Double check that any filtering on this field matches the described format! (this is a reminder, not an error)'
                 )
     VALIDATION_CACHE[prompt] = parsed
     return {"status": VALID_STATUS, "tips": tips}, parsed
@@ -216,7 +224,12 @@ def validation_error_to_string(err: ValidationError):
             if e["type"] == "missing":
                 path = "".join([str(x) for x in e["loc"][:-1]])
                 path_freq[path] += 1
+                key = e["loc"][-1]
                 message = f'Missing "{e["loc"][-1]}" in this JSON object you provided: {json.dumps(e["input"], indent=4)}. You may also be using the wrong object. Double check Literal and Column formats.'
+                if key == "type" and "value" in e["input"]:
+                    nested = e["input"]["value"]
+                    if "type" in nested:
+                        message = f'Missing "{e["loc"][-1]}". You have have overly nested a literal in {json.dumps(e["input"], indent=4)}. Flatten the inner object {json.dumps(nested, indent=4)} out into the parent.'
                 path_map[path].append(message)
                 missing.append(message)
             elif e["type"] == "extra_forbidden":

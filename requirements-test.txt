@@ -5,3 +5,6 @@ duckdb-engine
 mypy
 ruff
 types-tabulate
+pandas
+seaborn
+matplotlib

@@ -3,14 +3,23 @@ import pytest
 import tomli_w
 from trilogy import Executor
 from trilogy_nlp.main import build_query
+from trilogy_nlp import NLPEngine
 from trilogy_nlp.environment import build_env_and_imports
 from trilogy_nlp.constants import logger
 from langchain_core.language_models import BaseLanguageModel
 from collections import defaultdict
+from datetime import datetime
 
 import tomllib
 
 working_path = Path(__file__).parent
+
+# defaults
+ATTEMPTS = 1
+
+TARGET = 0.8
+
+GLOBAL_DEBUG: bool = False
 
 
 class EnvironmentSetupException(Exception):
@@ -18,7 +27,9 @@ class EnvironmentSetupException(Exception):
 
 
 def helper(text: str, llm, imports: list[str]):
-    environment = build_env_and_imports(text, working_path=working_path, llm=llm)
+    environment = build_env_and_imports(
+        text, working_path=working_path, llm=llm, debug=True
+    )
 
     if not set(environment.imports.keys()).issubset(set(imports)):
         raise EnvironmentSetupException(
@@ -33,23 +44,16 @@ def helper(text: str, llm, imports: list[str]):
     return environment, processed_query
 
 
-# from dataclasses import dataclass
-
-# @dataclass
-# def PromptInput:
-
-ATTEMPTS = 1
-
-TARGET = 0.8
-
-
 def matrix(
     engine: Executor,
     idx: int,
     llm: BaseLanguageModel,
     prompts: dict[str, dict[str, str]],
-) -> dict[str, int]:
+    debug: bool = False,
+) -> dict[str, dict[str, int | list[int]]]:
     output = {}
+    output["cases"] = {}
+    output["durations"] = {}
     for name, prompt_info in prompts.items():
         prompt = prompt_info["prompt"]
         imports = prompt_info["imports"]
@@ -59,40 +63,73 @@ def matrix(
         if not required:
             continue
         cases = []
-        outputs = defaultdict(lambda: 0)
+        failure_reason = defaultdict(lambda: 0)
+        durations = []
         for _ in range(0, attempts):
-            result, reason = query_loop(prompt, imports, engine, idx, llm=llm)
-            if reason:
-                outputs[reason] += 1
+            start = datetime.now()
+            result, reason = query_loop(
+                prompt,
+                imports,
+                engine,
+                idx,
+                llm=llm,
+                debug=debug,
+            )
+            if result is not True:
+                failure_reason[reason] += 1
             cases.append(result)
+            end = datetime.now()
+            duration = end - start
+            durations.append(duration.total_seconds())
+
         ratio = sum(1 if c else 0 for c in cases) / attempts
-        output[name] = ratio
-        assert sum(1 if c else 0 for c in cases) / attempts >= target, outputs
+        output["cases"][name] = ratio
+        output["durations"][name] = durations
+        assert sum(1 if c else 0 for c in cases) / attempts >= target, {
+            k: v for k, v in failure_reason.items()
+        }
+        logger.info(f"Successful run for query {idx}!")
     return output
 
 
 def query_loop(
-    prompt: str, imports: list[str], engine: Executor, idx: int, llm: BaseLanguageModel
+    prompt: str,
+    imports: list[str],
+    engine: Executor,
+    idx: int,
+    llm: BaseLanguageModel,
+    debug: bool = False,
 ) -> tuple[bool, str | None]:
     try:
         env, processed_query = helper(prompt, llm, imports)
     except EnvironmentSetupException as e:
+        if debug:
+            raise e
         return False, str(e)
     except Exception as e:
         logger.error("Error in query_loop: %s", e)
+        print(
+            f"Error in query_loop: {str(e)}",
+        )
+        if debug:
+            raise e
         return False, str(e)
     # fetch our results
     # parse_start = datetime.now()
     engine.environment = env
     query = engine.generate_sql(processed_query)[-1]
-    logger.info(query)
     # parse_time = datetime.now() - parse_start
     # exec_start = datetime.now()
     results = engine.execute_raw_sql(query)
     # exec_time = datetime.now() - exec_start
     # assert results == ''
     comp_results = list(results.fetchall())
-    assert len(comp_results) > 0, "No results returned"
+    try:
+        assert len(comp_results) > 0, "No results returned"
+    except AssertionError as e:
+        if debug:
+            raise e
+        return False, str(e)
     # run the built-in comp
     # comp_start = datetime.now()
     base = engine.execute_raw_sql(f"PRAGMA tpcds({idx});")
@@ -116,18 +153,22 @@ def query_loop(
     return True, None
 
 
-def run_query(engine: Executor, idx: int, llm: BaseLanguageModel):
+def run_query(engine: Executor, idx: int, llm: NLPEngine, debug: bool = False):
 
     with open(working_path / f"query{idx:02d}.prompt") as f:
         text = f.read()
         parsed = tomllib.loads(text)
 
-    prompts = matrix(engine, idx, llm, parsed)
+    matrix_info = matrix(engine, idx, llm.llm, parsed, debug=debug)
 
     with open(working_path / f"zquery{idx:02d}.log", "w") as f:
         f.write(
             tomli_w.dumps(
-                {"query_id": idx, "model": str(type(llm)), "success_rates": prompts},
+                {
+                    "query_id": idx,
+                    "model": f"{llm.provider.value}-{llm.model}",
+                    **matrix_info,
+                },
                 multiline_strings=True,
             )
         )
@@ -135,7 +176,7 @@ def run_query(engine: Executor, idx: int, llm: BaseLanguageModel):
 
 
 def test_one(engine, llm):
-    run_query(engine, 1, llm)
+    run_query(engine, 1, llm, debug=GLOBAL_DEBUG)
 
 
 @pytest.mark.skip(reason="Is duckdb correct??")
@@ -144,7 +185,7 @@ def test_two(engine):
 
 
 def test_three(engine, llm):
-    run_query(engine, 3, llm)
+    run_query(engine, 3, llm, debug=GLOBAL_DEBUG)
 
 
 @pytest.mark.skip(reason="Is duckdb correct??")
@@ -159,11 +200,11 @@ def test_five(engine):
 
 @pytest.mark.cli
 def test_six(engine, llm):
-    query = run_query(engine, 6, llm)
+    run_query(engine, 6, llm, debug=GLOBAL_DEBUG)
 
 
 def test_seven(engine, llm):
-    run_query(engine, 7, llm)
+    run_query(engine, 7, llm, debug=GLOBAL_DEBUG)
 
 
 @pytest.mark.skip(reason="No prompt yet")
@@ -179,7 +220,7 @@ def test_ten(engine, llm):
 
 @pytest.mark.skip(reason="No prompt yet")
 def test_twelve(engine, llm):
-    run_query(engine, 12, llm)
+    run_query(engine, 12, llm, debug=GLOBAL_DEBUG)
 
 
 @pytest.mark.skip(reason="No prompt yet")
@@ -255,7 +296,16 @@ SELECT * FROM dsdgen(sf=.5);"""
             print("test: ", row, " vs sql: ", comp_results[idx])
 
     else:
-        run_query(engine, number)
+        from trilogy_nlp import NLPEngine, Provider
+        from trilogy_nlp.enums import CacheType
+
+        llm = NLPEngine(
+            provider=Provider.OPENAI,
+            model="gpt-4o-mini",
+            cache=CacheType.SQLLITE,
+            cache_kwargs={"database_path": ".tests.db"},
+        ).llm
+        run_query(engine, number, llm=llm, debug=True)
 
 
 if __name__ == "__main__":
@@ -278,26 +328,7 @@ ORDER BY
     store_sales.customer.state asc
 
 LIMIT 100;"""
-    TEST = """
-import store_sales as store_sales;
-WHERE
-    store_sales.customer.demographics.gender = 'M' 
-    and store_sales.customer.demographics.marital_status = 'S' and
-    store_sales.customer.demographics.education_status = 'College' 
-    and store_sales.date.date.year = 2000 and (store_sales.promotion.channel_event = 'N' or store_sales.promotion.channel_email = 'N')
-SELECT
-    avg(store_sales.quantity) -> average_quantity_sold,
-    avg(store_sales.list_price) -> average_list_price,
-    avg(store_sales.coupon_amt) -> average_coupon_amount,
-    avg(store_sales.sales_price) -> average_sales_price,
-    store_sales.item.name,
-ORDER BY
-    store_sales.item.name asc
-
-LIMIT 100;
-"""
 
     run_adhoc(
-        7,
-        text=TEST,
+        1,
     )

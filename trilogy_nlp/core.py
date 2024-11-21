@@ -1,12 +1,17 @@
-from trilogy import Environment
+from trilogy import Environment, Executor
 from trilogy_nlp.enums import Provider, CacheType
 from trilogy_nlp.main import build_query
 from langchain.globals import set_llm_cache
+from trilogy.executor import CursorResult
+from trilogy.core.models import ProcessedQuery
 
 DEFAULT_GPT = "gpt-4o-mini"
 DEFAULT_GEMINI = "gemini-pro"
 
 DEFAULT_MAX_TOXENS = 6500
+
+# 0 to 1.0, scaled by provider
+DEFAULT_TEMPERATURE = 0.3
 
 
 class NLPEngine(object):
@@ -30,11 +35,11 @@ class NLPEngine(object):
 
         cache_instance: BaseCache
         if cache == CacheType.SQLLITE:
-            from langchain.cache import SQLiteCache
+            from langchain_community.cache import SQLiteCache
 
             cache_instance = SQLiteCache(**cache_kwargs)
         elif cache == CacheType.MEMORY:
-            from langchain.cache import InMemoryCache
+            from langchain_community.cache import InMemoryCache
 
             cache_instance = InMemoryCache()
         else:
@@ -44,12 +49,14 @@ class NLPEngine(object):
 
     def create_llm(self):
         if self.provider == Provider.OPENAI:
-            from langchain_community.chat_models import ChatOpenAI
+            from langchain_openai import ChatOpenAI
             import openai
 
             llm = ChatOpenAI(
                 model_name=self.model if self.model else DEFAULT_GPT,
                 openai_api_key=self.api_key,
+                # openai temperature is 0 to 2.0
+                temperature=DEFAULT_TEMPERATURE * 2,
                 # model_kwargs=chat_openai_model_kwargs,
             ).with_retry(
                 retry_if_exception_type=(
@@ -65,6 +72,8 @@ class NLPEngine(object):
                 model=self.model if self.model else DEFAULT_GEMINI,
                 convert_system_message_to_human=True,
                 google_api_key=self.api_key,
+                # openai temperature is 0 to 2.0
+                temperature=DEFAULT_TEMPERATURE * 2,
             ).with_retry()
         elif self.provider == Provider.LLAMAFILE:
             from langchain_community.chat_models import ChatOpenAI
@@ -73,6 +82,7 @@ class NLPEngine(object):
                 model_name=self.model if self.model else "not-applicalbe",
                 openai_api_key="not-required",
                 base_url="http://localhost:8080/v1",
+                temperature=DEFAULT_TEMPERATURE,
                 # model_kwargs=chat_openai_model_kwargs,
             ).with_retry()
         else:
@@ -84,10 +94,18 @@ class NLPEngine(object):
         result = local.invoke("Hello")
         print(result.content)
 
-    def build_query_from_text(self, input_text: str, env: Environment):
+    def generate_query(self, text: str, env: Environment | Executor) -> ProcessedQuery:
+        if isinstance(env, Executor):
+            env = env.environment
+        # avoid mutating our model
+        env = env.model_copy(deep=True)
         return build_query(
-            input_text=input_text,
+            input_text=text,
             input_environment=env,
             debug=self.debug,
             llm=self.llm,
         )
+
+    def run_query(self, text: str, executor: Executor) -> CursorResult:
+        query = self.generate_query(text, executor)
+        return executor.execute_query(query)

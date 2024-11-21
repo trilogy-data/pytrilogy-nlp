@@ -6,6 +6,7 @@ import re
 import openai
 from trilogy.constants import logger
 from trilogy_nlp.constants import DEFAULT_LIMIT
+from trilogy.core.models import Concept
 
 extract = re.compile("Please try again in ([0-9]+)s")
 
@@ -16,6 +17,18 @@ def safe_limit(input: int | None) -> int:
     if input in (-1, 0):
         return DEFAULT_LIMIT
     return input
+
+
+def is_relevent_concept(concept: Concept) -> bool:
+    if concept.name.startswith("_"):
+        return False
+    if concept.name.endswith(".count"):
+        return False
+    if concept.namespace and any(
+        x.startswith("_") for x in concept.namespace.split(".")
+    ):
+        return False
+    return True
 
 
 # define a retry decorator

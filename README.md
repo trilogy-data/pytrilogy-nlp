@@ -15,12 +15,57 @@ This makes it more testable and less prone to hallucination than generating SQL 
 
 Trilogy-NLP is built on the common NLP backend (langchain, etc) and supports configurable backends.
 
-
 ## Examples
 
-### Basic BQ example
+> [!TIP]
+> These utilize the `trilogy-public-models` package to get predefined model.s, which can be installed with `pip install trilogy-public-models`
+
+### Hello World
+
+```python
+
+from trilogy_public_models import get_executor
+from trilogy_nlp import NLPEngine, Provider, CacheType
+
+# we use this to run queries
+# get a Trilogy executor preloaded with the tpc_ds schema in duckdb
+# Executors run queries again a model using an engine
+executor = get_executor("duckdb.tpc_ds")
+
+# create an NLP engine
+# we use this to generate queries against the model
+engine = NLPEngine(
+    provider=Provider.OPENAI,
+    model="gpt-4o-mini",
+    cache=CacheType.SQLLITE,
+    cache_kwargs={"database_path": ".demo.db"},
+)
+
+# We can pass the executor to the engine
+# to directly run a querie
+results = engine.run_query(
+    "What was the store sales for the first 5 days of January 2000 for customers in CA?",
+    executor=executor,
+)
+
+for row in results:
+    print(row)
+
+# Or generate a query without executing it
+query = engine.generate_query(
+    "What was the store sales for the first 5 days of January 2000 for customers in CA?",
+    env=executor.environment,
+)
+
+# which can compile it to SQL
+# this might be multiple statements in some cases
+# but here we can just grab the last one
+print(executor.generate_sql(query)[-1])
 
 
+```
+
+### BQ Example
 ```python
 from trilogy_public_models import models
 from trilogy import Executor, Dialects
@@ -49,24 +94,8 @@ for row in results:
     print(row)
 ```
 
-## Don't Expecct Perfection
-
-Results are non-determistic; review the generated trilogy to make sure it maches your expectations. 
-
-```sql
-# generated from prompt: What is Taylor Swift's birthday? How many questions were asked on that day in 2020?
-SELECT
-    question.count,
-    answer.creation_date.year,
-    question.creation_date.year,
-    question.creation_date,
-WHERE
-    question.creation_date.year = 1989
-ORDER BY
-    question.count desc,
-    question.count desc
-LIMIT 100;
-```
+> [!WARNING]  
+> Don't expect perfection - results are non-determistic; review the generated Trilogy to make sure it maches your expectations. Treat queries as a starting point for refinement. 
 
 ## Setting Up Your Environment
 
@@ -76,10 +105,18 @@ tests (surprise).
 trilogy-nlp is python 3.10+
 
 ## Open AI Config
-Requires setting the following environment variables
+Requires setting the following environment variables or passing them into NLPEngine creation.
+
 - OPENAI_API_KEY
 - OPENAI_MODEL
 
-Recommended to use "gpt-3.5-turbo" or higher as the model.
+Recommended to use "gpt-4o-mini" or higher as the model.
+
+## Gemini
+Requires setting the following environment variables or passing them into NLpEngine reation
+
+- GOOGLE_API_KEY
 
 ## LlamaFile Config
+
+Run server locally

@@ -64,7 +64,18 @@ def get_next_inline_calc_name(environment: Environment) -> str:
 
 def create_literal(
     literal: Literal, environment: Environment
-) -> str | float | int | bool | MagicConstants | Concept | ConceptTransform:
+) -> (
+    str
+    | float
+    | int
+    | bool
+    | MagicConstants
+    | Concept
+    | ConceptTransform
+    | list[str]
+    | list[int]
+    | list[float]
+):
     # LLMs might get formats mixed up; if they gave us a column, hydrate it here.
     # and carry on
     if isinstance(literal.value, Calculation):
@@ -74,14 +85,15 @@ def create_literal(
             ),
             environment,
         )
-    if literal.value in environment.concepts:
+    if isinstance(literal.value, str) and literal.value in environment.concepts:
         return create_column(Column(name=literal.value), environment)
 
     # otherwise, we really have a literal
     if literal.type == "null":
         return MagicConstants.NULL
     dtype = parse_datatype(literal.type)
-
+    if isinstance(literal.value, list):
+        return literal.value
     if dtype == DataType.STRING:
         return literal.value
     if dtype == DataType.INTEGER:
@@ -90,10 +102,14 @@ def create_literal(
         return float(literal.value)
     if dtype == DataType.BOOL:
         return bool(literal.value)
+    if dtype == DataType.ARRAY:
+        return literal.value
     return literal.value
 
 
-def create_column(c: Column, environment: Environment) -> Concept | ConceptTransform:
+def create_column(
+    c: Column, environment: Environment, level: int = 1
+) -> Concept | ConceptTransform:
     if not c.calculation:
         return environment.concepts[c.name]
     if c.calculation.operator.lower() not in FunctionType.__members__:
@@ -182,7 +198,8 @@ def parse_order(
 
 
 def parse_filter_obj(
-    inp: NLPComparisonGroup | NLPConditions | Column | Literal, environment: Environment
+    inp: NLPComparisonGroup | NLPConditions | Column | Literal | list[Column | Literal],
+    environment: Environment,
 ):
     if isinstance(inp, NLPComparisonGroup):
         children = [parse_filter_obj(x, environment) for x in inp.values]
@@ -204,6 +221,20 @@ def parse_filter_obj(
         operator = inp.operator
         if right == MagicConstants.NULL and operator == ComparisonOperator.NE:
             operator = ComparisonOperator.IS_NOT
+        cast_eligible = operator not in [
+            ComparisonOperator.IS_NOT,
+            ComparisonOperator.IS,
+            ComparisonOperator.IN,
+            ComparisonOperator.NOT_IN,
+        ]
+        if cast_eligible and arg_to_datatype(left) != arg_to_datatype(right):
+            right = Function(
+                operator=FunctionType.CAST,
+                output_datatype=arg_to_datatype(left),
+                output_purpose=Purpose.PROPERTY,
+                arguments=[right, arg_to_datatype(left)],  # type: ignore
+                arg_count=2,
+            )
         return Comparison(
             left=left,
             right=right,
@@ -211,6 +242,8 @@ def parse_filter_obj(
         )
     elif isinstance(inp, (Column, Literal)):
         return parse_object(inp, environment)
+    elif isinstance(inp, list):
+        return [parse_filter_obj(x, environment) for x in inp]
     else:
         raise SyntaxError(inp)
 
@@ -250,6 +283,8 @@ def parse_filter_obj_flat(
 def parse_filter(
     input: FilterResultV2, environment: Environment
 ) -> Comparison | Conditional | None:
+    if not input.root.values:
+        return None
     return parse_filter_obj(input.root, environment)
 
 

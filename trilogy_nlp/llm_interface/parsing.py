@@ -198,7 +198,8 @@ def parse_order(
 
 
 def parse_filter_obj(
-    inp: NLPComparisonGroup | NLPConditions | Column | Literal, environment: Environment
+    inp: NLPComparisonGroup | NLPConditions | Column | Literal | list[Column | Literal],
+    environment: Environment,
 ):
     if isinstance(inp, NLPComparisonGroup):
         children = [parse_filter_obj(x, environment) for x in inp.values]

@@ -241,6 +241,8 @@ def parse_filter_obj(
         )
     elif isinstance(inp, (Column, Literal)):
         return parse_object(inp, environment)
+    elif isinstance(inp, list):
+        return [parse_filter_obj(x, environment) for x in inp]
     else:
         raise SyntaxError(inp)
 

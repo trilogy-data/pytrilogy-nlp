@@ -2,8 +2,8 @@
 attempts = 4
 target = 0.75
 imports = ["web_sales"]
-prompt = """using web sales data, return the item name, item descritpion, item category, item class, item current price, sum of external_sales_price , and the % of the total
-external sales price for the item class (class revenue ratio) for 'Sports', 'Books', 'Home' categories between 1999-02-22 and 1999-03-24. 
+prompt = """using web sales data, return the item name, item descritpion, item category, item class, item current price, sum of external_sales_price, and the ratio of
+the sum of the item external sales price over all dimension to the total external sales for the item class (class revenue ratio) for 'Sports', 'Books', 'Home' categories between 1999-02-22 and 1999-03-24. 
 
 Order the results by item category, item class, item name, item description, and class revenue ratio. Return only the first 100 rows.
 

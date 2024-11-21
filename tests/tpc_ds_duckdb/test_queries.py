@@ -220,7 +220,7 @@ def test_ten(engine, llm):
 
 @pytest.mark.skip(reason="No prompt yet")
 def test_twelve(engine, llm):
-    run_query(engine, 12, llm, debug=True)
+    run_query(engine, 12, llm, debug=GLOBAL_DEBUG)
 
 
 @pytest.mark.skip(reason="No prompt yet")

@@ -76,7 +76,8 @@ NLPComparisonOperator._member_map_.update(ComparisonOperator._member_map_)
 
 class NLPConditions(BaseModel):
     left: Column | Literal
-    right: Column | Literal
+    # right can be a contains operator
+    right: Column | Literal | list[Column | Literal]
     operator: ComparisonOperator
 
 

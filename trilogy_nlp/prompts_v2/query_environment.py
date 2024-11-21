@@ -103,7 +103,12 @@ BASE_1 = """Thought Process: You are a data analyst assistant. Your job is to id
     ```
     {{
         "action": "Final Answer",
-        "action_input": <VALID_JSON_SPEC_DEFINED_ABOVE>
+        "action_input": {{
+            "namespaces": [
+                <string namespace list>
+            ]
+            }},
+        "reasoning": "Read to submit!"
     }}
     ```
 

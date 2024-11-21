@@ -15,9 +15,19 @@ BASE_1 = """Thought Process: You are a data analyst assistant. Your job is to id
     The output to the analyst should be a VALID JSON blob with the following keys and values followed by a stopword: <EOD>:
     - namespaces: a list of databases to use as strings
 
-    So a final argument should look like 
+    So a submission argument "action_input" field should look like 
     {{
     "namespaces": ["orders", "customers"]
+    }}
+    
+    to converse, will provide a series of action responses
+    
+    of the below json format. the action input may be a string or json.
+    
+    {{
+    "action": "name",
+    "action_input": "input",
+    "reasoning": "optional thinking"
     }}
 
     You have access to the following tools:

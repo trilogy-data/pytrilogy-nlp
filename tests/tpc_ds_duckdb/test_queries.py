@@ -19,13 +19,17 @@ ATTEMPTS = 1
 
 TARGET = 0.8
 
+GLOBAL_DEBUG: bool = False
+
 
 class EnvironmentSetupException(Exception):
     pass
 
 
 def helper(text: str, llm, imports: list[str]):
-    environment = build_env_and_imports(text, working_path=working_path, llm=llm)
+    environment = build_env_and_imports(
+        text, working_path=working_path, llm=llm, debug=True
+    )
 
     if not set(environment.imports.keys()).issubset(set(imports)):
         raise EnvironmentSetupException(
@@ -59,7 +63,7 @@ def matrix(
         if not required:
             continue
         cases = []
-        success_rate = defaultdict(lambda: 0)
+        failure_reason = defaultdict(lambda: 0)
         durations = []
         for _ in range(0, attempts):
             start = datetime.now()
@@ -71,8 +75,8 @@ def matrix(
                 llm=llm,
                 debug=debug,
             )
-            if reason:
-                success_rate[reason] += 1
+            if result is not True:
+                failure_reason[reason] += 1
             cases.append(result)
             end = datetime.now()
             duration = end - start
@@ -81,7 +85,9 @@ def matrix(
         ratio = sum(1 if c else 0 for c in cases) / attempts
         output["cases"][name] = ratio
         output["durations"][name] = durations
-        assert sum(1 if c else 0 for c in cases) / attempts >= target, success_rate
+        assert sum(1 if c else 0 for c in cases) / attempts >= target, {
+            k: v for k, v in failure_reason.items()
+        }
         logger.info(f"Successful run for query {idx}!")
     return output
 
@@ -170,7 +176,7 @@ def run_query(engine: Executor, idx: int, llm: NLPEngine, debug: bool = False):
 
 
 def test_one(engine, llm):
-    run_query(engine, 1, llm)
+    run_query(engine, 1, llm, debug=GLOBAL_DEBUG)
 
 
 @pytest.mark.skip(reason="Is duckdb correct??")
@@ -179,7 +185,7 @@ def test_two(engine):
 
 
 def test_three(engine, llm):
-    run_query(engine, 3, llm)
+    run_query(engine, 3, llm, debug=GLOBAL_DEBUG)
 
 
 @pytest.mark.skip(reason="Is duckdb correct??")
@@ -194,11 +200,11 @@ def test_five(engine):
 
 @pytest.mark.cli
 def test_six(engine, llm):
-    run_query(engine, 6, llm)
+    run_query(engine, 6, llm, debug=GLOBAL_DEBUG)
 
 
 def test_seven(engine, llm):
-    run_query(engine, 7, llm)
+    run_query(engine, 7, llm, debug=GLOBAL_DEBUG)
 
 
 @pytest.mark.skip(reason="No prompt yet")

@@ -10,6 +10,9 @@ DEFAULT_GEMINI = "gemini-pro"
 
 DEFAULT_MAX_TOXENS = 6500
 
+# 0 to 1.0, scaled by provider
+DEFAULT_TEMPERATURE = 0.3
+
 
 class NLPEngine(object):
     def __init__(
@@ -36,7 +39,7 @@ class NLPEngine(object):
 
             cache_instance = SQLiteCache(**cache_kwargs)
         elif cache == CacheType.MEMORY:
-            from langchain.cache import InMemoryCache
+            from langchain_community.cache import InMemoryCache
 
             cache_instance = InMemoryCache()
         else:
@@ -52,6 +55,8 @@ class NLPEngine(object):
             llm = ChatOpenAI(
                 model_name=self.model if self.model else DEFAULT_GPT,
                 openai_api_key=self.api_key,
+                # openai temperature is 0 to 2.0
+                temperature=DEFAULT_TEMPERATURE * 2,
                 # model_kwargs=chat_openai_model_kwargs,
             ).with_retry(
                 retry_if_exception_type=(
@@ -67,6 +72,8 @@ class NLPEngine(object):
                 model=self.model if self.model else DEFAULT_GEMINI,
                 convert_system_message_to_human=True,
                 google_api_key=self.api_key,
+                # openai temperature is 0 to 2.0
+                temperature=DEFAULT_TEMPERATURE * 2,
             ).with_retry()
         elif self.provider == Provider.LLAMAFILE:
             from langchain_community.chat_models import ChatOpenAI
@@ -75,6 +82,7 @@ class NLPEngine(object):
                 model_name=self.model if self.model else "not-applicalbe",
                 openai_api_key="not-required",
                 base_url="http://localhost:8080/v1",
+                temperature=DEFAULT_TEMPERATURE,
                 # model_kwargs=chat_openai_model_kwargs,
             ).with_retry()
         else:

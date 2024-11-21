@@ -176,78 +176,78 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
     {{
         "action": "validate_response",
         "action_input": {{
-        "output_columns": [
-            {{"name": "store.order.id"}},
-            {{"name": "store.order.customer.id"}},
-            {{"name": "revenue_sum", 
-                "calculation": {{
-                    "operator":"SUM", 
-                    "arguments": [
-                            {{
-                            "name": "revenue_dollars",
-                            "calculation" : {{
-                                "operator": "MULTIPLY",
-                                "arguments": [
-                                    {{ "name": "store.order.revenue_cents" }}
-                                    ]
+            "output_columns": [
+                {{"name": "store.order.id"}},
+                {{"name": "store.order.customer.id"}},
+                {{"name": "revenue_sum", 
+                    "calculation": {{
+                        "operator":"SUM", 
+                        "arguments": [
+                                {{
+                                "name": "revenue_dollars",
+                                "calculation" : {{
+                                    "operator": "MULTIPLY",
+                                    "arguments": [
+                                        {{ "name": "store.order.revenue_cents" }}
+                                        ]
+                                    }}
                                 }}
-                            }}
-                        ],
-                        "over": [
-                            {{"name": "store.order.id"}},
-                            {{"name": "store.order.customer.id"}}]
-                    }}
-            }}
-        ],
-        "filtering": {{
-            "root": {{
-                "values": [
-                {{
-                    "operator": "="
-                    "left": {{"name": "store.zip_code"}},
-                    "right": {{"value":"10245", "type":"integer"}},
-                    
-                }},
-                {{
-                    "operator": "="
-                    "left": {{"name": "store.order.date.year" }},
-                    "right": {{"value":"2000", "type":"integer"}},
-                    
-                }},
-                {{
-                    "operator": ">"
-                    "left": {{"name": "revenue_sum" }},
-                    "right": {{"value":"10", "type":"float"}},
-                    
-                }},
-                {{  
-                    "operator": ">"
-                    "left": {{
-                        "name": "sales_price_sum_by_store", 
-                        "calculation": {{"operator":"SUM", 
-                            "arguments": [
-                                {{ "name": "item.sales_price"}}
-                                ],
+                            ],
                             "over": [
-                                {{ "name": "store.order.id"}}, 
-                                {{ "name": "store.id"}}
-                            ]
-                            }}
-                        }},
-                    "right": {{"value":"100.0", "type":"float"}},
-                    
-                    
+                                {{"name": "store.order.id"}},
+                                {{"name": "store.order.customer.id"}}]
+                        }}
                 }}
-                ],
-                "boolean": "and"
-                }},
-        }}
-        "order": [
-            {{"column_name": "customer_id", "order": "asc nulls first"}},
-            {{"column_name": "revenue_sum", "order": "desc"}}
-        ],
-        "limit": 100
-        }}, 
+            ],
+            "filtering": {{
+                "root": {{
+                    "values": [
+                    {{
+                        "operator": "="
+                        "left": {{"name": "store.zip_code"}},
+                        "right": {{"value":"10245", "type":"integer"}},
+                        
+                    }},
+                    {{
+                        "operator": "="
+                        "left": {{"name": "store.order.date.year" }},
+                        "right": {{"value":"2000", "type":"integer"}},
+                        
+                    }},
+                    {{
+                        "operator": ">"
+                        "left": {{"name": "revenue_sum" }},
+                        "right": {{"value":"10", "type":"float"}},
+                        
+                    }},
+                    {{  
+                        "operator": ">"
+                        "left": {{
+                            "name": "sales_price_sum_by_store", 
+                            "calculation": {{"operator":"SUM", 
+                                "arguments": [
+                                    {{ "name": "item.sales_price"}}
+                                    ],
+                                "over": [
+                                    {{ "name": "store.order.id"}}, 
+                                    {{ "name": "store.id"}}
+                                ]
+                                }}
+                            }},
+                        "right": {{"value":"100.0", "type":"float"}},
+                        
+                        
+                    }}
+                    ],
+                    "boolean": "and"
+                    }},
+            }}
+            "order": [
+                {{"column_name": "customer_id", "order": "asc nulls first"}},
+                {{"column_name": "revenue_sum", "order": "desc"}}
+            ],
+            "limit": 100
+            }}, 
         "reasoning": "I can return order id, customer id, and the total order revenue. Order Id and customer Id are scalar values, while the total order revenue will require a calculation. I can filter to the zip code and the year, and then restrict to where the sales price over the store and order id is more than 100, which will require a calculation. Before submitting my answer, I need to validate my answer."
     }}
 

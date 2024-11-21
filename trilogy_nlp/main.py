@@ -102,18 +102,19 @@ def llm_loop(
         try:
             output = agent_executor.invoke({"input": input_text})
             return ir_to_query(
-                InitialParseResponseV2.parse_obj(output["output"]),
+                InitialParseResponseV2.model_validate(output["output"]),
                 input_environment,
                 debug=debug,
             )
         except ValidationPassedException as e:
             ir = e.ir
             return ir_to_query(ir, input_environment=input_environment, debug=True)
+
         except Exception as e:
             logger.error(
                 f"Error in main execution llm loop with output {output}: {str(e)}"
             )
-        attempts += 1
+            attempts += 1
     if error:
         raise error
     raise ValueError(f"Unable to get parseable response after {attempts} attempts")

@@ -2,12 +2,12 @@ query_id = 3
 model = "openai-gpt-4o-mini"
 
 [cases]
-Medium = 0.75
+Medium = 1.0
 
 [durations]
 Medium = [
-    47.177632,
-    22.099007,
-    33.755085,
-    73.056173,
+    43.919255,
+    26.770803,
+    47.283477,
+    49.942536,
 ]

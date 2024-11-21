@@ -6,7 +6,6 @@ from langchain.agents import create_structured_chat_agent, AgentExecutor
 from langchain.tools import Tool, StructuredTool
 from trilogy.core.enums import Purpose
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from trilogy_nlp.tools import get_wiki_tool
 from trilogy.core.enums import Modifier
 from difflib import get_close_matches
 from trilogy.core.exceptions import InvalidSyntaxException
@@ -22,9 +21,9 @@ class AddImportResponse(BaseModel):
     reasoning: str | None = None
 
 
-def get_environment_possible_imports(env: Environment) -> list[str]:
+def get_environment_possible_imports(env: Environment) -> str:
     raw = Path(env.working_path).glob("*.preql")
-    return [x.stem for x in raw if "query" not in x.stem]
+    return "Observation: " + str([x.stem for x in raw if "query" not in x.stem])
 
 
 def get_environment_detailed_values(env: Environment, input: str):
@@ -34,17 +33,19 @@ def get_environment_detailed_values(env: Environment, input: str):
 
     except (ImportError, InvalidSyntaxException):
         suggestions = get_close_matches(input, get_environment_possible_imports(env))
-        base = "This is an invalid database. Refer back to the list from the get_database_list tool. Names must match exactly."
+        base = "Observation: This is an invalid database. Refer back to the list from the list_databases tool. Names must match exactly."
         if suggestions:
             base += f" Did you mean {suggestions[0]}?"
         return base
     # TODO: does including a description work better?
-    return {
-        k.split(".", 1)[1]
-        for k, v in new.concepts.items()
-        # skipp hidden values
-        if is_relevent_concept(v)
-    }
+    return "Observation:" + str(
+        {
+            k.split(".", 1)[1]
+            for k, v in new.concepts.items()
+            # skipp hidden values
+            if is_relevent_concept(v)
+        }
+    )
 
 
 def validate_response(
@@ -75,7 +76,7 @@ def environment_agent_tools(environment):
             func=get_import_wrapper,
             name="list_databases",
             description="""
-           Describe the databases you can look at. Takes empty argument string.""",
+            Describe the databases you can look at. Takes empty argument string.""",
             handle_tool_error='Argument is an EMPTY STRING, rendered as "". {} is not valid. Do not call with {} ',
         ),
         Tool.from_function(
@@ -98,7 +99,10 @@ def environment_agent_tools(environment):
 
 
 def llm_loop(
-    input_text: str, input_environment: Environment, llm: BaseLanguageModel
+    input_text: str,
+    input_environment: Environment,
+    llm: BaseLanguageModel,
+    debug: bool = False,
 ) -> AddImportResponse:
     system = BASE_1
     human = """{input}
@@ -115,19 +119,20 @@ def llm_loop(
         ]
     )
 
-    tools = environment_agent_tools(input_environment) + [get_wiki_tool()]
+    tools = environment_agent_tools(input_environment)
     chat_agent = create_structured_chat_agent(
         llm=llm,
         tools=tools,
         prompt=prompt,
     )
     agent_executor = AgentExecutor(
-        agent=chat_agent, tools=tools, verbose=True, handle_parsing_errors=True  # type: ignore
+        agent=chat_agent, tools=tools, verbose=debug, handle_parsing_errors=True  # type: ignore
     )
 
     result = agent_executor.invoke({"input": input_text})
     output = result["output"]
-    print(output)
+    if "Agent stopped due to iteration limit" in output:
+        raise TimeoutError(output)
     if isinstance(output, str):
         return AddImportResponse.model_validate_json(output)
     elif isinstance(output, dict):
@@ -137,28 +142,42 @@ def llm_loop(
 
 
 def select_required_import(
-    input_text: str, environment: Environment, llm: BaseLanguageModel
+    input_text: str,
+    environment: Environment,
+    llm: BaseLanguageModel,
+    debug: bool = False,
 ) -> AddImportResponse:
     exception = None
-    ATTEMPTS = 3
-    for attempts in range(ATTEMPTS):
+    MAX_ATTEMPTS = 3
+    attempts = 0
+    while attempts < MAX_ATTEMPTS:
         try:
-            return llm_loop(input_text, environment, llm)
+            return llm_loop(input_text, environment, llm, debug=debug)
         except Exception as e:
+            if (
+                "The model produced invalid content. Consider modifying your prompt if you are seeing this error persistently"
+                in str(e)
+            ):
+                continue
+            if debug:
+                raise e
             logger.error("Error in select_required_import: %s", e)
             exception = e
+            attempts += 1
     if exception:
         raise exception
-    raise ValueError(f"Unable to get parseable response after {ATTEMPTS} attempts; ")
+    raise ValueError(
+        f"Unable to get parseable response after {MAX_ATTEMPTS} attempts; "
+    )
 
 
 def build_env_and_imports(
-    input_text: str,
-    working_path: Path,
-    llm: BaseLanguageModel,
+    input_text: str, working_path: Path, llm: BaseLanguageModel, debug: bool = False
 ):
     base = Environment(working_path=working_path)
-    response: AddImportResponse = select_required_import(input_text, base, llm=llm)
+    response: AddImportResponse = select_required_import(
+        input_text, base, llm=llm, debug=debug
+    )
 
     for x in response.namespaces:
         base.parse(f"""import {x} as {x};""")

@@ -11,6 +11,8 @@ from pydantic import (
 # from trilogy.core.constants import
 from enum import Enum
 
+class MagicEnum(Enum):
+    STAR_OP = '*'
 
 class OrderResultV2(BaseModel):
     """The result of the order prompt"""
@@ -34,7 +36,7 @@ class Calculation(BaseModel):
     model_config = ConfigDict(extra="forbid")
     arguments: list[Union["Column", Literal]]
     operator: str
-    over: list["Column"] | None = None
+    over: list[Union["Column",  MagicEnum ]]  |  None = None
 
 
 class Column(BaseModel):

@@ -19,7 +19,7 @@ ATTEMPTS = 1
 
 TARGET = 0.8
 
-GLOBAL_DEBUG: bool = False
+GLOBAL_DEBUG: bool = True
 
 
 class EnvironmentSetupException(Exception):
@@ -218,7 +218,7 @@ def test_ten(engine, llm):
     assert len(query) < 7000, query
 
 
-@pytest.mark.skip(reason="No prompt yet")
+# @pytest.mark.skip(reason="No prompt yet")
 def test_twelve(engine, llm):
     run_query(engine, 12, llm, debug=GLOBAL_DEBUG)
 
@@ -310,25 +310,28 @@ SELECT * FROM dsdgen(sf=.5);"""
 
 if __name__ == "__main__":
     TEST = """
-import store_sales as store_sales;
-
-metric customer_count <- count(store_sales.customer.id); # local to select
-metric average_item_price_by_category <- avg(store_sales.item.current_price) by store_sales.item.category; # local to select
-property inline_calc_319 <- average_item_price_by_category * 1.2; # local to select
+metric total_class_external_sales <- sum(web_sales.external_sales_price) by web_sales.item.class; # local to select
+property class_revenue_ratio <- total_external_sales_price / total_class_external_sales; # local to select
 WHERE
-    ((store_sales.item.current_price > inline_calc_319 and store_sales.date.date.month = 1) and store_sales.date.date.year = 2001) and store_sales.item.category is not null
+    web_sales.item.category in ['Sports', 'Books', 'Home'] and (web_sales.date.date >= CAST('1999-02-22' AS date) and web_sales.date.date <= CAST('1999-03-24' AS date))
 SELECT
-    count(store_sales.customer.id) -> customer_count,
-    store_sales.customer.state,
-HAVING
-    customer_count >= 10 and True
-
+    web_sales.item.name,
+    web_sales.item.desc,
+    web_sales.item.category,
+    web_sales.item.class,
+    web_sales.item.current_price,
+    sum(web_sales.external_sales_price) by web_sales.item.name, web_sales.item.desc, web_sales.item.category, web_sales.item.class, web_sales.item.current_price -> total_external_sales_price,
+    total_external_sales_price / total_class_external_sales -> class_revenue_ratio,
 ORDER BY
-    customer_count asc,
-    store_sales.customer.state asc
+    web_sales.item.category asc,
+    web_sales.item.class asc,
+    web_sales.item.name asc,
+    web_sales.item.desc asc,
+    class_revenue_ratio asc
 
 LIMIT 100;"""
 
     run_adhoc(
-        1,
+        12,
+        text=TEST
     )

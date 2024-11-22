@@ -17,6 +17,23 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
 
     Reinforcement: make sure you use the "over" clause on any aggregate calculation if you need to group to a particular level. In general, you'll use this for any aggregate function w/ the output columns you select, except
     if the query specifically asks for an aggregate at a different level. 
+
+    IMPORTANT: If you want an aggregate to be over all the dimensions you return, put "*" in the over clause.
+
+    Example:
+
+        "calculation": {{
+                "operator": "SUM",
+                "arguments": [
+                    {{
+                        "name": "store.return_value"
+                    }}
+                ]
+                "over": [
+                 "*"
+                ]
+            }}
+
     For example, when calculating a ratio of costs to revenue by state, you would have a nested calculation of costs by state and a calculation of revenue by state, and a parent division calculation with no over clause.
 
     For example, to get the average customer revenue by store, you would first sum the revenue by customer, then average that sum by store.
@@ -89,7 +106,7 @@ BASE_1 = """You are a data analyst assistant. Your job is to turn unstructured b
     A Calculation Object is json with three fields:
     -- operator: a function to call with those arguments. [SUM, AVG, COUNT, MAX, MIN, SUBSTRING, etc], expressed as a string. A calculation object MUST have an operator. This cannot be a comparison operator.
     -- arguments: a list of Column or Literal objects. If there is an operator, there MUST be arguments
-    -- over: an optional list of Column objects used when an aggregate calculation needs to group over other columns (sum of revenue by state and county, for example). Mandataory for aggregations.
+    -- over: an optional list of Column objects used when an aggregate calculation needs to group over other columns (sum of revenue by state and county, for example). Mandatoryfor aggregations.
 
     A Comparison object is JSON with three fields:
     -- operator: the comparison operator, one of "=", "in", "<", ">", "<=", "like", or ">=". Use two comparisons to represent a between

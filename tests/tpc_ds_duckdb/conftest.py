@@ -63,6 +63,7 @@ def engine():
         EXPORT DATABASE '{base_path}' (FORMAT PARQUET);"""
         )
     yield engine
+    engine.connection.close()
 
 
 @pytest.fixture(autouse=True, scope="session")

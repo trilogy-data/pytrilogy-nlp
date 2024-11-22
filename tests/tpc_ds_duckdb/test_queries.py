@@ -310,6 +310,7 @@ SELECT * FROM dsdgen(sf=.5);"""
 
 if __name__ == "__main__":
     TEST = """
+import web_sales as web_sales;
 metric total_class_external_sales <- sum(web_sales.external_sales_price) by web_sales.item.class; # local to select
 property class_revenue_ratio <- total_external_sales_price / total_class_external_sales; # local to select
 WHERE

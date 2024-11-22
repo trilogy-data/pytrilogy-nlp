@@ -34,9 +34,10 @@ class Literal(BaseModel):
 
 class Calculation(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    arguments: list[Union["Column", Literal]]
+    arguments: list[Union["Column", Literal, "Calculation"]]
     operator: str
     over: list[Union["Column",  MagicEnum ]]  |  None = None
+
 
 
 class Column(BaseModel):

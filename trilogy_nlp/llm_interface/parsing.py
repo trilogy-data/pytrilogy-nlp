@@ -47,6 +47,8 @@ from trilogy.parsing.common import arg_to_datatype
 def parse_object(ob, environment: Environment):
     if isinstance(ob, Column):
         return create_column(ob, environment)
+    elif isinstance(ob, Calculation):
+        return create_anon_calculation(ob, environment)
     return create_literal(ob, environment)
 
 
@@ -106,49 +108,50 @@ def create_literal(
         return literal.value
     return literal.value
 
-
-def create_column(
-    c: Column, environment: Environment, level: int = 1
-) -> Concept | ConceptTransform:
-    if not c.calculation:
-        return environment.concepts[c.name]
-    if c.calculation.operator.lower() not in FunctionType.__members__:
-        if c.calculation.operator == "RENAME":
-            c.calculation.operator = "ALIAS"
-
-    operator = FunctionType(c.calculation.operator.lower())
+def create_anon_calculation(
+    c: Calculation, environment: Environment
+) -> Function | AggregateWrapper:
+    operator = FunctionType(c.operator.lower())
     if operator in FunctionClass.AGGREGATE_FUNCTIONS.value:
         purpose = Purpose.METRIC
     else:
         purpose = Purpose.PROPERTY
-
-    args = [parse_object(c, environment) for c in c.calculation.arguments]
-    base_name = c.name
-    # TAG: resiliency
-    # LLM may reference the same name for the output of a calculation
-    # if that's so, force the outer concept a new name
-    if any(isinstance(z, Concept) and z.name == base_name for z in args):
-        base_name = f"{c.name}_deriv"
-    # TODO: use better helpers here
-    # this duplicates a bit of pytrilogy logic
+    if c.operator.lower() not in FunctionType.__members__:
+        if c.operator == "RENAME":
+            c.operator = "ALIAS"
+    args = [parse_object(c, environment) for c in c.arguments]
     deriv_function = Function(
-        operator=FunctionType(c.calculation.operator.lower()),
+        operator=FunctionType(c.operator.lower()),
         output_datatype=arg_to_datatype(args[0]),
         output_purpose=purpose,
         arguments=args,
         arg_count=InfiniteFunctionArgs,
     )
     derivation: Function | AggregateWrapper
-    if c.calculation.over:
+    if c.over:
         if purpose != Purpose.METRIC:
             raise ValueError("Can only use over with aggregate functions.")
         derivation = AggregateWrapper(
             function=deriv_function,
-            by=[parse_object(c, environment) for c in c.calculation.over],
+            by=[parse_object(c, environment) for c in c.over],
         )
     else:
         derivation = deriv_function
+    return derivation
 
+
+def create_column(
+    c: Column, environment: Environment
+) -> Concept | ConceptTransform:
+    if not c.calculation:
+        return environment.concepts[c.name]
+    base_name = c.name
+    # TAG: resiliency
+    # LLM may reference the same name for the output of a calculation
+    # if that's so, force the outer concept a new name
+    derivation = create_anon_calculation(c.calculation, environment)
+    if any(isinstance(z, Concept) and z.name == base_name for z in derivation.concept_arguments):
+        base_name = f"{c.name}_deriv"
     new = arbitrary_to_concept(
         derivation,
         namespace="local",

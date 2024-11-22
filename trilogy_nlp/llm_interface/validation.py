@@ -85,10 +85,18 @@ def validate_query(
                 valid = valid and local
             if calc.operator not in ["AVG", "SUM", "MIN", "MAX", "COUNT"]:
                 errors.append(
-                    f"{calc} in {context} can only use one of [AVG, SUM, MIN, MAX, COUNT] when setting an 'over' clause (is using {calc.operator}); If this is a calculation off aggregates, move the 'over' into each input",
+                    f"{calc} in {context} should only use 'over' when using one of [AVG, SUM, MIN, MAX, COUNT] when setting an 'over' clause (is using {calc.operator}); Drop this over (make sure it's included in any parent aggregate if needed)",
                 )
+                valid = False
 
-        for arg in calc.arguments:
+        for arg in calc.arguments:                 
+            if isinstance(arg, Column):
+                if arg.name in environment.concepts:
+                    dtype = environment.concepts[arg.name].datatype
+                    if dtype == DataType.STRING:
+                        errors.append(
+                            f"Aggregate function {calc.operator} in {context} is being used on a string field {arg.name}; if you need this field in the output, just return it without a calculation. (Don't forget to set the full name {arg.name} when you drop the calculation!)",
+                        )
             if isinstance(arg, Column):
                 local = validate_column(arg, context)
                 valid = valid and local
@@ -133,31 +141,8 @@ def validate_query(
                     f"{col.name} in {context} is a predefined field and should not have a calculation; check that you are using the field as is, without any additional transformations.",
                 )
         elif col.calculation:
-
-            if not is_valid_function(col.calculation.operator):
-                errors.append(
-                    f"{col.name} Column definition in {context} does not use a valid function (is using {col.calculation.operator}); check that you are using ONLY a valid option from this list: {sorted([x for x in FunctionType.__members__.keys() if x not in COMPLICATED_FUNCTIONS]) }. If the column requires no transformation, drop the calculation field.",
-                )
-            else:
-                valid = True
-            if col.calculation.operator in ["AVG", "SUM", "MIN", "MAX", "COUNT"]:
-                for arg in col.calculation.arguments:
-                    if isinstance(arg, Column):
-                        if arg.name in environment.concepts:
-                            dtype = environment.concepts[arg.name].datatype
-                            if dtype == DataType.STRING:
-                                errors.append(
-                                    f"Aggregate function {col.calculation.operator} in {context} is being used on a string field {arg.name}; if you need this field in the output, just return it without a calculation. (Don't forget to set the full name {arg.name} when you drop the calculation!)",
-                                )
-            if col.calculation.over:
-                for x in col.calculation.over:
-                    local = validate_column(x, context)
-                    valid = valid and local
-
-            for arg in col.calculation.arguments:
-                if isinstance(arg, Column):
-                    local = validate_column(arg, context)
-                    valid = valid and local
+            local = validate_calculation(col.calculation, context)
+            valid = valid and local
         if valid:
             if context == QueryContext.SELECT:
                 select.add(col.name)

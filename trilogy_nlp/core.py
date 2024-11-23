@@ -5,6 +5,7 @@ from trilogy.executor import CursorResult
 
 from trilogy_nlp.enums import CacheType, Provider
 from trilogy_nlp.main import build_query
+from trilogy_nlp.instrumentation import EventTracker
 
 DEFAULT_GPT = "gpt-4o-mini"
 DEFAULT_GEMINI = "gemini-pro"
@@ -23,6 +24,7 @@ class NLPEngine(object):
         api_key: str | None = None,
         cache: CacheType | None = None,
         cache_kwargs: dict | None = None,
+        instrumentation: EventTracker | None = None,
     ):
         self.provider = provider
         self.debug = False
@@ -30,6 +32,7 @@ class NLPEngine(object):
         self.api_key = api_key
         self.llm = self.create_llm()
         self.cache = self.create_cache(cache, cache_kwargs or {}) if cache else None
+        self.instrumentation = instrumentation
 
     def create_cache(self, cache: CacheType, cache_kwargs: dict):
         from langchain_core.caches import BaseCache

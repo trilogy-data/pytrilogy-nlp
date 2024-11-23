@@ -12,3 +12,10 @@ class Provider(Enum):
 class CacheType(Enum):
     MEMORY = "memory"
     SQLLITE = "sqlite"
+
+
+class EventType(Enum):
+    OPEN_DATABASE = "open_database"
+
+    ## validation
+    VALIDATION_ERROR = "validation_error"

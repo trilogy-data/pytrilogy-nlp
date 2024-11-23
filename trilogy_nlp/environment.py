@@ -56,7 +56,7 @@ def validate_response(
 ):
     possible = get_environment_possible_imports(environment)
     if not all(x in possible for x in namespaces):
-        return {"status": "invalid", "error": "Not all of those databases exist!"}
+        return {"status": "invalid", "error": f"Not all of those namespaces exist! You must pick from {possible}"}
 
     return {
         "status": "valid",
@@ -73,18 +73,18 @@ def environment_agent_tools(environment):
         )
 
     tools = [
-        Tool.from_function(
-            func=get_import_wrapper,
-            name="list_databases",
-            description="""
-            Describe the databases you can look at. Takes empty argument string.""",
-            handle_tool_error='Argument is an EMPTY STRING, rendered as "". {} is not valid. Do not call with {} ',
-        ),
+        # Tool.from_function(
+        #     func=get_import_wrapper,
+        #     name="list_databases",
+        #     description="""
+        #     Describe the databases you can look at. Takes empty argument string.""",
+        #     handle_tool_error='Argument is an EMPTY STRING, rendered as "". {} is not valid. Do not call with {} ',
+        # ),
         Tool.from_function(
             func=lambda x: get_environment_detailed_values(environment, x),
-            name="get_database_description",
+            name="get_namespace_description",
             description="""
-           Describe the database and general groupings of fields available. Call with a database name.""",
+           Describe the namespace and general groupings of fields available. Call with a namespace name.""",
             handle_tool_error=True,
         ),
         StructuredTool(
@@ -118,6 +118,9 @@ def llm_loop(
             MessagesPlaceholder("chat_history", optional=True),
             ("human", human),
         ]
+    )
+    prompt = prompt.partial(
+        namespaces = get_environment_possible_imports(input_environment)
     )
 
     tools = environment_agent_tools(input_environment)

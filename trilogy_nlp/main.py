@@ -22,6 +22,7 @@ from trilogy_nlp.config import DEFAULT_CONFIG
 from trilogy_nlp.constants import logger
 from trilogy_nlp.exceptions import ValidationPassedException
 from trilogy_nlp.helpers import safe_limit
+from trilogy_nlp.instrumentation import EventTracker
 from trilogy_nlp.llm_interface.constants import MAGIC_GENAI_DESCRIPTION
 from trilogy_nlp.llm_interface.models import Column, InitialParseResponseV2
 from trilogy_nlp.llm_interface.parsing import (
@@ -33,7 +34,6 @@ from trilogy_nlp.llm_interface.parsing import (
 from trilogy_nlp.llm_interface.tools import sql_agent_tools
 from trilogy_nlp.prompts_v2.query_system import BASE_1
 from trilogy_nlp.tools import get_wiki_tool
-from trilogy_nlp.instrumentation import EventTracker
 
 
 def is_local_derived(x: Concept) -> bool:

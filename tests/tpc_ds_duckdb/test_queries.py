@@ -12,8 +12,8 @@ from trilogy import Executor
 from trilogy_nlp import NLPEngine
 from trilogy_nlp.constants import logger
 from trilogy_nlp.environment import build_env_and_imports
-from trilogy_nlp.main import build_query
 from trilogy_nlp.instrumentation import EventTracker
+from trilogy_nlp.main import build_query
 
 working_path = Path(__file__).parent
 

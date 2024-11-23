@@ -21,6 +21,7 @@ from trilogy.core.models import (
 
 from trilogy_nlp.constants import logger
 from trilogy_nlp.helpers import is_relevent_concept
+from trilogy_nlp.instrumentation import EventTracker
 from trilogy_nlp.llm_interface.constants import COMPLICATED_FUNCTIONS
 from trilogy_nlp.llm_interface.models import (
     Calculation,
@@ -31,7 +32,6 @@ from trilogy_nlp.llm_interface.models import (
     NLPConditions,
     OrderResultV2,
 )
-from trilogy_nlp.instrumentation import EventTracker
 
 VALID_STATUS = "valid"
 

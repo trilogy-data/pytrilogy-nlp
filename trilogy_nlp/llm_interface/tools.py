@@ -8,13 +8,13 @@ from trilogy.core.models import (
 
 from trilogy_nlp.exceptions import ValidationPassedException
 from trilogy_nlp.helpers import is_relevent_concept
+from trilogy_nlp.instrumentation import EventTracker
 from trilogy_nlp.llm_interface.validation import (
     VALID_STATUS,
     ValidateResponseInterface,
     validate_response,
 )
 from trilogy_nlp.tools import get_today_date
-from trilogy_nlp.instrumentation import EventTracker
 
 
 def concept_to_string(concept: Concept) -> str:

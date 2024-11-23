@@ -12,8 +12,8 @@ from trilogy.core.exceptions import InvalidSyntaxException
 
 from trilogy_nlp.constants import logger
 from trilogy_nlp.helpers import is_relevent_concept
-from trilogy_nlp.prompts_v2.query_environment import BASE_1
 from trilogy_nlp.instrumentation import EventTracker
+from trilogy_nlp.prompts_v2.query_environment import BASE_1
 
 
 class AddImportResponse(BaseModel):

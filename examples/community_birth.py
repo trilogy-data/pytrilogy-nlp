@@ -1,9 +1,10 @@
-from trilogy_public_models import models
-from trilogy import Dialects
-from trilogy_nlp import build_query
-from trilogy.hooks.query_debugger import DebuggingHook
-from logging import StreamHandler, DEBUG
+from logging import DEBUG, StreamHandler
 
+from trilogy import Dialects
+from trilogy.hooks.query_debugger import DebuggingHook
+from trilogy_public_models import models
+
+from trilogy_nlp import build_query
 from trilogy_nlp.constants import logger
 
 logger.setLevel(DEBUG)

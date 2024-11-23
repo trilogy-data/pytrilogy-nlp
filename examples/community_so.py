@@ -1,10 +1,12 @@
-from trilogy_public_models import models
-from trilogy_nlp.main import parse_query
-from logging import StreamHandler, INFO
-from trilogy_nlp.constants import logger
-from trilogy.parsing.render import render_query
+from logging import INFO, StreamHandler
+
 from trilogy import Dialects
 from trilogy.hooks.query_debugger import DebuggingHook
+from trilogy.parsing.render import render_query
+from trilogy_public_models import models
+
+from trilogy_nlp.constants import logger
+from trilogy_nlp.main import parse_query
 
 logger.setLevel(INFO)
 logger.addHandler(StreamHandler())

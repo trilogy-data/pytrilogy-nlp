@@ -1,12 +1,15 @@
-from pathlib import Path
-import os
-import pandas as pd
 import json
-import matplotlib.pyplot as plt
-import seaborn as sns
+import os
 import sys
-import tomllib
 from os import environ
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+import tomllib
+
+from trilogy_nlp.instrumentation import EventTracker
 
 # https://github.com/python/cpython/issues/125235#issuecomment-2412948604
 if not environ.get("TCL_LIBRARY"):
@@ -14,7 +17,7 @@ if not environ.get("TCL_LIBRARY"):
     environ["TCL_LIBRARY"] = str(sys_path / "tcl" / "tcl8.6")
 
 
-def analyze(show: bool = False):
+def analyze(show: bool = False, counter: EventTracker = None):
 
     results = []
     root = Path(__file__).parent
@@ -102,6 +105,26 @@ def analyze(show: bool = False):
         plt.show()
     else:
         plt.savefig(root / "tpc-ds-timing.png")
+
+    # df = pd.DataFrame(counter.events.items(), columns=['Event Type', 'Count'])
+
+    # # Sort the DataFrame for better visualization (optional)
+    # df = df.sort_values(by='Count', ascending=False)
+
+    # # Create a Seaborn barplot
+    # sns.barplot(data=df, x='Event Type', y='Count', palette='viridis')
+
+    # # Customize the plot
+    # plt.title('Event Counts')
+    # plt.ylabel('Count')
+    # plt.xlabel('Event Type')
+    # plt.xticks(rotation=45)  # Rotate x-axis labels if needed
+    # plt.tight_layout()       # Adjust layout to fit everything nicely
+
+    # if show:
+    #     plt.show()
+    # else:
+    #     plt.savefig(root / "event-count.png")
 
 
 if __name__ == "__main__":

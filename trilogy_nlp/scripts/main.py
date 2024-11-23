@@ -1,15 +1,15 @@
-from click import Path, argument, group, UNPROCESSED
-from trilogy.dialect.enums import Dialects
-from pathlib import Path as PathlibPath
 import os
-from sys import path as sys_path
-from trilogy.parsing.render import Renderer
 from datetime import datetime
+from pathlib import Path as PathlibPath
+from sys import path as sys_path
 
+from click import UNPROCESSED, Path, argument, group
 from trilogy.dialect.enums import Dialects  # noqa
 from trilogy.executor import Executor
-from trilogy_nlp.main import build_query
+from trilogy.parsing.render import Renderer
+
 from trilogy_nlp.environment import build_env_and_imports
+from trilogy_nlp.main import build_query
 
 # handles development cases
 nb_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))

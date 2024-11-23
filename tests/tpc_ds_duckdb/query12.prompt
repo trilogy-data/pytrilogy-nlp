@@ -2,8 +2,12 @@
 attempts = 4
 target = 0.75
 imports = ["web_sales"]
-prompt = """using web sales data, return the item name, item descritpion, item category, item class, item current price, sum of external_sales_price, and the ratio of
-the sum of the item external sales price over all dimension to the total external sales for the item class (class revenue ratio) for 'Sports', 'Books', 'Home' categories between 1999-02-22 and 1999-03-24. 
+prompt = """using web sales data, return the item name, item descritpion, item category, item class, item current price, sum of external_sales_price by all those prior fields (item_total_revenue), and 
+the class revenue ratio for that item for the 'Sports', 'Books', 'Home' categories between 1999-02-22 and 1999-03-24. 
+
+The class revenue ratio can be calculated by dividing the item_total_revenue by class_revenue and multiplying the result by 100 to get a percent. Do this in two steps; first calculation the raw ratio, then multiple the output by 100.
+
+To find class revenue, group the sum of total external sales by the item class.
 
 Order the results by item category, item class, item name, item description, and class revenue ratio. Return only the first 100 rows.
 

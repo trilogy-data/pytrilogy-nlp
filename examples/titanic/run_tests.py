@@ -1,5 +1,5 @@
-from sys import path
 from os.path import dirname
+from sys import path
 
 nb_path = __file__
 root_path = dirname(dirname(dirname(__file__)))
@@ -8,16 +8,15 @@ print(root_path)
 path.insert(0, root_path)
 
 
-from examples.titanic.setup_environment import setup_engine, setup_titanic
+from logging import DEBUG, StreamHandler
 
-from trilogy_nlp.enums import Provider
 from trilogy.core.models import Environment
 
-from trilogy_nlp.main import build_query
-from logging import StreamHandler, DEBUG
-
+from examples.titanic.setup_environment import setup_engine, setup_titanic
 from trilogy_nlp.constants import logger
 from trilogy_nlp.core import NLPEngine
+from trilogy_nlp.enums import Provider
+from trilogy_nlp.main import build_query
 
 # how many passengers survived in first and second class?
 

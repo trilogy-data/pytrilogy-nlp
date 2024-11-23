@@ -1,6 +1,7 @@
+import sqlite3
+
 from trilogy_nlp.cache_providers.base import BaseCache
 from trilogy_nlp.constants import logger
-import sqlite3
 
 DEFAULT_SQLITE_ADDRESS = "local_prompt_cache.db"
 

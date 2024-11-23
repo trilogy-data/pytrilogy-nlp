@@ -1,19 +1,25 @@
-from trilogy import Dialects, Environment, Executor
-from trilogy.dialect.config import DuckDBConfig
-import pytest
+import os
+from logging import DEBUG, StreamHandler
 from pathlib import Path
 
-from trilogy_nlp.constants import logger
+import pytest
 from pytest import fixture
-from logging import StreamHandler, DEBUG
-from trilogy_nlp import NLPEngine, Provider
-from trilogy_nlp.enums import CacheType
-import os
+from trilogy import Dialects, Environment, Executor
+from trilogy.dialect.config import DuckDBConfig
+
 from tests.tpc_ds_duckdb.analyze_test_results import analyze
+from trilogy_nlp import NLPEngine, Provider
+from trilogy_nlp.constants import logger
+from trilogy_nlp.instrumentation import EventTracker
 
 working_path = Path(__file__).parent
 
 SF = 0.5
+
+
+@fixture(scope="session", autouse=True)
+def test_counter():
+    yield EventTracker()
 
 
 @fixture(scope="session", autouse=True)
@@ -24,14 +30,15 @@ def test_logger():
 
 
 @fixture(scope="session", autouse=True)
-def llm():
+def llm(test_counter):
 
     # yield NLPEngine(provider=Provider.LLAMAFILE, model="na", cache=CacheType.SQLLITE, cache_kwargs={'database_path':".tests.db"}).llm
     yield NLPEngine(
         provider=Provider.OPENAI,
         model="gpt-4o-mini",
-        cache=CacheType.MEMORY,
+        # cache=CacheType.MEMORY,
         cache_kwargs={"database_path": ".tests.db"},
+        instrumentation=test_counter,
     )
     # yield NLPEngine(provider=Provider.OPENAI, model="gpt-4").llm
 
@@ -63,11 +70,12 @@ def engine():
         EXPORT DATABASE '{base_path}' (FORMAT PARQUET);"""
         )
     yield engine
+    engine.connection.close()
 
 
 @pytest.fixture(autouse=True, scope="session")
-def my_fixture():
+def my_fixture(test_counter):
     # setup_stuff
     yield
     # teardown_stuff
-    analyze()
+    analyze(counter=test_counter)

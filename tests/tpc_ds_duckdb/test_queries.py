@@ -1,16 +1,19 @@
-from pathlib import Path
-import pytest
-import tomli_w
-from trilogy import Executor
-from trilogy_nlp.main import build_query
-from trilogy_nlp import NLPEngine
-from trilogy_nlp.environment import build_env_and_imports
-from trilogy_nlp.constants import logger
-from langchain_core.language_models import BaseLanguageModel
 from collections import defaultdict
 from datetime import datetime
+from decimal import Decimal
+from pathlib import Path
 
+import pytest
+import tomli_w
 import tomllib
+from langchain_core.language_models import BaseLanguageModel
+from trilogy import Executor
+
+from trilogy_nlp import NLPEngine
+from trilogy_nlp.constants import logger
+from trilogy_nlp.environment import build_env_and_imports
+from trilogy_nlp.instrumentation import EventTracker
+from trilogy_nlp.main import build_query
 
 working_path = Path(__file__).parent
 
@@ -26,9 +29,9 @@ class EnvironmentSetupException(Exception):
     pass
 
 
-def helper(text: str, llm, imports: list[str]):
+def helper(text: str, llm, imports: list[str], tracker: EventTracker = None):
     environment = build_env_and_imports(
-        text, working_path=working_path, llm=llm, debug=True
+        text, working_path=working_path, llm=llm, debug=True, event_tracker=tracker
     )
 
     if not set(environment.imports.keys()).issubset(set(imports)):
@@ -40,6 +43,7 @@ def helper(text: str, llm, imports: list[str]):
         input_environment=environment,
         debug=True,
         llm=llm,
+        event_tracker=tracker,
     )
     return environment, processed_query
 
@@ -49,6 +53,7 @@ def matrix(
     idx: int,
     llm: BaseLanguageModel,
     prompts: dict[str, dict[str, str]],
+    event_tracker: EventTracker,
     debug: bool = False,
 ) -> dict[str, dict[str, int | list[int]]]:
     output = {}
@@ -74,6 +79,7 @@ def matrix(
                 idx,
                 llm=llm,
                 debug=debug,
+                event_tracker=event_tracker,
             )
             if result is not True:
                 failure_reason[reason] += 1
@@ -85,10 +91,12 @@ def matrix(
         ratio = sum(1 if c else 0 for c in cases) / attempts
         output["cases"][name] = ratio
         output["durations"][name] = durations
+
         assert sum(1 if c else 0 for c in cases) / attempts >= target, {
             k: v for k, v in failure_reason.items()
         }
         logger.info(f"Successful run for query {idx}!")
+    output["events"] = {k.name: v for k, v in event_tracker.events.items()}
     return output
 
 
@@ -99,9 +107,10 @@ def query_loop(
     idx: int,
     llm: BaseLanguageModel,
     debug: bool = False,
+    event_tracker: EventTracker = None,
 ) -> tuple[bool, str | None]:
     try:
-        env, processed_query = helper(prompt, llm, imports)
+        env, processed_query = helper(prompt, llm, imports, tracker=event_tracker)
     except EnvironmentSetupException as e:
         if debug:
             raise e
@@ -144,22 +153,29 @@ def query_loop(
             f"Row count mismatch: target: {len(base_results)} != test: {len(comp_results)}",
         )
     for qidx, row in enumerate(base_results):
-        for cell in row:
-            if cell not in comp_results[qidx]:
-                return (
-                    False,
-                    f"Could not find value {cell} in row {qidx} (expected row v test): {row} != {comp_results[qidx]}",
-                )
+        comparison = comp_results[qidx]
+        if not compare_row(row, comparison):
+            logger.error(row)
+            logger.error(comparison)
+            return (False, f"Row mismatch: target: {row} != test: {comparison}")
     return True, None
 
 
-def run_query(engine: Executor, idx: int, llm: NLPEngine, debug: bool = False):
-
+def run_query(
+    engine: Executor,
+    idx: int,
+    llm: NLPEngine,
+    debug: bool = False,
+    event_tracker: EventTracker = None,
+) -> int:
+    event_tracker = event_tracker or EventTracker()
     with open(working_path / f"query{idx:02d}.prompt") as f:
         text = f.read()
         parsed = tomllib.loads(text)
 
-    matrix_info = matrix(engine, idx, llm.llm, parsed, debug=debug)
+    matrix_info = matrix(
+        engine, idx, llm.llm, parsed, debug=debug, event_tracker=event_tracker
+    )
 
     with open(working_path / f"zquery{idx:02d}.log", "w") as f:
         f.write(
@@ -173,6 +189,29 @@ def run_query(engine: Executor, idx: int, llm: NLPEngine, debug: bool = False):
             )
         )
     return 1
+
+
+def test_helpers():
+    row_1 = (
+        "AAAAAAAACBACAAAA",
+        "Very gross years give even in a fingers. Conflicts finish visibly clear, alone years. Inland thanks strengthen currently causal serv",
+        "Books",
+        "arts",
+        Decimal("4.78"),
+        Decimal("3556.48"),
+        9.608269993770056,
+    )
+    row_2 = (
+        "AAAAAAAACBACAAAA",
+        "Very gross years give even in a fingers. Conflicts finish visibly clear, alone years. Inland thanks strengthen currently causal serv",
+        "Books",
+        "arts",
+        Decimal("4.78"),
+        Decimal("37014.78"),
+        Decimal("3556.48"),
+        9.608269993770056,
+    )
+    assert compare_row(row_1, row_2)
 
 
 def test_one(engine, llm):
@@ -218,7 +257,7 @@ def test_ten(engine, llm):
     assert len(query) < 7000, query
 
 
-@pytest.mark.skip(reason="No prompt yet")
+# @pytest.mark.skip(reason="No prompt yet")
 def test_twelve(engine, llm):
     run_query(engine, 12, llm, debug=GLOBAL_DEBUG)
 
@@ -270,10 +309,24 @@ def test_twenty_six(engine, llm):
     # assert len(query) < 6000, query
 
 
+def comp_cell(cell, target):
+    if isinstance(cell, float) and isinstance(target, float):
+        return abs(cell - target) <= 0.0001
+    return cell == target
+
+
+def compare_row(row, target_row):
+    for idx, cell in enumerate(row):
+        if not any(comp_cell(cell, v) for v in target_row):
+            return False
+    return True
+
+
 def run_adhoc(number: int, text: str | None = None, comparison: str | None = None):
-    from trilogy import Environment, Dialects
-    from trilogy.hooks.query_debugger import DebuggingHook
     from logging import INFO
+
+    from trilogy import Dialects, Environment
+    from trilogy.hooks.query_debugger import DebuggingHook
 
     env = Environment(working_path=Path(__file__).parent)
     engine: Executor = Dialects.DUCK_DB.default_executor(
@@ -293,16 +346,17 @@ SELECT * FROM dsdgen(sf=.5);"""
         comp_results = comp.fetchall()
         results = engine.execute_text(text)
         for idx, row in enumerate(results[0].fetchall()):
-            print("test: ", row, " vs sql: ", comp_results[idx])
+            if compare_row(row, comp_results[idx]):
+                continue
+            print(f"row {idx}: test: ", row, " vs sql: ", comp_results[idx])
 
     else:
         from trilogy_nlp import NLPEngine, Provider
-        from trilogy_nlp.enums import CacheType
 
         llm = NLPEngine(
             provider=Provider.OPENAI,
             model="gpt-4o-mini",
-            cache=CacheType.SQLLITE,
+            # cache=CacheType.SQLLITE,
             cache_kwargs={"database_path": ".tests.db"},
         ).llm
         run_query(engine, number, llm=llm, debug=True)
@@ -310,25 +364,27 @@ SELECT * FROM dsdgen(sf=.5);"""
 
 if __name__ == "__main__":
     TEST = """
-import store_sales as store_sales;
-
-metric customer_count <- count(store_sales.customer.id); # local to select
-metric average_item_price_by_category <- avg(store_sales.item.current_price) by store_sales.item.category; # local to select
-property inline_calc_319 <- average_item_price_by_category * 1.2; # local to select
+import web_sales as web_sales;
+metric sum_external_sales_price <- sum(web_sales.external_sales_price) by web_sales.item.category, web_sales.item.class, web_sales.item.name, web_sales.item.desc; # local to select
+metric total_class_revenue <- sum(web_sales.external_sales_price) by web_sales.item.class; # local to select
+property class_revenue_ratio <- sum_external_sales_price / total_class_revenue * 100.0; # local to select
 WHERE
-    ((store_sales.item.current_price > inline_calc_319 and store_sales.date.date.month = 1) and store_sales.date.date.year = 2001) and store_sales.item.category is not null
+    web_sales.item.category in ['Sports', 'Books', 'Home'] and (web_sales.date.date >= CAST('1999-02-22' AS date) and web_sales.date.date <= CAST('1999-03-24' AS date))
 SELECT
-    count(store_sales.customer.id) -> customer_count,
-    store_sales.customer.state,
-HAVING
-    customer_count >= 10 and True
-
+    web_sales.item.category,
+    web_sales.item.class,
+    web_sales.item.name,
+    web_sales.item.desc,
+    sum(web_sales.external_sales_price) by web_sales.item.category, web_sales.item.class, web_sales.item.name, web_sales.item.desc -> sum_external_sales_price,
+    web_sales.item.current_price,
+    sum_external_sales_price / total_class_revenue * 100.0 -> class_revenue_ratio,
 ORDER BY
-    customer_count asc,
-    store_sales.customer.state asc
+    web_sales.item.category asc,
+    web_sales.item.class asc,
+    web_sales.item.name asc,
+    web_sales.item.desc asc,
+    class_revenue_ratio asc
 
 LIMIT 100;"""
 
-    run_adhoc(
-        1,
-    )
+    run_adhoc(12, text=TEST)

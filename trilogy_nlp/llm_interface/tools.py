@@ -1,17 +1,20 @@
+import json
+
+from langchain.tools import StructuredTool, Tool
 from trilogy.core.models import (
     Concept,
     Environment,
 )
-from langchain.tools import Tool, StructuredTool
-import json
-from trilogy_nlp.tools import get_today_date
+
 from trilogy_nlp.exceptions import ValidationPassedException
 from trilogy_nlp.helpers import is_relevent_concept
+from trilogy_nlp.instrumentation import EventTracker
 from trilogy_nlp.llm_interface.validation import (
-    validate_response,
-    ValidateResponseInterface,
     VALID_STATUS,
+    ValidateResponseInterface,
+    validate_response,
 )
+from trilogy_nlp.tools import get_today_date
 
 
 def concept_to_string(concept: Concept) -> str:
@@ -56,11 +59,14 @@ def submit_response(environment, prompt, **kwargs):
     return response
 
 
-def sql_agent_tools(environment, prompt: str):
+def sql_agent_tools(
+    environment, prompt: str, event_tracker: EventTracker | None = None
+):
     def validate_response_wrapper(**kwargs):
         response, ir = validate_response(
             environment=environment,
             prompt=prompt,
+            event_tracker=event_tracker,
             **kwargs,
         )
         return response

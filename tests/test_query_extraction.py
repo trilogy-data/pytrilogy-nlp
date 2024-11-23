@@ -1,8 +1,10 @@
-from trilogy_nlp.main import ir_to_query
-from trilogy_nlp.llm_interface.models import InitialParseResponseV2
 import json
 from pathlib import Path
+
 from trilogy import Environment
+
+from trilogy_nlp.llm_interface.models import InitialParseResponseV2
+from trilogy_nlp.main import ir_to_query
 
 ORDERING_TEST_CASE = """{
     "action": "Final Answer",

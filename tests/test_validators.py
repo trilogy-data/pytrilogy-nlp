@@ -1,13 +1,14 @@
-from trilogy_nlp.llm_interface.validation import (
-    validate_response,
-    Column,
-    FilterResultV2,
-)
+import json
+from pathlib import Path
+
 from trilogy import Environment
 
-from pathlib import Path
-import json
-
+# from trilogy.dialect.base
+from trilogy_nlp.llm_interface.validation import (
+    Column,
+    FilterResultV2,
+    validate_response,
+)
 
 INVALID_FUNCTION = {
     "output_columns": [
@@ -292,3 +293,132 @@ def test_validate_response_invalid_field():
     assert response["status"] == "invalid", response
     errors = response["errors"]
     assert "is not a valid preexisting field returned by the get" in str(errors), errors
+
+
+INVALID_CALCULATION = """{
+        "output_columns": [
+            {
+                "name": "web_sales.item.name"
+            },
+            {
+                "name": "web_sales.item.desc"
+            },
+            {
+                "name": "web_sales.item.category"
+            },
+            {
+                "name": "web_sales.item.class"
+            },
+            {
+                "name": "web_sales.item.current_price"
+            },
+            {
+                "name": "sum_external_sales_price",
+                "calculation": {
+                    "operator": "SUM",
+                    "arguments": [
+                        {
+                            "name": "web_sales.external_sales_price"
+                        }
+                    ],
+                    "over": [
+                        {"name": "web_sales.item.name"},
+                        {"name": "web_sales.item.desc"},
+                        {"name": "web_sales.item.category"},
+                        {"name": "web_sales.item.class"},
+                        {"name": "web_sales.item.current_price"}
+                    ]
+                }
+            },
+            {
+                "name": "class_revenue_ratio",
+                "calculation": {
+                    "operator": "MULTIPLY",
+                    "arguments": [
+                        {
+                            "operator": "DIVIDE",
+                            "arguments": [
+                                {
+                                    "name": "sum_external_sales_price"
+                                },
+                                {
+                                    "name": "total_class_revenue",
+                                    "calculation": {
+                                        "operator": "SUM",
+                                        "arguments": [
+                                            {
+                                                "name": "web_sales.external_sales_price"
+                                            }
+                                        ],
+                                        "over": [
+                                            {"name": "web_sales.item.class"}
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "value": "100", 
+                            "type": "float"
+                        }
+                    ]
+                }
+            }
+        ],
+        "filtering": {
+            "root": {
+                "values": [
+                    {
+                        "operator": "in",
+                        "left": {"name": "web_sales.item.category"},
+                        "right": {
+                            "value": ["Sports", "Books", "Home"],
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "operator": ">=",
+                        "left": {"name": "web_sales.date.date"},
+                        "right": {"value": "1999-02-22", "type": "date"}
+                    },
+                    {
+                        "operator": "<=",
+                        "left": {"name": "web_sales.date.date"},
+                        "right": {"value": "1999-03-24", "type": "date"}
+                    }
+                ],
+                "boolean": "and"
+            }
+        },
+        "order": [
+            {"column_name": "web_sales.item.category", "order": "asc"},
+            {"column_name": "web_sales.item.class", "order": "asc"},
+            {"column_name": "web_sales.item.name", "order": "asc"},
+            {"column_name": "web_sales.item.desc", "order": "asc"},
+            {"column_name": "class_revenue_ratio", "order": "asc"}
+        ],
+        "limit": 100
+    }"""
+
+
+def test_validate_calculation():
+    # check to make sure that the invalid function is detected
+    PARSED_INVALID = json.loads(INVALID_CALCULATION)
+    filtering = FilterResultV2.model_validate(PARSED_INVALID["filtering"])
+    columns = [Column.model_validate(x) for x in PARSED_INVALID["output_columns"]]
+
+    env = Environment()
+    env.add_file_import(
+        Path(__file__).parent / "tpc_ds_duckdb" / "web_sales.preql", "web_sales"
+    )
+
+    response, ir = validate_response(
+        environment=env,
+        output_columns=columns,
+        filtering=filtering,
+        order=None,
+        limit=100,
+        prompt="shenanigans",
+    )
+
+    assert response["status"] == "valid", response

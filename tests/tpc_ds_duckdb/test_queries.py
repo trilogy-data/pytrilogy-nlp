@@ -337,12 +337,11 @@ SELECT * FROM dsdgen(sf=.5);"""
 
     else:
         from trilogy_nlp import NLPEngine, Provider
-        from trilogy_nlp.enums import CacheType
 
         llm = NLPEngine(
             provider=Provider.OPENAI,
             model="gpt-4o-mini",
-            cache=CacheType.SQLLITE,
+            # cache=CacheType.SQLLITE,
             cache_kwargs={"database_path": ".tests.db"},
         ).llm
         run_query(engine, number, llm=llm, debug=True)

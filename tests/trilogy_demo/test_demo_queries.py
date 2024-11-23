@@ -1,13 +1,13 @@
 from trilogy import Executor
 
-from trilogy_nlp import CacheType, NLPEngine, Provider
+from trilogy_nlp import NLPEngine, Provider
 
 
 def test_age_class_query_resolution(normalized_engine: Executor, test_env):
     nlp_engine = NLPEngine(
         provider=Provider.OPENAI,
         model="gpt-4o-mini",
-        cache=CacheType.SQLLITE,
+        # cache=CacheType.SQLLITE,
         cache_kwargs={"database_path": ".tests.db"},
     )
     executor = normalized_engine
@@ -34,7 +34,7 @@ def test_filtering(normalized_engine: Executor, test_env):
     nlp_engine = NLPEngine(
         provider=Provider.OPENAI,
         model="gpt-4o-mini",
-        cache=CacheType.SQLLITE,
+        # cache=CacheType.SQLLITE,
         cache_kwargs={"database_path": ".tests.db"},
     )
     executor = normalized_engine

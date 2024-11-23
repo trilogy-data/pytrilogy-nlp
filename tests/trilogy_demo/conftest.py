@@ -394,12 +394,14 @@ def setup_titanic_distributed(env: Environment):
 def normalized_engine():
     executor = setup_normalized_engine()
     yield executor
+    executor.connection.close()
 
 
 @fixture
 def engine():
     executor = setup_engine()
     yield executor
+    executor.connection.close()
 
 
 @fixture

@@ -10,7 +10,6 @@ from trilogy.dialect.config import DuckDBConfig
 from tests.tpc_ds_duckdb.analyze_test_results import analyze
 from trilogy_nlp import NLPEngine, Provider
 from trilogy_nlp.constants import logger
-from trilogy_nlp.enums import CacheType
 
 working_path = Path(__file__).parent
 
@@ -31,7 +30,7 @@ def llm():
     yield NLPEngine(
         provider=Provider.OPENAI,
         model="gpt-4o-mini",
-        cache=CacheType.MEMORY,
+        # cache=CacheType.MEMORY,
         cache_kwargs={"database_path": ".tests.db"},
     )
     # yield NLPEngine(provider=Provider.OPENAI, model="gpt-4").llm

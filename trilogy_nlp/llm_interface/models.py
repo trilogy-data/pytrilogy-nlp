@@ -1,18 +1,21 @@
-from typing import Optional, Union
-from pydantic import BaseModel, field_validator
-from trilogy.core.enums import ComparisonOperator, Ordering, BooleanOperator
-from pydantic import (
-    Field,
-    AliasChoices,
-    ConfigDict,
-    ValidationInfo,
-)
-
 # from trilogy.core.constants import
 from enum import Enum
+from typing import Optional, Union
+
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+)
+from trilogy.core.enums import BooleanOperator, ComparisonOperator, Ordering
+
 
 class MagicEnum(Enum):
-    STAR_OP = '*'
+    STAR_OP = "*"
+
 
 class OrderResultV2(BaseModel):
     """The result of the order prompt"""
@@ -36,8 +39,7 @@ class Calculation(BaseModel):
     model_config = ConfigDict(extra="forbid")
     arguments: list[Union["Column", Literal, "Calculation"]]
     operator: str
-    over: list[Union["Column",  MagicEnum ]]  |  None = None
-
+    over: list["Column"] | None = None
 
 
 class Column(BaseModel):

@@ -1,9 +1,10 @@
-from trilogy import Environment, Executor
-from trilogy_nlp.enums import Provider, CacheType
-from trilogy_nlp.main import build_query
 from langchain.globals import set_llm_cache
-from trilogy.executor import CursorResult
+from trilogy import Environment, Executor
 from trilogy.core.models import ProcessedQuery
+from trilogy.executor import CursorResult
+
+from trilogy_nlp.enums import CacheType, Provider
+from trilogy_nlp.main import build_query
 
 DEFAULT_GPT = "gpt-4o-mini"
 DEFAULT_GEMINI = "gemini-pro"
@@ -49,8 +50,8 @@ class NLPEngine(object):
 
     def create_llm(self):
         if self.provider == Provider.OPENAI:
-            from langchain_openai import ChatOpenAI
             import openai
+            from langchain_openai import ChatOpenAI
 
             llm = ChatOpenAI(
                 model_name=self.model if self.model else DEFAULT_GPT,

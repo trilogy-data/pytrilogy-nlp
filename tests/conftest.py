@@ -1,7 +1,9 @@
-from trilogy_nlp.constants import logger
+from logging import DEBUG, StreamHandler
+
 from pytest import fixture
-from logging import StreamHandler, DEBUG
+
 from trilogy_nlp import NLPEngine, Provider
+from trilogy_nlp.constants import logger
 
 
 @fixture(scope="session", autouse=True)

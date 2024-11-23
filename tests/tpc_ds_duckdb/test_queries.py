@@ -1,16 +1,18 @@
-from pathlib import Path
-import pytest
-import tomli_w
-from trilogy import Executor
-from trilogy_nlp.main import build_query
-from trilogy_nlp import NLPEngine
-from trilogy_nlp.environment import build_env_and_imports
-from trilogy_nlp.constants import logger
-from langchain_core.language_models import BaseLanguageModel
 from collections import defaultdict
 from datetime import datetime
+from decimal import Decimal
+from pathlib import Path
 
+import pytest
+import tomli_w
 import tomllib
+from langchain_core.language_models import BaseLanguageModel
+from trilogy import Executor
+
+from trilogy_nlp import NLPEngine
+from trilogy_nlp.constants import logger
+from trilogy_nlp.environment import build_env_and_imports
+from trilogy_nlp.main import build_query
 
 working_path = Path(__file__).parent
 
@@ -19,7 +21,7 @@ ATTEMPTS = 1
 
 TARGET = 0.8
 
-GLOBAL_DEBUG: bool = True
+GLOBAL_DEBUG: bool = False
 
 
 class EnvironmentSetupException(Exception):
@@ -144,12 +146,11 @@ def query_loop(
             f"Row count mismatch: target: {len(base_results)} != test: {len(comp_results)}",
         )
     for qidx, row in enumerate(base_results):
-        for cell in row:
-            if cell not in comp_results[qidx]:
-                return (
-                    False,
-                    f"Could not find value {cell} in row {qidx} (expected row v test): {row} != {comp_results[qidx]}",
-                )
+        comparison = comp_results[qidx]
+        if not compare_row(row, comparison):
+            logger.error(row)
+            logger.error(comparison)
+            return (False, f"Row mismatch: target: {row} != test: {comparison}")
     return True, None
 
 
@@ -173,6 +174,29 @@ def run_query(engine: Executor, idx: int, llm: NLPEngine, debug: bool = False):
             )
         )
     return 1
+
+
+def test_helpers():
+    row_1 = (
+        "AAAAAAAACBACAAAA",
+        "Very gross years give even in a fingers. Conflicts finish visibly clear, alone years. Inland thanks strengthen currently causal serv",
+        "Books",
+        "arts",
+        Decimal("4.78"),
+        Decimal("3556.48"),
+        9.608269993770056,
+    )
+    row_2 = (
+        "AAAAAAAACBACAAAA",
+        "Very gross years give even in a fingers. Conflicts finish visibly clear, alone years. Inland thanks strengthen currently causal serv",
+        "Books",
+        "arts",
+        Decimal("4.78"),
+        Decimal("37014.78"),
+        Decimal("3556.48"),
+        9.608269993770056,
+    )
+    assert compare_row(row_1, row_2)
 
 
 def test_one(engine, llm):
@@ -270,10 +294,24 @@ def test_twenty_six(engine, llm):
     # assert len(query) < 6000, query
 
 
+def comp_cell(cell, target):
+    if isinstance(cell, float) and isinstance(target, float):
+        return abs(cell - target) <= 0.0001
+    return cell == target
+
+
+def compare_row(row, target_row):
+    for idx, cell in enumerate(row):
+        if not any(comp_cell(cell, v) for v in target_row):
+            return False
+    return True
+
+
 def run_adhoc(number: int, text: str | None = None, comparison: str | None = None):
-    from trilogy import Environment, Dialects
-    from trilogy.hooks.query_debugger import DebuggingHook
     from logging import INFO
+
+    from trilogy import Dialects, Environment
+    from trilogy.hooks.query_debugger import DebuggingHook
 
     env = Environment(working_path=Path(__file__).parent)
     engine: Executor = Dialects.DUCK_DB.default_executor(
@@ -293,7 +331,9 @@ SELECT * FROM dsdgen(sf=.5);"""
         comp_results = comp.fetchall()
         results = engine.execute_text(text)
         for idx, row in enumerate(results[0].fetchall()):
-            print("test: ", row, " vs sql: ", comp_results[idx])
+            if compare_row(row, comp_results[idx]):
+                continue
+            print(f"row {idx}: test: ", row, " vs sql: ", comp_results[idx])
 
     else:
         from trilogy_nlp import NLPEngine, Provider
@@ -311,18 +351,19 @@ SELECT * FROM dsdgen(sf=.5);"""
 if __name__ == "__main__":
     TEST = """
 import web_sales as web_sales;
-metric total_class_external_sales <- sum(web_sales.external_sales_price) by web_sales.item.class; # local to select
-property class_revenue_ratio <- total_external_sales_price / total_class_external_sales; # local to select
+metric sum_external_sales_price <- sum(web_sales.external_sales_price) by web_sales.item.category, web_sales.item.class, web_sales.item.name, web_sales.item.desc; # local to select
+metric total_class_revenue <- sum(web_sales.external_sales_price) by web_sales.item.class; # local to select
+property class_revenue_ratio <- sum_external_sales_price / total_class_revenue * 100.0; # local to select
 WHERE
     web_sales.item.category in ['Sports', 'Books', 'Home'] and (web_sales.date.date >= CAST('1999-02-22' AS date) and web_sales.date.date <= CAST('1999-03-24' AS date))
 SELECT
-    web_sales.item.name,
-    web_sales.item.desc,
     web_sales.item.category,
     web_sales.item.class,
+    web_sales.item.name,
+    web_sales.item.desc,
+    sum(web_sales.external_sales_price) by web_sales.item.category, web_sales.item.class, web_sales.item.name, web_sales.item.desc -> sum_external_sales_price,
     web_sales.item.current_price,
-    sum(web_sales.external_sales_price) by web_sales.item.name, web_sales.item.desc, web_sales.item.category, web_sales.item.class, web_sales.item.current_price -> total_external_sales_price,
-    total_external_sales_price / total_class_external_sales -> class_revenue_ratio,
+    sum_external_sales_price / total_class_revenue * 100.0 -> class_revenue_ratio,
 ORDER BY
     web_sales.item.category asc,
     web_sales.item.class asc,
@@ -332,7 +373,4 @@ ORDER BY
 
 LIMIT 100;"""
 
-    run_adhoc(
-        12,
-        text=TEST
-    )
+    run_adhoc(12, text=TEST)

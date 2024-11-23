@@ -1,26 +1,26 @@
-import pandas as pd
-from trilogy import Executor, Dialects
-from trilogy.core.models import Environment
-from sqlalchemy import create_engine
-from trilogy.core.models import (
-    Datasource,
-    Concept,
-    ColumnAssignment,
-    Grain,
-    Function,
-    DataType,
-)
-from trilogy.core.enums import Purpose, FunctionType
+from logging import DEBUG, StreamHandler
 from os.path import dirname
 from pathlib import PurePath
 from typing import Optional
 
-from trilogy_nlp.main_v2 import build_query as build_query_v2
-from logging import StreamHandler, DEBUG
+import pandas as pd
+from sqlalchemy import create_engine
+from trilogy import Dialects, Executor
+from trilogy.core.enums import FunctionType, Purpose
+from trilogy.core.functions import arg_to_datatype, function_args_to_output_purpose
+from trilogy.core.models import (
+    ColumnAssignment,
+    Concept,
+    Datasource,
+    DataType,
+    Environment,
+    Function,
+    Grain,
+)
 
 from trilogy_nlp.constants import logger
 from trilogy_nlp.main import build_query
-from trilogy.core.functions import function_args_to_output_purpose, arg_to_datatype
+from trilogy_nlp.main_v2 import build_query as build_query_v2
 
 
 def create_function_derived_concept(

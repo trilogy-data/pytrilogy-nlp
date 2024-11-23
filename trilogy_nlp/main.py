@@ -1,38 +1,38 @@
-from langchain.agents import create_structured_chat_agent, AgentExecutor
+from langchain.agents import AgentExecutor, create_structured_chat_agent
 from langchain.agents.agent import OutputParserException
+from langchain_core.language_models import BaseLanguageModel
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from networkx import DiGraph, topological_sort
 from trilogy.core.models import (
-    Environment,
-    ProcessedQuery,
-    SelectStatement,
-    SelectItem,
-    Concept,
-    ConceptTransform,
-    ConceptDeclarationStatement,
-    Function,
-    FilterItem,
-    WindowItem,
     AggregateWrapper,
+    Concept,
+    ConceptDeclarationStatement,
+    ConceptTransform,
+    Environment,
+    FilterItem,
+    Function,
+    ProcessedQuery,
+    SelectItem,
+    SelectStatement,
+    WindowItem,
 )
 from trilogy.core.query_processor import process_query
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.language_models import BaseLanguageModel
-from trilogy_nlp.tools import get_wiki_tool
-from trilogy_nlp.constants import logger
 
+from trilogy_nlp.config import DEFAULT_CONFIG
+from trilogy_nlp.constants import logger
+from trilogy_nlp.exceptions import ValidationPassedException
+from trilogy_nlp.helpers import safe_limit
+from trilogy_nlp.llm_interface.constants import MAGIC_GENAI_DESCRIPTION
+from trilogy_nlp.llm_interface.models import Column, InitialParseResponseV2
 from trilogy_nlp.llm_interface.parsing import (
-    parse_filtering,
-    parse_order,
     create_column,
     generate_having_and_where,
+    parse_filtering,
+    parse_order,
 )
-from trilogy_nlp.llm_interface.models import InitialParseResponseV2, Column
 from trilogy_nlp.llm_interface.tools import sql_agent_tools
-from trilogy_nlp.llm_interface.constants import MAGIC_GENAI_DESCRIPTION
 from trilogy_nlp.prompts_v2.query_system import BASE_1
-from trilogy_nlp.helpers import safe_limit
-from trilogy_nlp.exceptions import ValidationPassedException
-from trilogy_nlp.config import DEFAULT_CONFIG
-from networkx import DiGraph, topological_sort
+from trilogy_nlp.tools import get_wiki_tool
 
 
 def is_local_derived(x: Concept) -> bool:
@@ -125,17 +125,21 @@ def determine_ordering(columns: list[Column]):
 
     def handle_column(column: Column):
         calculation = column.calculation
+        base_name = column.name
         if not calculation:
             return
         for arg in calculation.arguments:
+            if isinstance(arg, Column) and arg.name == base_name:
+                base_name = base_name + "_deriv"
+        for arg in calculation.arguments:
             if not isinstance(arg, Column):
                 continue
-            edges.append((arg.name, column.name))
+            edges.append((arg.name, base_name))
             handle_column(arg)
         for arg in calculation.over or []:
             if not isinstance(arg, Column):
                 continue
-            edges.append((arg.name, column.name))
+            edges.append((arg.name, base_name))
             handle_column(arg)
 
     for ic in columns:

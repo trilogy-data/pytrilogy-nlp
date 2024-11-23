@@ -1,12 +1,13 @@
 # imports
 import random
-import time
 import re
+import time
 
 import openai
 from trilogy.constants import logger
-from trilogy_nlp.constants import DEFAULT_LIMIT
 from trilogy.core.models import Concept
+
+from trilogy_nlp.constants import DEFAULT_LIMIT
 
 extract = re.compile("Please try again in ([0-9]+)s")
 

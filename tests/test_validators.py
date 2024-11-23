@@ -1,13 +1,14 @@
-from trilogy_nlp.llm_interface.validation import (
-    validate_response,
-    Column,
-    FilterResultV2,
-)
+import json
+from pathlib import Path
+
 from trilogy import Environment
 
-from pathlib import Path
-import json
-
+# from trilogy.dialect.base
+from trilogy_nlp.llm_interface.validation import (
+    Column,
+    FilterResultV2,
+    validate_response,
+)
 
 INVALID_FUNCTION = {
     "output_columns": [
@@ -399,16 +400,12 @@ INVALID_CALCULATION = """{
         "limit": 100
     }"""
 
+
 def test_validate_calculation():
-        # check to make sure that the invalid function is detected
+    # check to make sure that the invalid function is detected
     PARSED_INVALID = json.loads(INVALID_CALCULATION)
-    filtering = FilterResultV2.model_validate(
-        PARSED_INVALID["filtering"]
-    )
-    columns = [
-        Column.model_validate(x)
-        for x in PARSED_INVALID["output_columns"]
-    ]
+    filtering = FilterResultV2.model_validate(PARSED_INVALID["filtering"])
+    columns = [Column.model_validate(x) for x in PARSED_INVALID["output_columns"]]
 
     env = Environment()
     env.add_file_import(

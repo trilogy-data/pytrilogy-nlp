@@ -1,35 +1,36 @@
-from typing import Optional
-from trilogy.core.models import (
-    Environment,
-)
-from typing import List
-from pydantic import BaseModel
-from pydantic_core import ValidationError, ErrorDetails
-from trilogy.core.enums import ComparisonOperator
-from langchain_core.tools import ToolException
-from trilogy.core.exceptions import UndefinedConceptException
-from collections import defaultdict
-
-from trilogy_nlp.llm_interface.models import (
-    InitialParseResponseV2,
-    Column,
-    NLPConditions,
-    FilterResultV2,
-    OrderResultV2,
-    Literal,
-    Calculation,
-)
-from trilogy_nlp.helpers import is_relevent_concept
-from trilogy_nlp.llm_interface.constants import COMPLICATED_FUNCTIONS
 import difflib
+import json
+from collections import defaultdict
+from enum import Enum
+from typing import List, Optional
+
+from langchain_core.tools import ToolException
+from pydantic import BaseModel
+from pydantic_core import ErrorDetails, ValidationError
 
 # from trilogy.core.constants import
 from trilogy.core.enums import (
+    ComparisonOperator,
     FunctionType,
 )
-from trilogy.core.models import DataType
-from enum import Enum
-import json
+from trilogy.core.exceptions import UndefinedConceptException
+from trilogy.core.models import (
+    DataType,
+    Environment,
+)
+
+from trilogy_nlp.constants import logger
+from trilogy_nlp.helpers import is_relevent_concept
+from trilogy_nlp.llm_interface.constants import COMPLICATED_FUNCTIONS
+from trilogy_nlp.llm_interface.models import (
+    Calculation,
+    Column,
+    FilterResultV2,
+    InitialParseResponseV2,
+    Literal,
+    NLPConditions,
+    OrderResultV2,
+)
 
 VALID_STATUS = "valid"
 
@@ -89,7 +90,7 @@ def validate_query(
                 )
                 valid = False
 
-        for arg in calc.arguments:                 
+        for arg in calc.arguments:
             if isinstance(arg, Column):
                 if arg.name in environment.concepts:
                     dtype = environment.concepts[arg.name].datatype
@@ -200,6 +201,7 @@ def validation_error_to_string(err: ValidationError):
     # inject in new context on failed answer
     raw_error = str(err)
     errors = err.errors()
+    logger.error(f"Validation error: {errors}")
     if "filtering.root." in raw_error:
         missing = []
         path_freq: dict[str, int] = defaultdict(lambda: 0)
@@ -244,7 +246,7 @@ def validation_error_to_string(err: ValidationError):
     else:
         for e in errors:
             if e["type"] == "missing":
-                raw_error = f'Missing {e["loc"][-1]} in {e["input"]}. You might have incorrect JSON formats or the key is actually missing. Double check Literal and Column formats.'
+                raw_error = f'Could not parse {e["input"]}. Maybe missing {e["loc"][-1]}? You might have incorrect JSON formatting or the key is actually missing. Double check Literal and Column formats.'
     return raw_error
 
 

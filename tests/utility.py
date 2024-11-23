@@ -1,9 +1,11 @@
-from promptimize.suite import Suite
+from typing import Callable, List
+
 from promptimize.reports import Report
-from trilogy_nlp.prompts.prompt_executor import BasePreqlPromptCase
+from promptimize.suite import Suite
 from promptimize.utils import serialize_object
-from typing import List, Callable
 from pydantic import BaseModel
+
+from trilogy_nlp.prompts.prompt_executor import BasePreqlPromptCase
 
 
 def generate_test_case(

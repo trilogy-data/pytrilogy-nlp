@@ -5,8 +5,8 @@ from typing import (
     Callable,
     Union,
 )
-import langchain_community.llms.openai as langchain_openai
 
+import langchain_community.llms.openai as langchain_openai
 from tenacity import (
     before_sleep_log,
     retry,

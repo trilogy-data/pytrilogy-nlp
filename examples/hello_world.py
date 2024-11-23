@@ -1,5 +1,5 @@
-from sys import path
 from os.path import dirname
+from sys import path
 
 nb_path = __file__
 root_path = dirname(dirname(__file__))
@@ -8,7 +8,8 @@ print(root_path)
 path.insert(0, root_path)
 
 from trilogy_public_models import get_executor
-from trilogy_nlp import NLPEngine, Provider, CacheType
+
+from trilogy_nlp import CacheType, NLPEngine, Provider
 
 # we use this to run queries
 # get a Trilogy executor preloaded with the tpc_ds schema in duckdb

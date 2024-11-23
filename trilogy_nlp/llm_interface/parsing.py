@@ -1,47 +1,49 @@
+from typing import List
+
+from trilogy.core.enums import (
+    BooleanOperator,
+    ComparisonOperator,
+    FunctionClass,
+    FunctionType,
+    InfiniteFunctionArgs,
+    Ordering,
+    Purpose,
+)
 from trilogy.core.models import (
-    Concept,
-    Environment,
+    AggregateWrapper,
     Comparison,
+    Concept,
+    ConceptTransform,
     Conditional,
+    DataType,
+    Environment,
+    Function,
+    HavingClause,
+    MagicConstants,
+    Metadata,
     OrderBy,
     OrderItem,
-    WhereClause,
-    AggregateWrapper,
-    Function,
-    Metadata,
-    HavingClause,
-    ConceptTransform,
-    MagicConstants,
     Parenthetical,
+    WhereClause,
 )
-from typing import List
-from trilogy.core.enums import Purpose, BooleanOperator, ComparisonOperator, Ordering
-from trilogy.parsing.common import arbitrary_to_concept
-from trilogy.core.models import DataType
+from trilogy.core.processing.utility import (
+    decompose_condition,
+    is_scalar_condition,
+)
+from trilogy.parsing.common import arbitrary_to_concept, arg_to_datatype
 
-from trilogy_nlp.llm_interface.models import (
-    Column,
-    NLPConditions,
-    NLPComparisonGroup,
-    FilterResultV2,
-    OrderResultV2,
-    Calculation,
-    Literal,
-)
 from trilogy_nlp.llm_interface.constants import (
     MAGIC_GENAI_DESCRIPTION,
 )
-from trilogy.core.processing.utility import (
-    is_scalar_condition,
-    decompose_condition,
+from trilogy_nlp.llm_interface.models import (
+    Calculation,
+    Column,
+    FilterResultV2,
+    Literal,
+    NLPComparisonGroup,
+    NLPConditions,
+    OrderResultV2,
 )
-
-from trilogy.core.enums import (
-    FunctionType,
-    FunctionClass,
-    InfiniteFunctionArgs,
-)
-from trilogy.parsing.common import arg_to_datatype
 
 
 def parse_object(ob, environment: Environment):
@@ -108,6 +110,7 @@ def create_literal(
         return literal.value
     return literal.value
 
+
 def create_anon_calculation(
     c: Calculation, environment: Environment
 ) -> Function | AggregateWrapper:
@@ -140,9 +143,7 @@ def create_anon_calculation(
     return derivation
 
 
-def create_column(
-    c: Column, environment: Environment
-) -> Concept | ConceptTransform:
+def create_column(c: Column, environment: Environment) -> Concept | ConceptTransform:
     if not c.calculation:
         return environment.concepts[c.name]
     base_name = c.name
@@ -150,7 +151,10 @@ def create_column(
     # LLM may reference the same name for the output of a calculation
     # if that's so, force the outer concept a new name
     derivation = create_anon_calculation(c.calculation, environment)
-    if any(isinstance(z, Concept) and z.name == base_name for z in derivation.concept_arguments):
+    if any(
+        isinstance(z, Concept) and z.name == base_name
+        for z in derivation.concept_arguments
+    ):
         base_name = f"{c.name}_deriv"
     new = arbitrary_to_concept(
         derivation,

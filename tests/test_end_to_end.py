@@ -1,6 +1,7 @@
-from trilogy_nlp.main import parse_query
-from trilogy.core.models import Environment, Concept, DataType
 from trilogy.core.enums import Purpose
+from trilogy.core.models import Concept, DataType, Environment
+
+from trilogy_nlp.main import parse_query
 
 
 def test_e2e_basic(engine):

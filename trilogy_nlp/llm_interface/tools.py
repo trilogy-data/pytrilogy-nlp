@@ -1,17 +1,19 @@
+import json
+
+from langchain.tools import StructuredTool, Tool
 from trilogy.core.models import (
     Concept,
     Environment,
 )
-from langchain.tools import Tool, StructuredTool
-import json
-from trilogy_nlp.tools import get_today_date
+
 from trilogy_nlp.exceptions import ValidationPassedException
 from trilogy_nlp.helpers import is_relevent_concept
 from trilogy_nlp.llm_interface.validation import (
-    validate_response,
-    ValidateResponseInterface,
     VALID_STATUS,
+    ValidateResponseInterface,
+    validate_response,
 )
+from trilogy_nlp.tools import get_today_date
 
 
 def concept_to_string(concept: Concept) -> str:

@@ -1,5 +1,6 @@
-from trilogy_nlp import NLPEngine, Provider, CacheType
 from trilogy import Executor
+
+from trilogy_nlp import CacheType, NLPEngine, Provider
 
 
 def test_age_class_query_resolution(normalized_engine: Executor, test_env):

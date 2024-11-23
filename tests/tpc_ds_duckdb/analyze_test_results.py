@@ -1,12 +1,13 @@
-from pathlib import Path
-import os
-import pandas as pd
 import json
-import matplotlib.pyplot as plt
-import seaborn as sns
+import os
 import sys
-import tomllib
 from os import environ
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+import tomllib
 
 # https://github.com/python/cpython/issues/125235#issuecomment-2412948604
 if not environ.get("TCL_LIBRARY"):

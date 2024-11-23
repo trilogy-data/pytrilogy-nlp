@@ -1,8 +1,10 @@
-from trilogy import Environment
 from pathlib import Path
-from trilogy_nlp.main import ir_to_query
-from trilogy_nlp.llm_interface.models import InitialParseResponseV2
+
+from trilogy import Environment
 from trilogy.core.models import SelectStatement
+
+from trilogy_nlp.llm_interface.models import InitialParseResponseV2
+from trilogy_nlp.main import ir_to_query
 
 INPUT = """{
         "output_columns": [

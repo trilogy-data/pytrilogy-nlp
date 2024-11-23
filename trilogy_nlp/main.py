@@ -101,7 +101,7 @@ def llm_loop(
     if additional_context:
         input_text += additional_context
     error = None
-    while attempts < 1:
+    while attempts < 4:
         output = None
         try:
             output = agent_executor.invoke({"input": input_text})
@@ -115,10 +115,18 @@ def llm_loop(
             return ir_to_query(ir, input_environment=input_environment, debug=True)
 
         except Exception as e:
+            error = e
             logger.error(
                 f"Error in main execution llm loop with output {output}: {str(e)}"
             )
-            attempts += 1
+            if (
+                "peer closed connection without sending complete message body (incomplete chunked read)"
+                in str(e)
+            ):
+                attempts + 1
+                continue
+            # don't retry an unknown error
+            break
     if error:
         raise error
     raise ValueError(f"Unable to get parseable response after {attempts} attempts")

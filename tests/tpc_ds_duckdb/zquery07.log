@@ -2,12 +2,19 @@ query_id = 7
 model = "openai-gpt-4o-mini"
 
 [cases]
-Easy = 0.75
+Easy = 1.0
 
 [durations]
 Easy = [
-    23.924863,
-    4.848272,
-    26.718676,
-    29.583352,
+    79.130008,
+    86.432565,
+    83.750041,
+    42.400979,
 ]
+
+[events]
+ENVIRONMENT_VALIDATION_PASSED = 5
+STRING_FIELD_WITH_AGGREGATE = 2
+QUERY_VALIDATION_PASSED = 4
+ORDER_BY_NOT_SELECTED = 2
+INVALID_COLUMN_NAME_NO_CALCULATION = 1

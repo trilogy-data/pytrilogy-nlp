@@ -94,7 +94,7 @@ def validate_query(
                 valid = valid and local
             if calc.operator not in ["AVG", "SUM", "MIN", "MAX", "COUNT"]:
                 errors.append(
-                    f"{calc} in {context} should only use 'over' when using one of [AVG, SUM, MIN, MAX, COUNT] when setting an 'over' clause (is using {calc.operator}); Drop this over (make sure it's included in any parent aggregate if needed)",
+                    f"{calc} in {context} should only use 'over' when using an aggregate function [AVG, SUM, MIN, MAX, COUNT] (is using {calc.operator}); remove this 'over' (make sure it's included in any parent aggregate if needed)",
                 )
                 tracker.count(tracker.etype.OVER_CLAUSE_WITHOUT_AGGREGATE)
                 valid = False
@@ -169,8 +169,8 @@ def validate_query(
 
     if parsed.order:
         for y in parsed.order:
-            tracker.count(tracker.etype.ORDER_BY_NOT_SELECTED)
             if y.column_name not in top_select:
+                tracker.count(tracker.etype.ORDER_BY_NOT_SELECTED)
                 errors.append(
                     f"{y.column_name} being ordered by is not in output_columns, add if needed.",
                 )

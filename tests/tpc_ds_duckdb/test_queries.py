@@ -53,6 +53,7 @@ def matrix(
     idx: int,
     llm: BaseLanguageModel,
     prompts: dict[str, dict[str, str]],
+    event_tracker: EventTracker,
     debug: bool = False,
 ) -> dict[str, dict[str, int | list[int]]]:
     output = {}
@@ -78,6 +79,7 @@ def matrix(
                 idx,
                 llm=llm,
                 debug=debug,
+                event_tracker=event_tracker,
             )
             if result is not True:
                 failure_reason[reason] += 1
@@ -89,10 +91,12 @@ def matrix(
         ratio = sum(1 if c else 0 for c in cases) / attempts
         output["cases"][name] = ratio
         output["durations"][name] = durations
+
         assert sum(1 if c else 0 for c in cases) / attempts >= target, {
             k: v for k, v in failure_reason.items()
         }
         logger.info(f"Successful run for query {idx}!")
+    output["events"] = {k.name: v for k, v in event_tracker.events.items()}
     return output
 
 
@@ -103,9 +107,10 @@ def query_loop(
     idx: int,
     llm: BaseLanguageModel,
     debug: bool = False,
+    event_tracker: EventTracker = None,
 ) -> tuple[bool, str | None]:
     try:
-        env, processed_query = helper(prompt, llm, imports)
+        env, processed_query = helper(prompt, llm, imports, tracker=event_tracker)
     except EnvironmentSetupException as e:
         if debug:
             raise e
@@ -156,13 +161,21 @@ def query_loop(
     return True, None
 
 
-def run_query(engine: Executor, idx: int, llm: NLPEngine, debug: bool = False):
-
+def run_query(
+    engine: Executor,
+    idx: int,
+    llm: NLPEngine,
+    debug: bool = False,
+    event_tracker: EventTracker = None,
+) -> int:
+    event_tracker = event_tracker or EventTracker()
     with open(working_path / f"query{idx:02d}.prompt") as f:
         text = f.read()
         parsed = tomllib.loads(text)
 
-    matrix_info = matrix(engine, idx, llm.llm, parsed, debug=debug)
+    matrix_info = matrix(
+        engine, idx, llm.llm, parsed, debug=debug, event_tracker=event_tracker
+    )
 
     with open(working_path / f"zquery{idx:02d}.log", "w") as f:
         f.write(

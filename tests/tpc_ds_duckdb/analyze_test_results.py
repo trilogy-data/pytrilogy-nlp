@@ -106,6 +106,26 @@ def analyze(show: bool = False, counter: EventTracker = None):
     else:
         plt.savefig(root / "tpc-ds-timing.png")
 
+    # df = pd.DataFrame(counter.events.items(), columns=['Event Type', 'Count'])
+
+    # # Sort the DataFrame for better visualization (optional)
+    # df = df.sort_values(by='Count', ascending=False)
+
+    # # Create a Seaborn barplot
+    # sns.barplot(data=df, x='Event Type', y='Count', palette='viridis')
+
+    # # Customize the plot
+    # plt.title('Event Counts')
+    # plt.ylabel('Count')
+    # plt.xlabel('Event Type')
+    # plt.xticks(rotation=45)  # Rotate x-axis labels if needed
+    # plt.tight_layout()       # Adjust layout to fit everything nicely
+
+    # if show:
+    #     plt.show()
+    # else:
+    #     plt.savefig(root / "event-count.png")
+
 
 if __name__ == "__main__":
     analyze(show=True)

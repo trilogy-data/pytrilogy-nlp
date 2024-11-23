@@ -13,7 +13,7 @@ DEFAULT_GEMINI = "gemini-pro"
 DEFAULT_MAX_TOXENS = 6500
 
 # 0 to 1.0, scaled by provider
-DEFAULT_TEMPERATURE = 0.3
+DEFAULT_TEMPERATURE = 0.25
 
 
 class NLPEngine(object):

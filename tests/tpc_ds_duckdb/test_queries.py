@@ -13,6 +13,7 @@ from trilogy_nlp import NLPEngine
 from trilogy_nlp.constants import logger
 from trilogy_nlp.environment import build_env_and_imports
 from trilogy_nlp.main import build_query
+from trilogy_nlp.instrumentation import EventTracker
 
 working_path = Path(__file__).parent
 
@@ -28,9 +29,9 @@ class EnvironmentSetupException(Exception):
     pass
 
 
-def helper(text: str, llm, imports: list[str]):
+def helper(text: str, llm, imports: list[str], tracker: EventTracker = None):
     environment = build_env_and_imports(
-        text, working_path=working_path, llm=llm, debug=True
+        text, working_path=working_path, llm=llm, debug=True, event_tracker=tracker
     )
 
     if not set(environment.imports.keys()).issubset(set(imports)):
@@ -42,6 +43,7 @@ def helper(text: str, llm, imports: list[str]):
         input_environment=environment,
         debug=True,
         llm=llm,
+        event_tracker=tracker,
     )
     return environment, processed_query
 

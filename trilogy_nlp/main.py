@@ -33,6 +33,7 @@ from trilogy_nlp.llm_interface.parsing import (
 from trilogy_nlp.llm_interface.tools import sql_agent_tools
 from trilogy_nlp.prompts_v2.query_system import BASE_1
 from trilogy_nlp.tools import get_wiki_tool
+from trilogy_nlp.instrumentation import EventTracker
 
 
 def is_local_derived(x: Concept) -> bool:
@@ -63,6 +64,7 @@ def llm_loop(
     llm: BaseLanguageModel,
     additional_context: str | None = None,
     debug: bool = False,
+    event_tracker: EventTracker | None = None,
 ) -> SelectStatement:
 
     human = """{input}
@@ -79,7 +81,9 @@ def llm_loop(
         ]
     )
 
-    tools = sql_agent_tools(input_environment, input_text) + [get_wiki_tool()]
+    tools = sql_agent_tools(input_environment, input_text, event_tracker) + [
+        get_wiki_tool()
+    ]
     chat_agent = create_structured_chat_agent(
         llm=llm,
         tools=tools,
@@ -276,8 +280,11 @@ def parse_query(
     llm: BaseLanguageModel,
     debug: bool = False,
     log_info: bool = True,
+    event_tracker: EventTracker | None = None,
 ) -> SelectStatement:
-    return llm_loop(input_text, input_environment, llm=llm, debug=debug)
+    return llm_loop(
+        input_text, input_environment, llm=llm, debug=debug, event_tracker=event_tracker
+    )
 
 
 def build_query(
@@ -286,6 +293,7 @@ def build_query(
     llm: BaseLanguageModel,
     debug: bool = False,
     log_info: bool = True,
+    event_tracker: EventTracker | None = None,
 ) -> ProcessedQuery:
     query = parse_query(
         input_text,
@@ -293,5 +301,6 @@ def build_query(
         debug=debug,
         llm=llm,
         log_info=log_info,
+        event_tracker=event_tracker,
     )
     return process_query(statement=query, environment=input_environment)

@@ -4,9 +4,10 @@ from trilogy_nlp.enums import EventType
 
 
 class EventTracker:
+    etype = EventType
 
     def __init__(self):
         self.events = Counter()
 
-    def track(self, event_type: EventType):
+    def count(self, event_type: EventType):
         self.events[event_type] += 1

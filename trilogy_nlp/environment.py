@@ -13,6 +13,7 @@ from trilogy.core.exceptions import InvalidSyntaxException
 from trilogy_nlp.constants import logger
 from trilogy_nlp.helpers import is_relevent_concept
 from trilogy_nlp.prompts_v2.query_environment import BASE_1
+from trilogy_nlp.instrumentation import EventTracker
 
 
 class AddImportResponse(BaseModel):
@@ -53,26 +54,32 @@ def validate_response(
     namespaces: list[str],
     environment: Environment,
     reasoning: str | None = None,
+    event_tracker: EventTracker | None = None,
 ):
+    event_tracker = event_tracker or EventTracker()
     possible = get_environment_possible_imports(environment)
     if not all(x in possible for x in namespaces):
+        event_tracker.count(event_tracker.etype.ENVIRONMENT_VALIDATION_FAILED)
         return {
             "status": "invalid",
             "error": f"Not all of those namespaces exist! You must pick from {possible}",
         }
-
+    event_tracker.count(event_tracker.etype.ENVIRONMENT_VALIDATION_PASSED)
     return {
         "status": "valid",
     }
 
 
-def environment_agent_tools(environment):
+def environment_agent_tools(environment, event_tracker: EventTracker | None = None):
     def get_import_wrapper(*args, **kwargs):
         return get_environment_possible_imports(environment)
 
     def validate_response_wrapper(namespaces: list[str], reasoning: str | None = None):
         return validate_response(
-            namespaces=namespaces, reasoning=reasoning, environment=environment
+            namespaces=namespaces,
+            reasoning=reasoning,
+            environment=environment,
+            event_tracker=event_tracker,
         )
 
     tools = [
@@ -107,6 +114,7 @@ def llm_loop(
     input_environment: Environment,
     llm: BaseLanguageModel,
     debug: bool = False,
+    event_tracker: EventTracker | None = None,
 ) -> AddImportResponse:
     system = BASE_1
     human = """{input}
@@ -126,7 +134,7 @@ def llm_loop(
         namespaces=get_environment_possible_imports(input_environment)
     )
 
-    tools = environment_agent_tools(input_environment)
+    tools = environment_agent_tools(input_environment, event_tracker=event_tracker)
     chat_agent = create_structured_chat_agent(
         llm=llm,
         tools=tools,
@@ -153,13 +161,16 @@ def select_required_import(
     environment: Environment,
     llm: BaseLanguageModel,
     debug: bool = False,
+    event_tracker: EventTracker | None = None,
 ) -> AddImportResponse:
     exception = None
     MAX_ATTEMPTS = 3
     attempts = 0
     while attempts < MAX_ATTEMPTS:
         try:
-            return llm_loop(input_text, environment, llm, debug=debug)
+            return llm_loop(
+                input_text, environment, llm, debug=debug, event_tracker=event_tracker
+            )
         except Exception as e:
             if (
                 "The model produced invalid content. Consider modifying your prompt if you are seeing this error persistently"
@@ -179,11 +190,15 @@ def select_required_import(
 
 
 def build_env_and_imports(
-    input_text: str, working_path: Path, llm: BaseLanguageModel, debug: bool = False
+    input_text: str,
+    working_path: Path,
+    llm: BaseLanguageModel,
+    debug: bool = False,
+    event_tracker: EventTracker | None = None,
 ):
     base = Environment(working_path=working_path)
     response: AddImportResponse = select_required_import(
-        input_text, base, llm=llm, debug=debug
+        input_text, base, llm=llm, debug=debug, event_tracker=event_tracker
     )
 
     for x in response.namespaces:

@@ -31,6 +31,7 @@ from trilogy_nlp.llm_interface.models import (
     NLPConditions,
     OrderResultV2,
 )
+from trilogy_nlp.instrumentation import EventTracker
 
 VALID_STATUS = "valid"
 
@@ -62,11 +63,16 @@ class QueryContext(Enum):
 
 
 def validate_query(
-    query: dict, environment: Environment, prompt: str
+    query: dict,
+    environment: Environment,
+    prompt: str,
+    event_tracker: EventTracker | None = None,
 ) -> tuple[dict, InitialParseResponseV2 | None]:
+    tracker = event_tracker or EventTracker()
     try:
         parsed = InitialParseResponseV2.model_validate(query)
     except ValidationError as e:
+        tracker.count(tracker.etype.INITIAL_VALIDATION_PARSING_FAILED)
         return {"status": "invalid", "error": validation_error_to_string(e)}, None
     errors = []
     # assume to start that all our select calculations are valid
@@ -80,6 +86,8 @@ def validate_query(
             errors.append(
                 f"{calc} in {context} does not use a valid function (is using {calc.operator}); check that you are using ONLY a valid option from this list: {sorted([x for x in FunctionType.__members__.keys() if x not in COMPLICATED_FUNCTIONS]) }. If the column requires no transformation, drop the calculation field.",
             )
+            valid = False
+            tracker.count(tracker.etype.INVALID_FUNCTION)
         if calc.over:
             for x in calc.over:
                 local = validate_column(x, context)
@@ -88,6 +96,7 @@ def validate_query(
                 errors.append(
                     f"{calc} in {context} should only use 'over' when using one of [AVG, SUM, MIN, MAX, COUNT] when setting an 'over' clause (is using {calc.operator}); Drop this over (make sure it's included in any parent aggregate if needed)",
                 )
+                tracker.count(tracker.etype.OVER_CLAUSE_WITHOUT_AGGREGATE)
                 valid = False
 
         for arg in calc.arguments:
@@ -98,6 +107,8 @@ def validate_query(
                         errors.append(
                             f"Aggregate function {calc.operator} in {context} is being used on a string field {arg.name}; if you need this field in the output, just return it without a calculation. (Don't forget to set the full name {arg.name} when you drop the calculation!)",
                         )
+                        valid = False
+                        tracker.count(tracker.etype.STRING_FIELD_WITH_AGGREGATE)
             if isinstance(arg, Column):
                 local = validate_column(arg, context)
                 valid = valid and local
@@ -118,6 +129,7 @@ def validate_query(
             and not col.calculation
         ):
             recommendations = None
+            tracker.count(tracker.etype.INVALID_COLUMN_NAME_NO_CALCULATION)
             try:
                 environment.concepts[col.name]
             except UndefinedConceptException as e:
@@ -131,16 +143,17 @@ def validate_query(
                     f"'{col.name}' in {context} is not a valid preexisting field returned by the get fields tool or previously defined by you; if this is a new calculated column you need to answer the question, {hint}. Did you want to use one of these? {recommendations}?",
                 )
             else:
-
                 errors.append(
                     f"'{col.name}' in {context} is not a valid preexisting field returned by the get fields tool or previously defined by you. If this is a new calculated column you need to answer the question, {hint}. If you just misspelled an existing field, maybe it should be one of {difflib.get_close_matches(col.name, [k for k,v in environment.concepts.items() if is_relevent_concept(v)], 3, 0.4)}",
                 )
         elif col.name in environment.concepts:
             valid = True
             if col.calculation:
+                tracker.count(tracker.etype.CALCULATION_WITH_PREDEFINED_FIELD)
                 errors.append(
                     f"{col.name} in {context} is a predefined field and should not have a calculation; check that you are using the field as is, without any additional transformations.",
                 )
+                valid = False
         elif col.calculation:
             local = validate_calculation(col.calculation, context)
             valid = valid and local
@@ -156,6 +169,7 @@ def validate_query(
 
     if parsed.order:
         for y in parsed.order:
+            tracker.count(tracker.etype.ORDER_BY_NOT_SELECTED)
             if y.column_name not in top_select:
                 errors.append(
                     f"{y.column_name} being ordered by is not in output_columns, add if needed.",
@@ -183,6 +197,7 @@ def validate_query(
             "status": "invalid",
             "errors": {f"Error {idx+1}: {error}" for idx, error in enumerate(errors)},
         }, parsed
+    tracker.count(tracker.etype.QUERY_VALIDATION_PASSED)
     tips = [
         f'Congrats! No validation errors - looking good! A few final checks - if you believe these do not apply, go ahead and submit this response as your final answer! (or make a tweak or two!) First, check that you have all fields you think are required in the output. Even better; keep it clean - if an output column is added only to be used in filtering and not explicitly asked for, you might be able to move it out of the select (move the entire definition into a nested reference).  The original prompt was: "{prompt}"!'
     ]
@@ -257,6 +272,7 @@ def validate_response(
     filtering: Optional[FilterResultV2] = None,
     order: Optional[list[OrderResultV2]] = None,
     limit: int | None = None,
+    event_tracker: EventTracker | None = None,
 ) -> tuple[dict, InitialParseResponseV2 | None]:
 
     base: dict[str, list[Column] | FilterResultV2 | list[OrderResultV2] | int] = {
@@ -276,6 +292,7 @@ def validate_response(
         base,
         environment=environment,
         prompt=prompt,
+        event_tracker=event_tracker,
     )
 
 

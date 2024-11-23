@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, auto
 
 
 class Provider(Enum):
@@ -15,7 +15,26 @@ class CacheType(Enum):
 
 
 class EventType(Enum):
-    OPEN_DATABASE = "open_database"
+    OPEN_DATABASE = auto()
 
+    ## environment
+    ENVIRONMENT_VALIDATION_FAILED = auto()
+    ENVIRONMENT_VALIDATION_PASSED = auto()
     ## validation
-    VALIDATION_ERROR = "validation_error"
+    INITIAL_VALIDATION_PARSING_FAILED = auto()
+
+    STRING_FIELD_WITH_AGGREGATE = auto()
+
+    OVER_CLAUSE_WITHOUT_AGGREGATE = auto()
+
+    INVALID_FUNCTION = auto()
+
+    INVALID_COLUMN_NAME_NO_CALCULATION = auto()
+
+    CALCULATION_WITH_PREDEFINED_FIELD = auto()
+
+    VALIDATION_ERROR = auto()
+
+    ORDER_BY_NOT_SELECTED = auto()
+
+    QUERY_VALIDATION_PASSED = auto()

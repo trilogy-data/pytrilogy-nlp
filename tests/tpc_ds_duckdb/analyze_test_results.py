@@ -8,14 +8,16 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import tomllib
+
 from trilogy_nlp.instrumentation import EventTracker
+
 # https://github.com/python/cpython/issues/125235#issuecomment-2412948604
 if not environ.get("TCL_LIBRARY"):
     sys_path = Path(sys.base_prefix)
     environ["TCL_LIBRARY"] = str(sys_path / "tcl" / "tcl8.6")
 
 
-def analyze(show: bool = False, counter:EventTracker = None):
+def analyze(show: bool = False, counter: EventTracker = None):
 
     results = []
     root = Path(__file__).parent

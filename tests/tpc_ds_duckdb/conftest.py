@@ -16,6 +16,7 @@ working_path = Path(__file__).parent
 
 SF = 0.5
 
+
 @fixture(scope="session", autouse=True)
 def test_counter():
     yield EventTracker()
@@ -37,7 +38,7 @@ def llm(test_counter):
         model="gpt-4o-mini",
         # cache=CacheType.MEMORY,
         cache_kwargs={"database_path": ".tests.db"},
-        instrumentation=test_counter
+        instrumentation=test_counter,
     )
     # yield NLPEngine(provider=Provider.OPENAI, model="gpt-4").llm
 

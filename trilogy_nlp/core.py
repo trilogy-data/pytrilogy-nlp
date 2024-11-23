@@ -4,8 +4,8 @@ from trilogy.core.models import ProcessedQuery
 from trilogy.executor import CursorResult
 
 from trilogy_nlp.enums import CacheType, Provider
-from trilogy_nlp.main import build_query
 from trilogy_nlp.instrumentation import EventTracker
+from trilogy_nlp.main import build_query
 
 DEFAULT_GPT = "gpt-4o-mini"
 DEFAULT_GEMINI = "gemini-pro"

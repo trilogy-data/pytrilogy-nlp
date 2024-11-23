@@ -56,7 +56,10 @@ def validate_response(
 ):
     possible = get_environment_possible_imports(environment)
     if not all(x in possible for x in namespaces):
-        return {"status": "invalid", "error": f"Not all of those namespaces exist! You must pick from {possible}"}
+        return {
+            "status": "invalid",
+            "error": f"Not all of those namespaces exist! You must pick from {possible}",
+        }
 
     return {
         "status": "valid",
@@ -120,7 +123,7 @@ def llm_loop(
         ]
     )
     prompt = prompt.partial(
-        namespaces = get_environment_possible_imports(input_environment)
+        namespaces=get_environment_possible_imports(input_environment)
     )
 
     tools = environment_agent_tools(input_environment)

@@ -166,8 +166,11 @@ def setup_richest_environment(env: Environment):
         namespace=namespace,
         datatype=DataType.STRING,
         purpose=Purpose.PROPERTY,
-        keys=(name,),
+        keys={
+            name.address,
+        },
     )
+    env.add_concept(name)
     split_name = function_to_concept(
         Function(
             operator=FunctionType.SPLIT,
@@ -178,14 +181,16 @@ def setup_richest_environment(env: Environment):
         ),
         name="split_name",
         namespace=namespace,
-        # keys = (name,)
+        environment=env,
     )
     last_name = Concept(
         name="last_name",
         namespace=namespace,
         purpose=Purpose.PROPERTY,
         datatype=DataType.STRING,
-        keys=(name,),
+        keys={
+            name.address,
+        },
         lineage=Function(
             operator=FunctionType.INDEX_ACCESS,
             arguments=[
@@ -222,7 +227,6 @@ def setup_titanic_distributed(env: Environment):
         namespace=namespace,
         datatype=DataType.INTEGER,
         purpose=Purpose.PROPERTY,
-        keys=[id],
         modifiers=[Modifier.NULLABLE],
     )
 
@@ -231,7 +235,7 @@ def setup_titanic_distributed(env: Environment):
         namespace=namespace,
         datatype=DataType.STRING,
         purpose=Purpose.PROPERTY,
-        keys=[id],
+        keys={id.address},
     )
     class_id = Concept(
         name="_class_id",
@@ -245,7 +249,7 @@ def setup_titanic_distributed(env: Environment):
         namespace=namespace,
         purpose=Purpose.PROPERTY,
         datatype=DataType.INTEGER,
-        keys=[class_id],
+        keys={class_id.address},
         modifiers=[Modifier.NULLABLE],
         metadata=Metadata(description="Integer ID of class. 1, 2, or 3."),
     )
@@ -254,7 +258,7 @@ def setup_titanic_distributed(env: Environment):
         namespace=namespace,
         purpose=Purpose.PROPERTY,
         datatype=DataType.INTEGER,
-        keys=[id],
+        keys={id.address},
         metadata=Metadata(
             description="Boolean flag. 1 if survived, 0 if not. When aggregating survivors, use a sum."
         ),
@@ -264,7 +268,7 @@ def setup_titanic_distributed(env: Environment):
         namespace=namespace,
         purpose=Purpose.PROPERTY,
         datatype=DataType.FLOAT,
-        keys=[id],
+        keys={id.address},
         modifiers=[Modifier.NULLABLE],
         metadata=Metadata(description="Float of fare. Can be null"),
     )
@@ -273,7 +277,7 @@ def setup_titanic_distributed(env: Environment):
         namespace=namespace,
         purpose=Purpose.PROPERTY,
         datatype=DataType.INTEGER,
-        keys=[id],
+        keys={id.address},
     )
     cabin = Concept(
         name="cabin",
@@ -281,10 +285,11 @@ def setup_titanic_distributed(env: Environment):
         purpose=Purpose.PROPERTY,
         datatype=DataType.STRING,
         modifiers=[Modifier.NULLABLE],
-        keys=[id],
+        keys={id.address},
         metadata=Metadata(description="String of cabin ID. Can be null."),
     )
 
+    env.add_concept(name)
     split_name = function_to_concept(
         Function(
             operator=FunctionType.SPLIT,
@@ -295,15 +300,17 @@ def setup_titanic_distributed(env: Environment):
         ),
         name="split_name",
         namespace=namespace,
-        # keys = (id,)
+        environment=env,
     )
-    assert split_name.keys == (id,)
+    assert split_name.keys == {
+        id.address,
+    }
     last_name = Concept(
         name="last_name",
         namespace=namespace,
         purpose=Purpose.PROPERTY,
         datatype=DataType.STRING,
-        keys=(id,),
+        keys={id.address},
         lineage=Function(
             operator=FunctionType.INDEX_ACCESS,
             arguments=[
@@ -353,7 +360,7 @@ def setup_titanic_distributed(env: Environment):
                 # ColumnAssignment(alias="cabin", concept=cabin),
                 # ColumnAssignment(alias="embarked", concept=embarked),
             ],
-            grain=Grain(components=[id]),
+            grain=Grain(components={id.address}),
         ),
     )
 
@@ -369,7 +376,7 @@ def setup_titanic_distributed(env: Environment):
                 ColumnAssignment(alias="cabin", concept=cabin),
                 ColumnAssignment(alias="embarked", concept=embarked),
             ],
-            grain=Grain(components=[id]),
+            grain=Grain(components={id.address}),
         ),
     )
 
@@ -384,7 +391,7 @@ def setup_titanic_distributed(env: Environment):
                 # ColumnAssignment(alias="cabin", concept=cabin),
                 # ColumnAssignment(alias="embarked", concept=embarked),
             ],
-            grain=Grain(components=[class_id]),
+            grain=Grain(components={class_id.address}),
         ),
     )
     return env

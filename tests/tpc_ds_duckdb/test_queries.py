@@ -387,4 +387,6 @@ ORDER BY
 
 LIMIT 100;"""
 
-    run_adhoc(12, text=TEST)
+    run_adhoc(
+        6,
+    )

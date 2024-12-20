@@ -531,7 +531,14 @@ def test_aggregate_grain():
     environment.add_file_import("store_sales", "store_sales")
 
     ir = ir_to_query(validated, input_environment=environment, debug=False)
+    print(ir.local_concepts["average_quantity_sold"])
+    print(ir.local_concepts["average_quantity_sold"].purpose)
+    assert ir.local_concepts["average_quantity_sold"].grain.components == {
+        "store_sales.item.name"
+    }
     for x in ir.output_components:
         if x.address == "store_sales.item.name":
             continue
-        assert x.grain == ir.grain, x.grain
+        assert (
+            x.grain.components == ir.grain.components
+        ), f"{x.address} HAS {x.grain.components} vs {ir.grain.components}"

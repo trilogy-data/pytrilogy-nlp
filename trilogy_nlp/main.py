@@ -11,12 +11,14 @@ from trilogy.core.models import (
     Environment,
     FilterItem,
     Function,
+    Grain,
     ProcessedQuery,
     SelectItem,
     SelectStatement,
     WindowItem,
 )
 from trilogy.core.query_processor import process_query
+from trilogy.parsing.render import Renderer
 
 from trilogy_nlp.config import DEFAULT_CONFIG
 from trilogy_nlp.constants import logger
@@ -205,7 +207,7 @@ def ir_to_query(
     query = SelectStatement(
         selection=[
             (
-                ConceptTransform(function=x.lineage, output=x)
+                SelectItem(content=ConceptTransform(function=x.lineage, output=x))
                 if is_local_derived(x)
                 and x.lineage
                 and isinstance(
@@ -219,6 +221,10 @@ def ir_to_query(
         order_by=order,
         where_clause=where,
         having_clause=having,
+    )
+
+    query.grain = Grain.from_concepts(
+        query.output_components, where_clause=query.where_clause
     )
 
     if having:
@@ -250,25 +256,40 @@ def ir_to_query(
 
         append_child_concepts(having.concept_arguments)
 
-    for item in query.selection:
-        # we don't know the grain of an aggregate at assignment time
-        # so rebuild at this point in the tree
-        # TODO: simplify
-        if isinstance(item.content, ConceptTransform):
-            new_concept = item.content.output.with_select_context(
-                query.grain,
-                conditional=None,
-                environment=input_environment,
+    for parse_pass in [1, 2]:
+        if parse_pass == 1:
+            grain = Grain.from_concepts(
+                [x.content for x in query.selection if isinstance(x.content, Concept)],
+                where_clause=query.where_clause,
             )
-            input_environment.add_concept(new_concept, force=True)
-            item.content.output = new_concept
-        elif isinstance(item.content, Concept):
-            # Sometimes cached values here don't have the latest info
-            # but we can't just use environment, as it might not have the right grain.
-            item.content = input_environment.concepts[item.content.address].with_grain(
-                item.content.grain
+        if parse_pass == 2:
+            grain = Grain.from_concepts(
+                query.output_components, where_clause=query.where_clause
             )
-    from trilogy.parsing.render import Renderer
+        query.grain = grain
+        for item in query.selection:
+            # we don't know the grain of an aggregate at assignment time
+            # so rebuild at this point in the tree
+            # TODO: simplify
+            if isinstance(item.content, ConceptTransform):
+                new_concept = item.content.output.with_select_context(
+                    local_concepts=query.local_concepts,
+                    grain=query.grain,
+                    environment=input_environment,
+                )
+                query.local_concepts[new_concept.address] = new_concept
+                if parse_pass == 2:
+                    input_environment.add_concept(new_concept, force=True)
+                item.content.output = new_concept
+            elif isinstance(item.content, Concept):
+                # Sometimes cached values here don't have the latest info
+                # but we can't just use environment, as it might not have the right grain.
+                item.content = item.content.with_select_context(
+                    local_concepts=query.local_concepts,
+                    grain=query.grain,
+                    environment=input_environment,
+                )
+                query.local_concepts[item.content.address] = item.content
 
     renderer = Renderer()
     print("RENDERED QUERY")
@@ -278,7 +299,7 @@ def ir_to_query(
             print(renderer.to_string(ConceptDeclarationStatement(concept=new_c)))
     print(renderer.to_string(query))
     print("---------")
-    query.validate_syntax()
+    query.validate_syntax(environment=input_environment)
     return query
 
 

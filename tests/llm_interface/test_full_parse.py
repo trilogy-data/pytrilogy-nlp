@@ -90,7 +90,7 @@ def test_ir_parsing():
 
     assert (
         str(query.having_clause.conditional)
-        == "local.total_return_amount<store_returns.item.id,store_returns.ticket_number> > local.1.2_times_avg_return_per_store<store_returns.store.id>"
+        == "local.total_return_amount@Grain<store_returns.item.id,store_returns.ticket_number> > local.1.2_times_avg_return_per_store@Grain<store_returns.store.id>"
     ), str(query.having_clause)
 
     _ = ir_to_query(

@@ -1,5 +1,6 @@
 from typing import List
 
+from trilogy.constants import DEFAULT_NAMESPACE
 from trilogy.core.enums import (
     BooleanOperator,
     ComparisonOperator,
@@ -158,9 +159,10 @@ def create_column(c: Column, environment: Environment) -> Concept | ConceptTrans
         base_name = f"{c.name}_deriv"
     new = arbitrary_to_concept(
         derivation,
-        namespace="local",
+        namespace=DEFAULT_NAMESPACE,
         name=f"{base_name}".lower(),
         metadata=Metadata(description=MAGIC_GENAI_DESCRIPTION),
+        environment=environment,
     )
     environment.add_concept(new)
 

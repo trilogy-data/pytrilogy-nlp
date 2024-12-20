@@ -205,7 +205,7 @@ def ir_to_query(
     query = SelectStatement(
         selection=[
             (
-                ConceptTransform(function=x.lineage, output=x)
+                SelectItem(content=ConceptTransform(function=x.lineage, output=x))
                 if is_local_derived(x)
                 and x.lineage
                 and isinstance(
@@ -256,10 +256,11 @@ def ir_to_query(
         # TODO: simplify
         if isinstance(item.content, ConceptTransform):
             new_concept = item.content.output.with_select_context(
-                query.grain,
-                conditional=None,
+                local_concepts=query.local_concepts,
+                grain=query.grain,
                 environment=input_environment,
             )
+            query.local_concepts[new_concept.address] = new_concept
             input_environment.add_concept(new_concept, force=True)
             item.content.output = new_concept
         elif isinstance(item.content, Concept):
@@ -278,7 +279,7 @@ def ir_to_query(
             print(renderer.to_string(ConceptDeclarationStatement(concept=new_c)))
     print(renderer.to_string(query))
     print("---------")
-    query.validate_syntax()
+    query.validate_syntax(environment=input_environment)
     return query
 
 

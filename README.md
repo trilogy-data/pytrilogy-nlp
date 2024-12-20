@@ -1,24 +1,25 @@
 ## Trilogy NLP
 
-Natural language interface for generating SQL queries via a Trilogy data model.
+`pytrilogy-nlp` is a natural language interface for generating SQL queries via a Trilogy data model.
 
-Most of the value in a SQL statement comes from the column selection, transformation, and filtering.
+When you write SQL, most of the value you're creating comes from the column selection, transformation, and filtering.
 
-Joins, table selection, group bys are all opportunitites to introduce errors. 
+Joins, table selection, group bys are opportunities to introduce errors. Maybe the source table is stale; maybe you group by
+more fields than you need to and impact performance; maybe you didn't realize a table had partial data and you need a left join.
 
-Trilogy is easier SQL for humans because it separates out those parts in the language into a reusable metadata
-layer; the exact same benefits apply to an LLM.
+Trilogy aims to be easier SQL for humans because it separates out those parts - that add little value, just risk - in the language into a reusable metadata
+layer that can be independently tested; the exact same benefits apply to an LLM.
 
-The extra data encoded in the semantic model, and the significantly reduced target space for generation reduce common sources of LLM errors. 
+Beyond reducing sources of error, the significantly reduced target space for generation vs full SQL syntax reduce common sources of LLM errors. 
 
 This makes it more testable and less prone to hallucination than generating SQL directly. 
 
-Trilogy-NLP is built on the common NLP backend (langchain, etc) and supports configurable backends.
+Trilogy-NLP is built on common open-source LLM toolchains, but can easily swap them out and supports configurable backends. [OpenAI, Anthropic, Google, local llama].
 
 ## Examples
 
 > [!TIP]
-> These utilize the `trilogy-public-models` package to get predefined model.s, which can be installed with `pip install trilogy-public-models`
+> These examples utilize the `trilogy-public-models` package to get predefined models, which can be installed with `pip install trilogy-public-models`
 
 ### Hello World
 
@@ -61,7 +62,6 @@ query = engine.generate_query(
 # this might be multiple statements in some cases
 # but here we can just grab the last one
 print(executor.generate_sql(query)[-1])
-
 
 ```
 

@@ -15,14 +15,14 @@ def test_e2e_basic(engine):
         namespace="user",
         datatype=DataType.STRING,
         purpose=Purpose.PROPERTY,
-        keys=[id],
+        keys={id.address},
     )
     name = Concept(
         name="name",
         namespace="user",
         datatype=DataType.STRING,
         purpose=Purpose.PROPERTY,
-        keys=[id],
+        keys={id.address},
     )
 
     environment.add_concept(concept=id)
@@ -34,7 +34,6 @@ def test_e2e_basic(engine):
     processed_query = parse_query(
         input_text="Which users are in germany?",
         input_environment=environment,
-        debug=True,
         llm=engine,
     )
     assert location in [x for x in processed_query.where_clause.concept_arguments]

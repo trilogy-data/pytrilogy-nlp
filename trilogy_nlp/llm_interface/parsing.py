@@ -1,17 +1,7 @@
 from typing import Any, List
 
-from trilogy import Environment
-from trilogy.constants import DEFAULT_NAMESPACE
-from trilogy.core.enums import (
-    BooleanOperator,
-    ComparisonOperator,
-    FunctionClass,
-    FunctionType,
-    InfiniteFunctionArgs,
-    Ordering,
-    Purpose,
-)
-from trilogy.core.models.author import (
+from trilogy.authoring import (
+    Environment,
     AggregateWrapper,
     CaseElse,
     CaseWhen,
@@ -29,6 +19,14 @@ from trilogy.core.models.author import (
     Parenthetical,
     SubselectComparison,
     WhereClause,
+    BooleanOperator,
+    ComparisonOperator,
+    FunctionClass,
+    FunctionType,
+    InfiniteFunctionArgs,
+    Ordering,
+    Purpose,
+    DEFAULT_NAMESPACE,
 )
 from trilogy.parsing.common import arbitrary_to_concept, arg_to_datatype
 

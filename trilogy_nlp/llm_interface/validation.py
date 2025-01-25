@@ -7,6 +7,7 @@ from typing import List, Optional
 from langchain_core.tools import ToolException
 from pydantic import BaseModel
 from pydantic_core import ErrorDetails, ValidationError
+from trilogy.authoring import DataType, Environment
 
 # from trilogy.core.constants import
 from trilogy.core.enums import (
@@ -14,7 +15,7 @@ from trilogy.core.enums import (
     FunctionType,
 )
 from trilogy.core.exceptions import UndefinedConceptException
-from trilogy.authoring import Environment, DataType
+
 from trilogy_nlp.constants import logger
 from trilogy_nlp.helpers import is_relevent_concept
 from trilogy_nlp.instrumentation import EventTracker

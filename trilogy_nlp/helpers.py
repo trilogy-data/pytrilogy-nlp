@@ -4,8 +4,8 @@ import re
 import time
 
 import openai
-from trilogy.constants import logger
 from trilogy.authoring import Concept
+from trilogy.constants import logger
 
 from trilogy_nlp.constants import DEFAULT_LIMIT
 

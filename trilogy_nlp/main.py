@@ -5,22 +5,20 @@ from langchain.agents.agent import OutputParserException
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from networkx import DiGraph, topological_sort
-
-
-from trilogy.core.query_processor import process_query
 from trilogy.authoring import (
-    Environment,
-    ConceptDeclarationStatement,
-    ConceptTransform,
-    SelectItem,
-    SelectStatement,
     AggregateWrapper,
     Concept,
+    ConceptDeclarationStatement,
     ConceptRef,
+    ConceptTransform,
+    Environment,
     FilterItem,
     Function,
+    SelectItem,
+    SelectStatement,
     WindowItem,
 )
+from trilogy.core.query_processor import process_query
 from trilogy.core.statements.execute import ProcessedQuery
 from trilogy.parsing.render import Renderer
 

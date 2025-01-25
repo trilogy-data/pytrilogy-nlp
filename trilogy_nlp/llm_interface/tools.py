@@ -2,9 +2,7 @@ import json
 
 from langchain.tools import StructuredTool, Tool
 from trilogy import Environment
-from trilogy.core.models.author import (
-    Concept,
-)
+from trilogy.authoring import Concept
 
 from trilogy_nlp.exceptions import ValidationPassedException
 from trilogy_nlp.helpers import is_relevent_concept

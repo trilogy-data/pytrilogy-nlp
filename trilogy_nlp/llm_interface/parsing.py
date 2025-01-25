@@ -1,32 +1,30 @@
 from typing import Any, List
 
-from trilogy import Environment
-from trilogy.constants import DEFAULT_NAMESPACE
-from trilogy.core.enums import (
-    BooleanOperator,
-    ComparisonOperator,
-    FunctionClass,
-    FunctionType,
-    InfiniteFunctionArgs,
-    Ordering,
-    Purpose,
-)
-from trilogy.core.models.author import (
+from trilogy.authoring import (
+    DEFAULT_NAMESPACE,
     AggregateWrapper,
+    BooleanOperator,
     CaseElse,
     CaseWhen,
     Comparison,
+    ComparisonOperator,
     Concept,
     ConceptRef,
     Conditional,
     DataType,
+    Environment,
     Function,
+    FunctionClass,
+    FunctionType,
     HavingClause,
+    InfiniteFunctionArgs,
     MagicConstants,
     Metadata,
     OrderBy,
+    Ordering,
     OrderItem,
     Parenthetical,
+    Purpose,
     SubselectComparison,
     WhereClause,
 )

@@ -127,6 +127,8 @@ def query_loop(
             raise e
         return False, str(e)
     except Exception as e:
+        if isinstance(e, RecursionError):
+            raise e
         logger.error("Error in query_loop: %s", e)
         print(
             f"Error in query_loop: {str(e)}",

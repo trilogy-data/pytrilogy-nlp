@@ -1,5 +1,6 @@
-from typing import List
+from typing import Any, List
 
+from trilogy import Environment
 from trilogy.constants import DEFAULT_NAMESPACE
 from trilogy.core.enums import (
     BooleanOperator,
@@ -10,14 +11,15 @@ from trilogy.core.enums import (
     Ordering,
     Purpose,
 )
-from trilogy.core.models import (
+from trilogy.core.models.author import (
     AggregateWrapper,
+    CaseElse,
+    CaseWhen,
     Comparison,
     Concept,
-    ConceptTransform,
+    ConceptRef,
     Conditional,
     DataType,
-    Environment,
     Function,
     HavingClause,
     MagicConstants,
@@ -25,11 +27,8 @@ from trilogy.core.models import (
     OrderBy,
     OrderItem,
     Parenthetical,
+    SubselectComparison,
     WhereClause,
-)
-from trilogy.core.processing.utility import (
-    decompose_condition,
-    is_scalar_condition,
 )
 from trilogy.parsing.common import arbitrary_to_concept, arg_to_datatype
 
@@ -45,6 +44,89 @@ from trilogy_nlp.llm_interface.models import (
     NLPConditions,
     OrderResultV2,
 )
+
+
+def is_scalar_condition(
+    element: Any,
+    environment: Environment,
+    materialized: set[str] | None = None,
+) -> bool:
+    assert environment
+    if isinstance(element, Parenthetical):
+        return is_scalar_condition(element.content, environment, materialized)
+    elif isinstance(element, SubselectComparison):
+        return True
+    elif isinstance(element, Comparison):
+        return is_scalar_condition(
+            element.left, environment, materialized
+        ) and is_scalar_condition(element.right, environment, materialized)
+    elif isinstance(element, Function):
+        if element.operator in FunctionClass.AGGREGATE_FUNCTIONS.value:
+            return False
+        return all(
+            [
+                is_scalar_condition(x, environment, materialized)
+                for x in element.arguments
+            ]
+        )
+    elif isinstance(element, ConceptRef):
+        if materialized and element.address in materialized:
+            return True
+        ec: Concept = environment.concepts[element.address]
+        if ec.lineage and isinstance(ec.lineage, AggregateWrapper):
+            return is_scalar_condition(ec.lineage, environment, materialized)
+        if ec.lineage and isinstance(ec.lineage, Function):
+            return is_scalar_condition(ec.lineage, environment, materialized)
+        return True
+    elif isinstance(element, AggregateWrapper):
+        return is_scalar_condition(element.function, environment, materialized)
+    elif isinstance(element, Conditional):
+        return is_scalar_condition(
+            element.left, environment, materialized
+        ) and is_scalar_condition(element.right, environment, materialized)
+    elif isinstance(element, (CaseWhen,)):
+        return is_scalar_condition(
+            element.comparison, environment, materialized
+        ) and is_scalar_condition(element.expr, environment, materialized)
+    elif isinstance(element, (CaseElse,)):
+        return is_scalar_condition(element.expr, environment, materialized)
+    elif isinstance(element, MagicConstants):
+        return True
+    return True
+
+
+CONDITION_TYPES = (
+    SubselectComparison,
+    Comparison,
+    Conditional,
+    Parenthetical,
+)
+
+
+def decompose_condition(
+    conditional: Conditional | Comparison | Parenthetical,
+) -> list[SubselectComparison | Comparison | Conditional | Parenthetical]:
+    chunks: list[SubselectComparison | Comparison | Conditional | Parenthetical] = []
+    if not isinstance(conditional, Conditional):
+        return [conditional]
+    if conditional.operator == BooleanOperator.AND:
+        if not (
+            isinstance(conditional.left, CONDITION_TYPES)
+            and isinstance(
+                conditional.right,
+                CONDITION_TYPES,
+            )
+        ):
+            chunks.append(conditional)
+        else:
+            for val in [conditional.left, conditional.right]:
+                if isinstance(val, Conditional):
+                    chunks.extend(decompose_condition(val))
+                else:
+                    chunks.append(val)
+    else:
+        chunks.append(conditional)
+    return chunks
 
 
 def parse_object(ob, environment: Environment):
@@ -76,7 +158,6 @@ def create_literal(
     | bool
     | MagicConstants
     | Concept
-    | ConceptTransform
     | list[str]
     | list[int]
     | list[float]
@@ -144,7 +225,7 @@ def create_anon_calculation(
     return derivation
 
 
-def create_column(c: Column, environment: Environment) -> Concept | ConceptTransform:
+def create_column(c: Column, environment: Environment) -> Concept:
     if not c.calculation:
         return environment.concepts[c.name]
     base_name = c.name
@@ -170,12 +251,12 @@ def create_column(c: Column, environment: Environment) -> Concept | ConceptTrans
 
 
 def parse_order(
-    input_concepts: List[Concept | ConceptTransform],
+    input_concepts: List[Concept],
     ordering: List[OrderResultV2] | None,
 ) -> OrderBy:
     normalized = [x if isinstance(x, Concept) else x.output for x in input_concepts]
     default_order = [
-        OrderItem(expr=c, order=Ordering.DESCENDING)
+        OrderItem(expr=c.reference, order=Ordering.DESCENDING)
         for c in normalized
         if c.purpose == Purpose.METRIC
     ]
@@ -202,7 +283,9 @@ def parse_order(
                 )
             ]
         if possible_matches:
-            final.append(OrderItem(expr=possible_matches[0], order=order.order))
+            final.append(
+                OrderItem(expr=possible_matches[0].reference, order=order.order)
+            )
     return OrderBy(items=final)
 
 
@@ -308,37 +391,30 @@ def parse_filtering(
 
 def generate_having_and_where(
     selected: list[str],
+    environment: Environment,
     filtering: WhereClause | None = None,
 ) -> tuple[WhereClause | None, HavingClause | None]:
     """If a concept is output by the select, and it is an aggregate;
     move that condition to the having clause. If it's an aggregate that is not output,
     we can keep it in where, as well as any scalars."""
+    assert environment
     if not filtering:
         return None, None
     where: Conditional | Comparison | Parenthetical | None = None
     having: Conditional | Comparison | Parenthetical | None = None
 
-    if is_scalar_condition(filtering.conditional):
+    if is_scalar_condition(filtering.conditional, environment=environment):
         where = filtering.conditional
     else:
         components = decompose_condition(filtering.conditional)
         for x in components:
-            if is_scalar_condition(x):
+            if is_scalar_condition(x, environment=environment):
                 where = where + x if where else x
             else:
                 if any([c.address in selected for c in x.concept_arguments]):
+
                     if any(
-                        (
-                            (
-                                isinstance(x.lineage, AggregateWrapper)
-                                # and not x.lineage.by
-                            )
-                            or (
-                                isinstance(x.lineage, Function)
-                                and x.lineage.operator
-                                in FunctionClass.AGGREGATE_FUNCTIONS.value
-                            )
-                        )
+                        not is_scalar_condition(x, environment=environment)
                         for x in x.concept_arguments
                     ):
                         having = having + x if having else x

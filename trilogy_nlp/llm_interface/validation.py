@@ -14,10 +14,10 @@ from trilogy.core.enums import (
     FunctionType,
 )
 from trilogy.core.exceptions import UndefinedConceptException
-from trilogy.core.models import (
+from trilogy.core.models.core import (
     DataType,
-    Environment,
 )
+from trilogy.core.models.environment import Environment
 
 from trilogy_nlp.constants import logger
 from trilogy_nlp.helpers import is_relevent_concept

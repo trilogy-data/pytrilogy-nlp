@@ -1,9 +1,9 @@
 import json
 
 from langchain.tools import StructuredTool, Tool
-from trilogy.core.models import (
+from trilogy import Environment
+from trilogy.core.models.author import (
     Concept,
-    Environment,
 )
 
 from trilogy_nlp.exceptions import ValidationPassedException

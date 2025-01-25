@@ -1,6 +1,6 @@
 from langchain.globals import set_llm_cache
 from trilogy import Environment, Executor
-from trilogy.core.models import ProcessedQuery
+from trilogy.core.statements.execute import ProcessedQuery
 from trilogy.executor import CursorResult
 
 from trilogy_nlp.enums import CacheType, Provider

@@ -6,19 +6,17 @@ from typing import Optional
 import pandas as pd
 from pytest import fixture
 from sqlalchemy import create_engine
-from trilogy import Dialects, Executor
+from trilogy import Dialects, Environment, Executor
 from trilogy.core.enums import FunctionType, Modifier, Purpose
 from trilogy.core.functions import arg_to_datatype, function_args_to_output_purpose
-from trilogy.core.models import (
-    ColumnAssignment,
+from trilogy.core.models.author import (
     Concept,
-    Datasource,
     DataType,
-    Environment,
     Function,
     Grain,
     Metadata,
 )
+from trilogy.core.models.datasource import ColumnAssignment, Datasource
 from trilogy.hooks.query_debugger import DebuggingHook
 from trilogy.parsing.common import function_to_concept
 
@@ -340,6 +338,7 @@ def setup_titanic_distributed(env: Environment):
         cabin,
         embarked,
         survived_count,
+        split_name,
         last_name,
         class_id,
     ]:

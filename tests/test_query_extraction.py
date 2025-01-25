@@ -4,6 +4,11 @@ from pathlib import Path
 from trilogy import Environment
 
 from trilogy_nlp.llm_interface.models import InitialParseResponseV2
+from trilogy_nlp.llm_interface.parsing import (
+    create_column,
+    generate_having_and_where,
+    parse_filtering,
+)
 from trilogy_nlp.main import ir_to_query
 
 ORDERING_TEST_CASE = """{
@@ -228,6 +233,9 @@ HAVING_WHERE_SPLIT = """{
 }"""
 
 
+from trilogy.core.models.author import Concept
+
+
 def test_having_where_split():
     loaded = json.loads(HAVING_WHERE_SPLIT)
     validated = InitialParseResponseV2.model_validate(loaded["action_input"])
@@ -235,6 +243,20 @@ def test_having_where_split():
     environment.add_file_import("store_sales", "store_sales")
     environment.add_file_import("item", "item")
     environment.parse("MERGE store_sales.item.id INTO ~item.id;")
+    selection = [create_column(x, environment) for x in validated.output_columns]
+
+    filtering = (
+        parse_filtering(validated.filtering, environment)
+        if validated.filtering
+        else None
+    )
+    normalized_select = [x if isinstance(x, Concept) else x.output for x in selection]
+    where, having = generate_having_and_where(
+        [x.address for x in normalized_select],
+        environment=environment,
+        filtering=filtering,
+    )
+    assert having is not None
     ir = ir_to_query(validated, input_environment=environment, debug=False)
     assert environment.concepts["customer_count"].address in [
         c.address for c in ir.having_clause.concept_arguments
@@ -536,7 +558,8 @@ def test_aggregate_grain():
     assert ir.local_concepts["average_quantity_sold"].grain.components == {
         "store_sales.item.name"
     }
-    for x in ir.output_components:
+    for xref in ir.output_components:
+        x = ir.local_concepts[xref]
         if x.address == "store_sales.item.name":
             continue
         assert (

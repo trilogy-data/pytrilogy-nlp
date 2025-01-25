@@ -5,7 +5,7 @@ import time
 
 import openai
 from trilogy.constants import logger
-from trilogy.core.models import Concept
+from trilogy.core.models.author import Concept
 
 from trilogy_nlp.constants import DEFAULT_LIMIT
 

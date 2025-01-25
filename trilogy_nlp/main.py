@@ -1,23 +1,27 @@
+from typing import Sequence
+
 from langchain.agents import AgentExecutor, create_structured_chat_agent
 from langchain.agents.agent import OutputParserException
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from networkx import DiGraph, topological_sort
-from trilogy.core.models import (
+from trilogy import Environment
+from trilogy.core.models.author import (
     AggregateWrapper,
     Concept,
-    ConceptDeclarationStatement,
-    ConceptTransform,
-    Environment,
+    ConceptRef,
     FilterItem,
     Function,
-    Grain,
-    ProcessedQuery,
-    SelectItem,
-    SelectStatement,
     WindowItem,
 )
 from trilogy.core.query_processor import process_query
+from trilogy.core.statements.author import (
+    ConceptDeclarationStatement,
+    ConceptTransform,
+    SelectItem,
+    SelectStatement,
+)
+from trilogy.core.statements.execute import ProcessedQuery
 from trilogy.parsing.render import Renderer
 
 from trilogy_nlp.config import DEFAULT_CONFIG
@@ -171,6 +175,16 @@ def sort_by_name_list(arr: list[Column], reference: list[str]):
     return sorted(arr, key=lambda x: order_map.get(x.name, float("inf")))
 
 
+def get_address(z: Concept | ConceptTransform | ConceptRef):
+    if isinstance(z, Concept):
+        return z.address
+    elif isinstance(z, ConceptTransform):
+        return z.output.address
+    elif isinstance(z, ConceptRef):
+        return z.address
+    raise ValueError(f"Unknown type {type(z)}")
+
+
 def ir_to_query(
     intermediate_results: InitialParseResponseV2,
     input_environment: Environment,
@@ -202,9 +216,11 @@ def ir_to_query(
                 print(o)
     normalized_select = [x if isinstance(x, Concept) else x.output for x in selection]
     where, having = generate_having_and_where(
-        [x.address for x in normalized_select], filtering
+        [x.address for x in normalized_select],
+        environment=input_environment,
+        filtering=filtering,
     )
-    query = SelectStatement(
+    query: SelectStatement = SelectStatement.from_inputs(
         selection=[
             (
                 SelectItem(content=ConceptTransform(function=x.lineage, output=x))
@@ -213,31 +229,22 @@ def ir_to_query(
                 and isinstance(
                     x.lineage, (Function, FilterItem, WindowItem, AggregateWrapper)
                 )
-                else SelectItem(content=x)
+                else SelectItem(content=x.reference)
             )
             for x in normalized_select
         ],
         limit=safe_limit(intermediate_results.limit),
         order_by=order,
         where_clause=where,
+        environment=input_environment,
         having_clause=having,
     )
 
-    query.grain = Grain.from_concepts(
-        query.output_components, where_clause=query.where_clause
-    )
-
     if having:
-
-        def append_child_concepts(xes: list[Concept]):
-
-            def get_address(z):
-                if isinstance(z, Concept):
-                    return z.address
-                elif isinstance(z, ConceptTransform):
-                    return z.output.address
-
-            for x in xes:
+        # append anything filtered in the having clause to the output of the select
+        def append_child_concepts(xes: Sequence[ConceptRef]):
+            for ref in xes:
+                x = input_environment.concepts[ref.address]
                 if not any(
                     x.address == get_address(item.content) for item in query.selection
                 ):
@@ -255,42 +262,6 @@ def ir_to_query(
                             append_child_concepts(x.lineage.concept_arguments)
 
         append_child_concepts(having.concept_arguments)
-
-    for parse_pass in [1, 2]:
-        if parse_pass == 1:
-            grain = Grain.from_concepts(
-                [x.content for x in query.selection if isinstance(x.content, Concept)],
-                where_clause=query.where_clause,
-            )
-        if parse_pass == 2:
-            grain = Grain.from_concepts(
-                query.output_components, where_clause=query.where_clause
-            )
-        query.grain = grain
-        for item in query.selection:
-            # we don't know the grain of an aggregate at assignment time
-            # so rebuild at this point in the tree
-            # TODO: simplify
-            if isinstance(item.content, ConceptTransform):
-                new_concept = item.content.output.with_select_context(
-                    local_concepts=query.local_concepts,
-                    grain=query.grain,
-                    environment=input_environment,
-                )
-                query.local_concepts[new_concept.address] = new_concept
-                if parse_pass == 2:
-                    input_environment.add_concept(new_concept, force=True)
-                item.content.output = new_concept
-            elif isinstance(item.content, Concept):
-                # Sometimes cached values here don't have the latest info
-                # but we can't just use environment, as it might not have the right grain.
-                item.content = item.content.with_select_context(
-                    local_concepts=query.local_concepts,
-                    grain=query.grain,
-                    environment=input_environment,
-                )
-                query.local_concepts[item.content.address] = item.content
-
     renderer = Renderer()
     print("RENDERED QUERY")
     print("---------")

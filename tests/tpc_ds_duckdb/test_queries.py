@@ -1,4 +1,5 @@
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -70,7 +71,8 @@ def matrix(
         cases = []
         failure_reason = defaultdict(lambda: 0)
         durations = []
-        for _ in range(0, attempts):
+
+        def attempt():
             start = datetime.now()
             result, reason = query_loop(
                 prompt,
@@ -81,12 +83,21 @@ def matrix(
                 debug=debug,
                 event_tracker=event_tracker,
             )
-            if result is not True:
-                failure_reason[reason] += 1
-            cases.append(result)
             end = datetime.now()
-            duration = end - start
-            durations.append(duration.total_seconds())
+            return result, reason, (end - start).total_seconds()
+
+        # Use ThreadPoolExecutor to parallelize attempts
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(attempt) for _ in range(attempts)]
+            for future in as_completed(futures):
+                try:
+                    result, reason, duration = future.result()
+                    if result is not True:
+                        failure_reason[reason] += 1
+                    cases.append(result)
+                    durations.append(duration)
+                except Exception as e:
+                    logger.error(f"Error during query loop execution: {e}")
 
         ratio = sum(1 if c else 0 for c in cases) / attempts
         output["cases"][name] = ratio
@@ -257,7 +268,6 @@ def test_ten(engine, llm):
     assert len(query) < 7000, query
 
 
-# @pytest.mark.skip(reason="No prompt yet")
 def test_twelve(engine, llm):
     run_query(engine, 12, llm, debug=GLOBAL_DEBUG)
 

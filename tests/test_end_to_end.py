@@ -1,5 +1,7 @@
+from trilogy import Environment
 from trilogy.core.enums import Purpose
-from trilogy.core.models import Concept, DataType, Environment
+from trilogy.core.models.author import Concept
+from trilogy.core.models.core import DataType
 
 from trilogy_nlp.main import parse_query
 

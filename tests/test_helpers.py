@@ -1,4 +1,4 @@
-from trilogy.core.models import FunctionType
+from trilogy.core.enums import FunctionType
 
 
 def is_valid(name: str):

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from trilogy import Environment
-from trilogy.core.models import SelectStatement
+from trilogy.core.statements.author import SelectStatement
 
 from trilogy_nlp.llm_interface.models import InitialParseResponseV2
 from trilogy_nlp.main import ir_to_query
@@ -90,7 +90,7 @@ def test_ir_parsing():
 
     assert (
         str(query.having_clause.conditional)
-        == "local.total_return_amount@Grain<store_returns.item.id,store_returns.ticket_number> > local.1.2_times_avg_return_per_store@Grain<store_returns.store.id>"
+        == "ref:local.total_return_amount > ref:local.1.2_times_avg_return_per_store"
     ), str(query.having_clause)
 
     _ = ir_to_query(

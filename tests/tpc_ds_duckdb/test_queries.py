@@ -23,7 +23,7 @@ ATTEMPTS = 1
 
 TARGET = 0.8
 
-GLOBAL_DEBUG: bool = False
+GLOBAL_DEBUG: bool = True
 
 
 class EnvironmentSetupException(Exception):

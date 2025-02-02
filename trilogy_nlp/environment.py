@@ -25,7 +25,7 @@ class AddImportResponse(BaseModel):
 
 def get_environment_possible_imports(env: Environment) -> str:
     raw = Path(env.working_path).glob("*.preql")
-    return "Observation: " + str([x.stem for x in raw if "query" not in x.stem])
+    return str(sorted([x.stem for x in raw if "query" not in x.stem]))
 
 
 def get_environment_detailed_values(env: Environment, input: str):
@@ -33,11 +33,14 @@ def get_environment_detailed_values(env: Environment, input: str):
     try:
         new.parse(f"import {input} as {input};")
 
-    except (ImportError, InvalidSyntaxException):
+    except (ImportError, InvalidSyntaxException) as e:
+        raise e
         suggestions = get_close_matches(input, get_environment_possible_imports(env))
-        base = "Observation: This is an invalid database. Refer back to the list from the list_databases tool. Names must match exactly."
+        base = "Observation: This is an invalid database. Names must match exactly."
         if suggestions:
             base += f" Did you mean {suggestions[0]}?"
+        else:
+            base += f" full list : {get_environment_possible_imports(env)}"
         return base
     # TODO: does including a description work better?
     return "Observation:" + str(
@@ -71,8 +74,7 @@ def validate_response(
 
 
 def environment_agent_tools(environment, event_tracker: EventTracker | None = None):
-    def get_import_wrapper(*args, **kwargs):
-        return get_environment_possible_imports(environment)
+
 
     def validate_response_wrapper(namespaces: list[str], reasoning: str | None = None):
         return validate_response(
@@ -83,15 +85,8 @@ def environment_agent_tools(environment, event_tracker: EventTracker | None = No
         )
 
     tools = [
-        # Tool.from_function(
-        #     func=get_import_wrapper,
-        #     name="list_databases",
-        #     description="""
-        #     Describe the databases you can look at. Takes empty argument string.""",
-        #     handle_tool_error='Argument is an EMPTY STRING, rendered as "". {} is not valid. Do not call with {} ',
-        # ),
         Tool.from_function(
-            func=lambda x: get_environment_detailed_values(environment, x),
+            func=lambda x: 'Observation: ' + get_environment_detailed_values(environment, x),
             name="get_namespace_description",
             description="""
            Describe the namespace and general groupings of fields available. Call with a namespace name.""",

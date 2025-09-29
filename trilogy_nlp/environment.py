@@ -75,7 +75,6 @@ def validate_response(
 
 def environment_agent_tools(environment, event_tracker: EventTracker | None = None):
 
-
     def validate_response_wrapper(namespaces: list[str], reasoning: str | None = None):
         return validate_response(
             namespaces=namespaces,
@@ -86,7 +85,8 @@ def environment_agent_tools(environment, event_tracker: EventTracker | None = No
 
     tools = [
         Tool.from_function(
-            func=lambda x: 'Observation: ' + get_environment_detailed_values(environment, x),
+            func=lambda x: "Observation: "
+            + get_environment_detailed_values(environment, x),
             name="get_namespace_description",
             description="""
            Describe the namespace and general groupings of fields available. Call with a namespace name.""",

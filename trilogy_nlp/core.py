@@ -1,8 +1,7 @@
 from langchain.globals import set_llm_cache
 from trilogy import Environment, Executor
 from trilogy.core.statements.execute import ProcessedQuery
-from trilogy.executor import CursorResult
-
+from trilogy.executor import ResultProtocol
 from trilogy_nlp.enums import CacheType, Provider
 from trilogy_nlp.instrumentation import EventTracker
 from trilogy_nlp.main import build_query
@@ -110,6 +109,6 @@ class NLPEngine(object):
             llm=self.llm,
         )
 
-    def run_query(self, text: str, executor: Executor) -> CursorResult:
+    def run_query(self, text: str, executor: Executor) -> ResultProtocol | None:
         query = self.generate_query(text, executor)
         return executor.execute_query(query)

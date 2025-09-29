@@ -48,4 +48,4 @@ def test_filtering(normalized_engine: Executor, test_env):
 
     executor.execute_query(query).fetchall()
 
-    assert 'dim_class."class" = 1' in query_text
+    assert '"dim_class"."class" = 1' in query_text

@@ -1,5 +1,11 @@
 ## Trilogy NLP
 
+:::warning
+Trilogy-NLP is probably overkill; models have accelerated to the point where you can provide a basic syntax reference and validator and they'll do fine with static generation.
+
+We'll be updating with a more streamlined library in the future.
+:::
+
 `pytrilogy-nlp` is a natural language interface for generating SQL queries via a Trilogy data model.
 
 When you write SQL, most of the value you're creating comes from the column selection, transformation, and filtering.

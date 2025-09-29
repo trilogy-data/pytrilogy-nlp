@@ -2,6 +2,7 @@ from langchain.globals import set_llm_cache
 from trilogy import Environment, Executor
 from trilogy.core.statements.execute import ProcessedQuery
 from trilogy.executor import ResultProtocol
+
 from trilogy_nlp.enums import CacheType, Provider
 from trilogy_nlp.instrumentation import EventTracker
 from trilogy_nlp.main import build_query

@@ -559,7 +559,7 @@ def test_aggregate_grain():
         "store_sales.item.name"
     }
     for xref in ir.output_components:
-        x = ir.local_concepts[xref]
+        x = ir.local_concepts[xref.address]
         if x.address == "store_sales.item.name":
             continue
         assert (
